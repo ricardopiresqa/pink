@@ -1,0 +1,10 @@
+{
+  "package": "@earendil-works/pi-coding-agent",
+  "version": "0.84.3",
+  "integrity": "sha512-Yr2p9PubrbFZmYEPYI+C8KmZP9xlFuLDnAG64RtU0ZDgrdiXYWa+y7WGyJO5OlqPliOkVCMd9IzVszO3/t0D0w==",
+  "shasum": "c040a5c2cfacd996731ce302a323269f124c8bdc",
+  "license": "MIT",
+  "node": ">=22.19.0",
+  "pinned_on": "2026-10-08",
+  "note": "Upgrading Pink is changing this version and integrity, rebuilding, and running tests/roadmap/test_f50.py: the patches fail loudly when the upstream code moved."
+}

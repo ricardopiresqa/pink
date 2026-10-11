@@ -1,0 +1,364 @@
+{
+  "schema": "thoth.pink_rebrand/1",
+  "upstream": "upstream.json",
+  "package_json": {
+    "set": {
+      "name": "@thoth/pink",
+      "version": "0.84.3-pink.2",
+      "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
+      "piConfig": {
+        "name": "pink",
+        "configDir": ".pink"
+      },
+      "bin": {
+        "pink": "dist/bundle/cli.js"
+      },
+      "thoth": {
+        "fork_of": "@earendil-works/pi-coding-agent@0.84.3",
+        "license_of_upstream": "MIT (see LICENSE-PI.txt)",
+        "rebrand": "rebrand.json in the Thoth repository (pink/)"
+      }
+    },
+    "files_add": [
+      "LICENSE-PI.txt",
+      "NOTICE.md",
+      "extensions"
+    ]
+  },
+  "add_files": [
+    {
+      "from": "theme/pink.json",
+      "to": "dist/modes/interactive/theme/pink.json"
+    },
+    {
+      "from": "LICENSE-PI.txt",
+      "to": "LICENSE-PI.txt"
+    },
+    {
+      "from": "NOTICE.md",
+      "to": "NOTICE.md"
+    },
+    {
+      "from": "README.md",
+      "to": "README.md",
+      "overwrite": true
+    },
+    {
+      "from": "docs/PINK.md",
+      "to": "docs/PINK.md"
+    },
+    {
+      "from": "extensions/pink-ui.ts",
+      "to": "extensions/pink-ui.ts"
+    }
+  ],
+  "shrinkwrap": {
+    "file": "npm-shrinkwrap.json"
+  },
+  "env_rename": {
+    "files": [
+      "dist/bundle/**/*.js"
+    ],
+    "exclude": [
+      "dist/bundle/chunks/lib-HGQMNYVT.js",
+      "dist/bundle/chunks/chunk-XDUWOHPL.js"
+    ],
+    "regex": "(?<![A-Za-z0-9_])PI_(?=[A-Z])",
+    "replace": "PINK_",
+    "min_count": 40
+  },
+  "replacements": [
+    {
+      "id": "help-update-source",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "[source|self|pi]",
+      "replace": "[source|self|pink]",
+      "count": 2
+    },
+    {
+      "id": "update-text",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "regex": true,
+      "find": "Update pi(?![\\w-])",
+      "replace": "Update pink",
+      "count": 7
+    },
+    {
+      "id": "update-reinstall",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Reinstall pi even if",
+      "replace": "Reinstall pink even if",
+      "count": 1
+    },
+    {
+      "id": "update-alias",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "alias to pi)",
+      "replace": "alias to pink)",
+      "count": 1
+    },
+    {
+      "id": "update-example",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "regex": true,
+      "find": "\\} update pi(?![\\w-])",
+      "replace": "} update pink",
+      "count": 1
+    },
+    {
+      "id": "update-alias-code",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "source===\"self\"||source===\"pi\"",
+      "replace": "source===\"self\"||source===\"pink\"",
+      "count": 1
+    },
+    {
+      "id": "banner-news",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "\"pi has joined Earendil\"",
+      "replace": "\"pink: a fork of Pi for Thoth\"",
+      "count": 1
+    },
+    {
+      "id": "editor-resume",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Pi will resume when the editor exits.",
+      "replace": "Pink will resume when the editor exits.",
+      "count": 1
+    },
+    {
+      "id": "share-title",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "\"Pi session\"",
+      "replace": "\"Pink session\"",
+      "count": 1
+    },
+    {
+      "id": "onboarding",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.",
+      "replace": "Pink can explain its own features and look up its docs. Ask it how to use or extend Pink.",
+      "count": 1
+    },
+    {
+      "id": "tmux-hint",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Pi works best with csi-u",
+      "replace": "Pink works best with csi-u",
+      "count": 1
+    },
+    {
+      "id": "trust-restart",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "then restart pi.",
+      "replace": "then restart pink.",
+      "count": 1
+    },
+    {
+      "id": "managed-messages",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "anaged Pi ",
+      "replace": "anaged Pink ",
+      "count": 3
+    },
+    {
+      "id": "telemetry-text",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "bugs within Pi.",
+      "replace": "bugs within Pink.",
+      "count": 1
+    },
+    {
+      "id": "auth-usage",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "regex": true,
+      "find": "(?m)^(\\s+)pi auth ",
+      "replace": "\\1pink auth ",
+      "count": 3
+    },
+    {
+      "id": "system-prompt-intro",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "operating inside pi, a coding agent harness",
+      "replace": "operating inside pink, a coding agent harness (a fork of Pi)",
+      "count": 1
+    },
+    {
+      "id": "system-prompt-docs",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Pi documentation (read only when the user asks about pi itself",
+      "replace": "Pink documentation (read only when the user asks about pink itself",
+      "count": 1
+    },
+    {
+      "id": "system-prompt-reading",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "When reading pi docs or examples",
+      "replace": "When reading pink docs or examples",
+      "count": 1
+    },
+    {
+      "id": "system-prompt-packages",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "pi packages (docs/packages.md)",
+      "replace": "pink packages (docs/packages.md)",
+      "count": 1
+    },
+    {
+      "id": "system-prompt-topics",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "When working on pi topics",
+      "replace": "When working on pink topics",
+      "count": 1
+    },
+    {
+      "id": "system-prompt-md",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "Always read pi .md files completely",
+      "replace": "Always read pink .md files completely",
+      "count": 1
+    },
+    {
+      "id": "user-agent-node",
+      "file": "dist/bundle/chunks/chunk-AXIIZGTV.js",
+      "find": "`pi (${nodeOs.platform()}",
+      "replace": "`pink (${nodeOs.platform()}",
+      "count": 1
+    },
+    {
+      "id": "user-agent-browser",
+      "file": "dist/bundle/chunks/chunk-AXIIZGTV.js",
+      "find": "\"pi (browser)\"",
+      "replace": "\"pink (browser)\"",
+      "count": 1
+    },
+    {
+      "id": "user-agent-http",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "`pi/${version} (",
+      "replace": "`pink/${version} (",
+      "count": 1
+    },
+    {
+      "id": "openrouter-attribution",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "\"HTTP-Referer\":\"https://pi.dev\",\"X-OpenRouter-Title\":\"pi\"",
+      "replace": "\"HTTP-Referer\":\"https://github.com/ricardopiresqa/pink\",\"X-OpenRouter-Title\":\"pink\"",
+      "count": 1
+    },
+    {
+      "id": "nvidia-billing-origin",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "\"X-BILLING-INVOKE-ORIGIN\":\"Pi\"",
+      "replace": "\"X-BILLING-INVOKE-ORIGIN\":\"Pink\"",
+      "count": 1
+    },
+    {
+      "id": "ai-agent-cli",
+      "file": "dist/bundle/cli.js",
+      "find": "process.env.AI_AGENT=\"pi\"",
+      "replace": "process.env.AI_AGENT=\"pink\"",
+      "count": 1
+    },
+    {
+      "id": "ai-agent-rpc",
+      "file": "dist/bundle/rpc-entry.js",
+      "find": "process.env.AI_AGENT=\"pi\"",
+      "replace": "process.env.AI_AGENT=\"pink\"",
+      "count": 1
+    },
+    {
+      "id": "privacy-telemetry-off",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getEnableInstallTelemetry(){return this.settings.enableInstallTelemetry??!0}",
+      "replace": "getEnableInstallTelemetry(){return this.settings.enableInstallTelemetry??!1}",
+      "count": 1
+    },
+    {
+      "id": "privacy-version-url",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "https://pi.dev/api/latest-version",
+      "replace": "https://pink.invalid/api/latest-version",
+      "count": 1
+    },
+    {
+      "id": "privacy-installer-url",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "https://pi.dev/api/installer/releases",
+      "replace": "https://pink.invalid/api/installer/releases",
+      "count": 1
+    },
+    {
+      "id": "privacy-report-url",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "https://pi.dev/api/report-install",
+      "replace": "https://pink.invalid/api/report-install",
+      "count": 1
+    },
+    {
+      "id": "theme-builtin",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\")))}}return BUILTIN_THEMES",
+      "replace": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\"))),pink:JSON.parse(stripBom(fs3.readFileSync(path5.join(themesDir,\"pink.json\"),\"utf-8\")))}}return BUILTIN_THEMES",
+      "count": 1
+    },
+    {
+      "id": "theme-default-rgb",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "return getRgbColorLuminance(rgb2)>=.5?\"light\":\"dark\"}",
+      "replace": "return\"pink\"}",
+      "count": 1
+    },
+    {
+      "id": "theme-default-env",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "theme:getAnsiColorLuminance(bg)>=.5?\"light\":\"dark\",source:\"COLORFGBG\"",
+      "replace": "theme:\"pink\",source:\"COLORFGBG\"",
+      "count": 1
+    },
+    {
+      "id": "theme-default-fallback",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "{theme:\"dark\",source:\"fallback\"",
+      "replace": "{theme:\"pink\",source:\"fallback\"",
+      "count": 1
+    },
+    {
+      "id": "builtin-ui-extension",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
+      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "count": 1
+    },
+    {
+      "id": "no-upstream-changelog",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "this.changelogMarkdown=this.getChangelogForDisplay()",
+      "replace": "this.changelogMarkdown=void 0",
+      "count": 1
+    },
+    {
+      "id": "quiet-startup-default",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getQuietStartup(){return this.settings.quietStartup??!1}",
+      "replace": "getQuietStartup(){return this.settings.quietStartup??!0}",
+      "count": 1
+    },
+    {
+      "id": "fullscreen-by-default",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getTuiMode(){return this.settings.tuiMode===\"fullscreen\"?\"fullscreen\":\"regular\"}",
+      "replace": "getTuiMode(){return this.settings.tuiMode===\"regular\"?\"regular\":\"fullscreen\"}",
+      "count": 1
+    }
+  ],
+  "left_as_upstream": [
+    "telemetry attribute names (pi.ai.*, pi.harness.*, pi.operation.*, pi.session.*): internal schema, not shown to the user",
+    "protocol identifiers sent to third parties: openai-codex originator, xai referrer, x-opencode-client",
+    "code identifiers (getPiUserAgent, checkForNewPiVersion, extension API parameter named pi, the pi key of package manifests, session entry type pi.share)",
+    "import specifiers of the Pi libraries (@earendil-works/pi-ai, pi-tui, pi-agent-core ...)",
+    "docs/ and CHANGELOG.md: upstream Pi documentation, with docs/PINK.md mapping the names",
+    "https://pi.dev/session/ (the /share viewer) and https://pi.dev/changelog (links the user opens on purpose)",
+    "the Pi CHANGELOG.md stays in the package but Pink never shows it at startup (Pi release notes are not Pink's)"
+  ]
+}
