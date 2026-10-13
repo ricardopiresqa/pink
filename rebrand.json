@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "0.84.3-pink.2",
+      "version": "0.84.3-pink.3",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",

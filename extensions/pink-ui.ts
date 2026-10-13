@@ -91,7 +91,7 @@ export function footerLine({ theme, width, left, right }) {
 }
 
 export function hintsLine({ theme, width }) {
-	return center(theme.fg("dim", "/ comandos   ! bash   ctrl+o ajuda   ctrl+c limpar/sair"), width);
+	return center(theme.fg("dim", "/ comandos   ! bash   ctrl+t pensamento   ctrl+o ajuda   ctrl+c limpar/sair"), width);
 }
 
 function tilde(cwd) {
@@ -152,6 +152,8 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 		}
 	}
 
+	// pensamento recolhível como no OpenCode: o atalho do Pi (ctrl+t) aparece no rodapé e o bloco recolhido diz como abrir
+	ctx.ui.setHiddenThinkingLabel?.("Pensando… (ctrl+t para ver)");
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	ctx.ui.setFooter((tui, theme) => {
 		state.tui = tui;
@@ -161,7 +163,7 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 				const window = usage?.contextWindow ?? ctx.model?.contextWindow;
 				const used = usage && usage.percent !== null && window ? `${Math.round(usage.percent)}%/${Math.round(window / 1000)}k` : "";
 				const left = theme.fg("muted", ` ${tilde(ctx.cwd)}${state.branch ? ` (${state.branch})` : ""}`);
-				const right = theme.fg("dim", `${used ? `ctx ${used}   ` : ""}pink ${version} `);
+				const right = theme.fg("dim", `ctrl+t pensamento   ${used ? `ctx ${used}   ` : ""}pink ${version} `);
 				return [footerLine({ theme, width, left, right })];
 			},
 			invalidate() {},
