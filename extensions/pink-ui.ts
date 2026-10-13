@@ -81,8 +81,16 @@ export function inputBox({ theme, content, width, label }) {
 	const text = Math.max(1, width - 2); // the bar and one space take two columns
 	const bar = theme.fg("accent", BAR);
 	const panel = (value) => (theme.bg ? theme.bg("userMessageBg", value) : value);
-	const row = (value) => `${bar}${panel(` ${pad(fit(value, text), text)}`)}`;
+	// o editor do Pi devolve a linha com "resetar cor" no meio (cursor, texto): sem reaplicar o fundo depois de cada reset,
+	// a faixa do texto ficava preta e só o rodapé da caixa ficava rosado
+	const open = theme.bg ? theme.bg("userMessageBg", "\u0000").split("\u0000")[0] : "";
+	const keep = (value) => (open ? value.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + open) : value);
+	const row = (value) => `${bar}${panel(keep(` ${pad(fit(value, text), text)}`))}`;
 	return [row(""), ...content.map(row), row(""), row(theme.fg("muted", label))];
+}
+
+export function thinkingLink(text) {
+	return `\x1b]8;;pink:thinking\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
 export function footerLine({ theme, width, left, right }) {
@@ -165,7 +173,10 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 	}
 
 	// pensamento recolhível como no OpenCode: o atalho do Pi (ctrl+t) aparece no rodapé e o bloco recolhido diz como abrir
-	ctx.ui.setHiddenThinkingLabel?.("Pensando… (ctrl+t para ver)");
+	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; clique no título (link interno pink:thinking,
+	// tratado pelo Pink no lugar do navegador) ou ctrl+t abre e recolhe
+	ctx.ui.setHiddenThinkingLabel?.(thinkingLink("▸ Pensamento · clique ou ctrl+t para ver"));
+	globalThis.__pinkThinkingHeader = thinkingLink("▾ Pensamento · clique ou ctrl+t para recolher");
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	ctx.ui.setFooter((tui, theme) => {
 		state.tui = tui;

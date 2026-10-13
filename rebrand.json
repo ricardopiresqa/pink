@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "0.84.3-pink.4",
+      "version": "0.84.3-pink.5",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
@@ -363,6 +363,41 @@
       "file": "dist/core/settings-manager.js",
       "find": "return this.settings.hideThinkingBlock ?? false;",
       "replace": "return this.settings.hideThinkingBlock ?? true;",
+      "count": 1
+    },
+    {
+      "id": "thinking-header-when-shown",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": ":this.contentContainer.addChild(new Markdown(thinkingBlocks.join(",
+      "replace": ":void(globalThis.__pinkThinkingHeader&&this.contentContainer.addChild(new Text(theme.fg(\"thinkingText\",globalThis.__pinkThinkingHeader),this.outputPad,0)))||this.contentContainer.addChild(new Markdown(thinkingBlocks.join(",
+      "count": 1
+    },
+    {
+      "id": "thinking-toggle-on-click",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "openUrl:openBrowser,",
+      "replace": "openUrl:url=>url===\"pink:thinking\"?globalThis.__pinkToggleThinking?.():openBrowser(url),",
+      "count": 1
+    },
+    {
+      "id": "thinking-toggle-registered",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "ld(this.footer),this.hideThinkingBlock=this.settingsManager.getHideThinkingBlock()",
+      "replace": "ld(this.footer),globalThis.__pinkToggleThinking=()=>this.toggleThinkingBlockVisibility(),this.hideThinkingBlock=this.settingsManager.getHideThinkingBlock()",
+      "count": 1
+    },
+    {
+      "id": "clean-exit-by-default",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"resume-hint\"?\"resume-hint\":\"transcript\"}",
+      "replace": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"transcript\"?\"transcript\":\"resume-hint\"}",
+      "count": 1
+    },
+    {
+      "id": "clean-exit-by-default-module",
+      "file": "dist/core/settings-manager.js",
+      "find": "return this.settings.fullscreenExitOutput === \"resume-hint\" ? \"resume-hint\" : \"transcript\";",
+      "replace": "return this.settings.fullscreenExitOutput === \"transcript\" ? \"transcript\" : \"resume-hint\";",
       "count": 1
     }
   ],
