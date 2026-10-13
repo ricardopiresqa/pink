@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "0.84.3-pink.3",
+      "version": "0.84.3-pink.4",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
@@ -349,6 +349,20 @@
       "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
       "find": "getTuiMode(){return this.settings.tuiMode===\"fullscreen\"?\"fullscreen\":\"regular\"}",
       "replace": "getTuiMode(){return this.settings.tuiMode===\"regular\"?\"regular\":\"fullscreen\"}",
+      "count": 1
+    },
+    {
+      "id": "thinking-collapsed-by-default",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getHideThinkingBlock(){return this.settings.hideThinkingBlock??!1}",
+      "replace": "getHideThinkingBlock(){return this.settings.hideThinkingBlock??!0}",
+      "count": 1
+    },
+    {
+      "id": "thinking-collapsed-by-default-module",
+      "file": "dist/core/settings-manager.js",
+      "find": "return this.settings.hideThinkingBlock ?? false;",
+      "replace": "return this.settings.hideThinkingBlock ?? true;",
       "count": 1
     }
   ],

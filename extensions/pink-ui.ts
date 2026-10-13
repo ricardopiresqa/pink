@@ -90,6 +90,18 @@ export function footerLine({ theme, width, left, right }) {
 	return fit(`${left}${" ".repeat(gap)}${right}`, width);
 }
 
+const THINKING_PT = { minimal: "mínimo", low: "baixo", medium: "médio", high: "alto", xhigh: "muito alto", max: "máximo" };
+
+// "thoth  thoth  off" dizia modelo, provedor e nível sem explicar nada: agora o nome do modelo, o provedor só quando é
+// outro, e o pensamento só quando está ligado ("pensamento alto")
+export function modelLabel({ theme, model, thinking }) {
+	if (!model) return theme.fg("muted", "sem modelo");
+	const name = model.name || model.id;
+	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";
+	const level = THINKING_PT[thinking] ? theme.fg("muted", ` · pensamento ${THINKING_PT[thinking]}`) : "";
+	return `${name}${provider}${level}`;
+}
+
 export function hintsLine({ theme, width }) {
 	return center(theme.fg("dim", "/ comandos   ! bash   ctrl+t pensamento   ctrl+o ajuda   ctrl+c limpar/sair"), width);
 }
@@ -143,8 +155,8 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 			const raw = super.render(Math.max(1, outer - 2));
 			const content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
 			const theme = ctx.ui.theme;
-			const model = ctx.model ? `${ctx.model.id}  ${theme.fg("dim", ctx.model.provider)}` : "sem modelo";
-			const lines = inputBox({ theme, content, width: outer, label: `${model}  ${theme.fg("dim", pi.getThinkingLevel?.() ?? "")}`.trimEnd() }).map((line) => " ".repeat(margin) + line);
+			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.() });
+			const lines = inputBox({ theme, content, width: outer, label }).map((line) => " ".repeat(margin) + line);
 			if (!state.home) return lines;
 			const rows = state.tui?.terminal?.rows ?? 24;
 			const body = [...lines, "", hintsLine({ theme, width })];
@@ -163,7 +175,7 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 				const window = usage?.contextWindow ?? ctx.model?.contextWindow;
 				const used = usage && usage.percent !== null && window ? `${Math.round(usage.percent)}%/${Math.round(window / 1000)}k` : "";
 				const left = theme.fg("muted", ` ${tilde(ctx.cwd)}${state.branch ? ` (${state.branch})` : ""}`);
-				const right = theme.fg("dim", `ctrl+t pensamento   ${used ? `ctx ${used}   ` : ""}pink ${version} `);
+				const right = `${theme.fg("muted", "ctrl+t pensamento")}${theme.fg("dim", `   ${used ? `ctx ${used}   ` : ""}pink ${version} `)}`;
 				return [footerLine({ theme, width, left, right })];
 			},
 			invalidate() {},
