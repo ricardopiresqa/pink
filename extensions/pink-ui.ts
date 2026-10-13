@@ -117,6 +117,95 @@ export function hintsLine({ theme, width }) {
 	return center(theme.fg("dim", "/ comandos   ! bash   ctrl+t pensamento   ctrl+o ajuda   ctrl+c limpar/sair"), width);
 }
 
+// -- lateral no estilo do OpenCode (owner 2026-10-13): sessão, contexto, tokens por modelo, modelo, Thoth, pasta e versão.
+// O Pink não tem MCP nem LSP próprios: a lateral mostra o que ele de fato sabe. Só aparece na sessão (não na tela inicial),
+// com a janela larga (>= 120 colunas); /lateral esconde e mostra.
+export const SIDEBAR_WIDTH = 36;
+export const SIDEBAR_MIN_COLUMNS = 120;
+
+export function formatTokens(value) {
+	const n = Number(value) || 0;
+	if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+	if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+	return String(n);
+}
+
+export function sessionStats(entries) {
+	const models = new Map();
+	let cost = 0;
+	let title = "";
+	for (const entry of entries ?? []) {
+		const message = entry?.type === "message" ? entry.message : undefined;
+		if (!message) continue;
+		if (!title && message.role === "user") {
+			const content = Array.isArray(message.content) ? message.content.find((part) => part?.type === "text")?.text : message.content;
+			title = String(content ?? "").replace(/\s+/g, " ").trim();
+		}
+		if (message.role !== "assistant" || !message.usage) continue;
+		const key = message.model || "?";
+		const item = models.get(key) ?? { input: 0, output: 0, cache: 0 };
+		item.input += message.usage.input || 0;
+		item.output += message.usage.output || 0;
+		item.cache += (message.usage.cacheRead || 0) + (message.usage.cacheWrite || 0);
+		models.set(key, item);
+		cost += Number(message.usage.cost?.total) || 0;
+	}
+	return { title, cost, models: [...models.entries()].map(([model, usage]) => ({ model, ...usage })) };
+}
+
+export function thothProject(cwd, vault, readFile) {
+	if (!vault || !cwd) return "";
+	try {
+		const mapping = JSON.parse(readFile(`${vault}/1_projetos/_project-mapping.json`));
+		const here = String(cwd).replace(/\\/g, "/").toLowerCase();
+		let best = "";
+		let bestLength = 0;
+		for (const project of mapping.projects ?? []) {
+			for (const root of project.repository_roots ?? []) {
+				const base = String(root).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+				if (base && (here === base || here.startsWith(`${base}/`)) && base.length > bestLength) {
+					best = project.canonical_name || project.project_id || "";
+					bestLength = base.length;
+				}
+			}
+		}
+		return best;
+	} catch {
+		return "";
+	}
+}
+
+export function sidebarLines({ theme, width, data }) {
+	const w = Math.max(10, width);
+	const line = (text = "") => fit(text, w);
+	const title = (text) => line(theme.bold ? theme.bold(theme.fg("text", text)) : theme.fg("text", text));
+	const dim = (text) => line(theme.fg("muted", text));
+	const out = [];
+	if (data.title) {
+		const words = data.title.length > w * 2 ? `${data.title.slice(0, w * 2 - 1)}…` : data.title;
+		out.push(title(words.slice(0, w)), ...(words.length > w ? [title(words.slice(w, w * 2))] : []), "");
+	}
+	out.push(title("Contexto"));
+	if (data.context?.tokens != null) {
+		out.push(dim(`${formatTokens(data.context.tokens)} tokens`), dim(`${Math.round(data.context.percent ?? 0)}% usado de ${formatTokens(data.context.window)}`));
+	} else {
+		out.push(dim("ainda sem medida"));
+	}
+	out.push(dim(`$${(data.cost ?? 0).toFixed(2)} gasto`), "");
+	if (data.models?.length) {
+		out.push(title("Tokens da sessão"));
+		for (const item of data.models) {
+			out.push(line(`  ${theme.fg("text", item.model)}`), dim(`    ${formatTokens(item.input)} entrada  ${formatTokens(item.output)} saída`));
+		}
+		out.push("");
+	}
+	out.push(title("Modelo"), line(`  ${data.model || theme.fg("muted", "sem modelo")}`), "");
+	if (data.project) out.push(title("Thoth"), dim(`  projeto ${data.project}`), "");
+	if (data.tools?.length) out.push(title("Ferramentas"), dim(`  ${data.tools.length} ativas`), "");
+	out.push(dim(data.folder || ""), ...(data.branch ? [line(theme.fg("text", data.branch))] : []), "", line(`${theme.fg("accent", "•")} ${theme.fg("text", "Pink")} ${theme.fg("muted", data.version || "")}`));
+	return out;
+}
+
 function tilde(cwd) {
 	const home = process.env.USERPROFILE || process.env.HOME || "";
 	return home && cwd.toLowerCase().startsWith(home.toLowerCase()) ? `~${cwd.slice(home.length)}` : cwd;
@@ -181,6 +270,33 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 	ctx.ui.setHiddenThinkingLabel?.(thinkingLink("▸ Pensamento · clique ou ctrl+t para ver"));
 	globalThis.__pinkThinkingHeader = thinkingLink("▾ Pensamento · clique ou ctrl+t para recolher");
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
+	const project = (() => {
+		try {
+			const fs = process.getBuiltinModule?.("node:fs");
+			return fs ? thothProject(ctx.cwd, process.env.THOTH_VAULT_PATH || "", (path) => fs.readFileSync(path, "utf8")) : "";
+		} catch {
+			return "";
+		}
+	})();
+	globalThis.__pinkSidebar = {
+		visible: (viewport) => (globalThis.__pinkSidebarOn ?? true) && !state.home && viewport.width >= SIDEBAR_MIN_COLUMNS,
+		render(width) {
+			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
+			const usage = ctx.getContextUsage?.();
+			const theme = ctx.ui.theme;
+			return sidebarLines({ theme, width, data: {
+				...stats,
+				context: usage ? { tokens: usage.tokens, percent: usage.percent, window: usage.contextWindow } : undefined,
+				model: modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.() }),
+				project,
+				tools: pi.getActiveTools?.() ?? [],
+				folder: tilde(ctx.cwd),
+				branch: state.branch,
+				version,
+			} });
+		},
+		invalidate() {},
+	};
 	ctx.ui.setFooter((tui, theme) => {
 		state.tui = tui;
 		return {
@@ -199,6 +315,13 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 }
 
 export default function (pi) {
+	pi.registerCommand?.("lateral", {
+		description: "Mostra ou esconde a lateral (sessão, contexto, tokens)",
+		handler: async (_args, ctx) => {
+			globalThis.__pinkSidebarOn = !(globalThis.__pinkSidebarOn ?? true);
+			ctx.ui.notify?.(globalThis.__pinkSidebarOn ? "Lateral visível" : "Lateral escondida", "info");
+		},
+	});
 	pi.on("session_start", async (_event, ctx) => {
 		if (ctx.mode !== "tui") return;
 		const { CustomEditor, VERSION } = await import("@earendil-works/pi-coding-agent");

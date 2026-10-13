@@ -16,6 +16,8 @@ pink --help
 - Pensamento: fica atrás de um título, como no OpenCode — recolhido por padrão (`▸ Pensamento`); **clique no título** ou **ctrl+t** abre (`▾ Pensamento`) e recolhe; a escolha fica salva. Sob a caixa de digitar: o nome do modelo, o provedor só quando é outro, e o nível de pensamento só quando ligado.
 - Ao sair, o terminal volta como estava (só a linha para retomar a sessão), como no OpenCode. Para deixar a conversa impressa no terminal: `"fullscreenExitOutput": "transcript"` em `~/.pink/agent/settings.json`.
 - Caixa de digitar: fundo rosa-escuro em todas as linhas (o mesmo da mensagem enviada), com a barra rosa à esquerda.
+- Lateral (como a do OpenCode), com a janela larga (120+ colunas) e só na conversa: título da sessão, contexto (tokens, % usado, custo), tokens por modelo, modelo e pensamento, projeto do Thoth (pela pasta), ferramentas ativas, pasta, branch e versão. `/lateral` esconde e mostra. O Pink não tem MCP nem LSP próprios, então a lateral não inventa essas seções.
+- Barra de rolagem escondida por padrão (a roda do mouse e as teclas continuam rolando); `"fullscreenScrollbar": "auto"` volta a mostrar ao rolar.
 - Privacidade: o Pink não envia a telemetria de instalação nem consulta versões no servidor do Pi.
 
 Licença: o Pi é MIT, copyright (c) 2025 Mario Zechner (`LICENSE-PI.txt`). Veja `NOTICE.md` para o que mudou.

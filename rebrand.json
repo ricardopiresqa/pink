@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "0.84.3-pink.6",
+      "version": "0.84.3-pink.7",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
@@ -398,6 +398,27 @@
       "file": "dist/core/settings-manager.js",
       "find": "return this.settings.fullscreenExitOutput === \"resume-hint\" ? \"resume-hint\" : \"transcript\";",
       "replace": "return this.settings.fullscreenExitOutput === \"transcript\" ? \"transcript\" : \"resume-hint\";",
+      "count": 1
+    },
+    {
+      "id": "scrollbar-hidden-by-default",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "getFullscreenScrollbar(){let mode=this.settings.fullscreenScrollbar;return mode===\"always\"||mode===\"hidden\"?mode:\"auto\"}",
+      "replace": "getFullscreenScrollbar(){let mode=this.settings.fullscreenScrollbar;return mode===\"always\"||mode===\"auto\"?mode:\"hidden\"}",
+      "count": 1
+    },
+    {
+      "id": "scrollbar-hidden-by-default-module",
+      "file": "dist/core/settings-manager.js",
+      "find": "return mode === \"always\" || mode === \"hidden\" ? mode : \"auto\";",
+      "replace": "return mode === \"always\" || mode === \"auto\" ? mode : \"hidden\";",
+      "count": 1
+    },
+    {
+      "id": "sidebar-column",
+      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "find": "fullscreenLayoutRoot=new VStack([{component:this.transcriptScrollView,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}])",
+      "replace": "fullscreenLayoutRoot=new HStack([{component:new VStack([{component:this.transcriptScrollView,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}]),basis:0,grow:1,shrink:1,minSize:20},{component:{render:w=>globalThis.__pinkSidebar?.render(w)??[],invalidate(){globalThis.__pinkSidebar?.invalidate?.()}},basis:36,grow:0,shrink:0,minSize:0,visible:v=>!!globalThis.__pinkSidebar?.visible?.(v)}],{gap:1,align:\"stretch\"})",
       "count": 1
     }
   ],
