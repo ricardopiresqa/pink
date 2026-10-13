@@ -206,6 +206,22 @@ export function sidebarLines({ theme, width, data }) {
 	return out;
 }
 
+// -- ao sair (owner 2026-10-13: "quando eu saio do pink tem que aparecer a logo do pink, assim como funciona o opencode"):
+// o terminal volta limpo e fica o logo, o título da sessão, tokens e custo, e o comando para continuar
+export function exitBanner({ theme, title, stats, resume }) {
+	const lines = ["", ...LOGO.map((row) => {
+		let out = "  ";
+		for (const ch of row) out += ch === "█" ? theme.fg("accent", ch) : ch === " " ? ch : theme.fg("dim", ch);
+		return out;
+	}), ""];
+	const field = (label, value) => `  ${theme.fg("muted", label.padEnd(10))}${value}`;
+	if (title) lines.push(field("Sessão", title.length > 70 ? `${title.slice(0, 69)}…` : title));
+	const totals = (stats?.models ?? []).reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
+	if (totals.input || totals.output) lines.push(field("Tokens", `${formatTokens(totals.input)} entrada  ${formatTokens(totals.output)} saída  $${(stats.cost ?? 0).toFixed(2)}`));
+	if (resume) lines.push(field("Continuar", theme.fg("accent", resume)));
+	return `${lines.join("\n")}\n\n`;
+}
+
 function tilde(cwd) {
 	const home = process.env.USERPROFILE || process.env.HOME || "";
 	return home && cwd.toLowerCase().startsWith(home.toLowerCase()) ? `~${cwd.slice(home.length)}` : cwd;
@@ -278,6 +294,7 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 			return "";
 		}
 	})();
+	Object.defineProperty(globalThis, "__pinkHome", { get: () => state.home, configurable: true });
 	globalThis.__pinkSidebar = {
 		visible: (viewport) => (globalThis.__pinkSidebarOn ?? true) && !state.home && viewport.width >= SIDEBAR_MIN_COLUMNS,
 		render(width) {
@@ -315,6 +332,18 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 }
 
 export default function (pi) {
+	// ao sair, o contexto da extensão já foi desligado quando o Pi imprime a linha de retomar: o fechamento é montado no
+	// session_shutdown (contexto ainda ativo) e só recebe o comando de continuar depois
+	pi.on("session_shutdown", async (event, ctx) => {
+		if (event?.reason !== "quit" || ctx?.mode !== "tui") return;
+		try {
+			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
+			const banner = exitBanner({ theme: ctx.ui.theme, title: stats.title, stats, resume: "\u0000" });
+			globalThis.__pinkExitBanner = (resume) => banner.replace("\u0000", resume);
+		} catch {
+			globalThis.__pinkExitBanner = undefined;  // sem fechamento, o Pi imprime a linha dele
+		}
+	});
 	pi.registerCommand?.("lateral", {
 		description: "Mostra ou esconde a lateral (sessão, contexto, tokens)",
 		handler: async (_args, ctx) => {
