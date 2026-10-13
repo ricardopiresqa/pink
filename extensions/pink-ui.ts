@@ -16,7 +16,10 @@ export const LOGO = [
 ];
 export const HOME_WIDTH = 78; // the input box on the home screen, like OpenCode's centered prompt
 export const BAR = "┃";
-const ANSI = /\u001b\[[0-9;]*m|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+// códigos que não ocupam coluna: CSI (cor, cursor), OSC (links) e APC/DCS/PM/SOS (o Pi marca o cursor com
+// \x1b_pi:c\x07). Contar o marcador como texto deixava a faixa da caixa de digitar 7 colunas mais curta.
+const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b[\]_P^X][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+const ANSI_SPLIT = /(\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b[\]_P^X][^\u0007\u001b]*(?:\u0007|\u001b\\))/;
 
 export function visible(text) {
 	return [...String(text).replace(ANSI, "")].length;
@@ -27,8 +30,8 @@ export function fit(text, width) {
 	if (visible(text) <= width) return text;
 	let out = "";
 	let seen = 0;
-	for (const part of String(text).split(/(\u001b\[[0-9;]*m)/)) {
-		if (/^\u001b\[/.test(part)) {
+	for (const part of String(text).split(ANSI_SPLIT)) {
+		if (/^\u001b/.test(part)) {
 			out += part;
 			continue;
 		}
