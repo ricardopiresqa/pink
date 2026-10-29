@@ -1,10 +1,14 @@
 // Pink UI (F50b): the OpenCode look on top of the Pi engine.
 //
 //   home (empty session)   a big PINK in the middle, the input box right under it, a line of hints
-//   session                the logo goes away; the input box stays at the bottom with a pink bar and the model label; one-line footer
+//   session                the logo goes away; full-screen frame: top bar, SESSÕES | conversation + input box | CONTEXTO/PLANO/
+//                          ALTERAÇÕES/SESSÃO, bottom bar; the side columns come and go with the terminal width
 //
-// Loaded by default by the Pink build (pink/rebrand.json patches the extension list). It only uses the public extension API
-// (setHeader, setEditorComponent, setFooter), so it survives Pi upgrades. The layout functions are pure and exported for tests.
+// Loaded by default by the Pink build (pink/rebrand.json patches the extension list). It uses the public extension API
+// (setHeader, setEditorComponent, setFooter, setWidget, registerMarkdownTransformer); the root layout and the label over each
+// answer, the pink bar of the user message and the root layout come from three small dist patches (frame-layout,
+// assistant-footer, user-bar) that only call globalThis.__pinkFrame, __pinkAssistantFooter and __pinkUserBar.
+// The layout functions are pure and exported for tests.
 
 export const LOGO = [
 	"██████╗ ██╗███╗   ██╗██╗  ██╗",
@@ -15,7 +19,7 @@ export const LOGO = [
 	"╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝",
 ];
 export const HOME_WIDTH = 78; // the input box on the home screen, like OpenCode's centered prompt
-export const BAR = "┃";
+export const BAR = "▌"; // a barra rosa cheia da caixa de envio e da mensagem do usuário (#ff6eb4, a cor accent do tema)
 // códigos que não ocupam coluna: CSI (cor, cursor), OSC (links) e APC/DCS/PM/SOS (o Pi marca o cursor com
 // \x1b_pi:c\x07). Contar o marcador como texto deixava a faixa da caixa de digitar 7 colunas mais curta.
 const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b[\]_P^X][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
@@ -79,17 +83,22 @@ export function homeBottomPad(rows, headerHeight, editorHeight) {
 	return Math.max(0, rows - 1 - headerHeight - editorHeight);
 }
 
-export function inputBox({ theme, content, width, label }) {
-	// `content` are the lines of the built-in editor without its top and bottom borders; the box is exactly `width` wide
-	const text = Math.max(1, width - 2); // the bar and one space take two columns
-	const bar = theme.fg("accent", BAR);
+export function inputBox({ theme, content, width, label, inline = false, hints = BOX_HINTS }) {
+	// `content` are the lines of the built-in editor without its top and bottom borders; the box is exactly `width` wide.
+	// Barra rosa cheia à esquerda + fundo, como a barra do OpenCode (owner 2026-10-29, pink.3; antes era a borda inteira);
+	// `inline`: o rótulo "Build · modelo" fica à direita da primeira linha (o editor foi desenhado mais estreito para caber);
+	// senão ele vai para a linha das dicas, à esquerda
+	const text = Math.max(1, width - 3); // a barra e um espaço de cada lado
 	const panel = (value) => (theme.bg ? theme.bg("userMessageBg", value) : value);
 	// o editor do Pi devolve a linha com "resetar cor" no meio (cursor, texto): sem reaplicar o fundo depois de cada reset,
 	// a faixa do texto ficava preta e só o rodapé da caixa ficava rosado
 	const open = theme.bg ? theme.bg("userMessageBg", "\u0000").split("\u0000")[0] : "";
 	const keep = (value) => (open ? value.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + open) : value);
-	const row = (value) => `${bar}${panel(keep(` ${pad(fit(value, text), text)}`))}`;
-	return [row(""), ...content.map(row), row(""), row(theme.fg("muted", label))];
+	const row = (value) => `${theme.fg("accent", BAR)}${panel(keep(` ${pad(fit(value, text), text)} `))}`;
+	const tip = theme.fg("dim", hints);
+	const lines = inline && label ? [footerLine({ theme, width: text, left: content[0] ?? "", right: label }), ...content.slice(1)] : content;
+	const last = inline || !label ? footerLine({ theme, width: text, left: "", right: tip }) : footerLine({ theme, width: text, left: theme.fg("muted", label), right: tip });
+	return [row(""), ...lines.map(row), row(""), row(last)];
 }
 
 export function footerLine({ theme, width, left, right }) {
@@ -128,7 +137,7 @@ export function planDecision(toolName, annotations) {
 
 // paleta de comandos (ctrl+p, como no OpenCode): os comandos do Pi com a descrição em português e os das extensões
 export const BUILTIN_COMMANDS = [
-	["new", "Nova sessão"], ["resume", "Trocar de sessão (lista as salvas)"], ["sessions", "Sessões desta pasta"], ["name", "Renomear a sessão"],
+	["new", "Nova sessão"], ["resume", "Trocar de sessão (lista as salvas)"], ["sessions", "Sessões desta pasta"], ["delete-session", "Apagar sessão (vai para a lixeira .trash)"], ["name", "Renomear a sessão"],
 	["model", "Escolher o modelo"], ["thinking", "Nível de pensamento"], ["themes", "Escolher o tema"], ["settings", "Configurações"],
 	["undo", "Desfazer a última mensagem e as mudanças nos arquivos"], ["redo", "Refazer o que o /undo desfez"],
 	["plan", "Agente Plano (só leitura)"], ["build", "Agente Build (edita e roda comandos)"], ["todos", "Lista de tarefas do agente"],
@@ -233,11 +242,138 @@ export async function gitRestore(snapshot, run = runGit) {
 	return { now, changed: back.length + created.length };
 }
 
-// -- lateral no estilo do OpenCode (owner 2026-10-13): sessão, contexto, tokens por modelo, modelo, Thoth, pasta e versão.
-// O Pink não tem MCP nem LSP próprios: a lateral mostra o que ele de fato sabe. Só aparece na sessão (não na tela inicial),
-// com a janela larga (>= 120 colunas); /lateral esconde e mostra.
-export const SIDEBAR_WIDTH = 36;
-export const SIDEBAR_MIN_COLUMNS = 120;
+// -- moldura de tela cheia (owner 2026-10-29, card 86e3x0ckk): topo, SESSÕES à esquerda, conversa no centro, CONTEXTO/PLANO/
+// ALTERAÇÕES/SESSÃO à direita e rodapé. Adaptativa como os painéis do OBS: a largura decide quantas colunas cabem. Só mostra
+// dado real; o que o Pink não sabe (custo zero, contexto ainda não medido) some. O patch frame-layout do build monta o layout
+// raiz com quatro espaços (top, left, right, bottom) que chamam globalThis.__pinkFrame; sem a extensão, eles ficam invisíveis.
+export const LEFT_WIDTH = 32; // com a borda (pink.3: +2 para o horário de cada sessão)
+export const RIGHT_WIDTH = 36; // com a borda
+export const THREE_COLUMNS = 150; // >= 150: sessões, conversa e contexto
+export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: só a conversa
+export const PLACEHOLDER = "Peça a próxima etapa...";
+export const BOX_HINTS = "Enter enviar · shift+tab pensar · ctrl+t ver pensamento";
+
+export function frameColumns(width, { home = false, on = true } = {}) {
+	if (home || !on) return { left: false, right: false };
+	return { left: width >= THREE_COLUMNS, right: width >= TWO_COLUMNS };
+}
+
+export function barRows(rows) {
+	return rows < 20 ? 1 : 2; // terminal baixo: topo e rodapé sem a linha separadora
+}
+
+const bold = (theme, text) => (theme.bold ? theme.bold(text) : text);
+
+export function kTokens(value) {
+	const n = Number(value) || 0;
+	return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n);
+}
+
+export function meter({ theme, percent, cells }) {
+	const full = Math.max(0, Math.min(cells, Math.round(((Number(percent) || 0) / 100) * cells)));
+	return `${theme.fg("accent", "━".repeat(full))}${theme.fg("borderMuted", "━".repeat(cells - full))}`;
+}
+
+export function topBar({ theme, width, rows, data }) {
+	const sep = theme.fg("dim", " │ ");
+	let left = `${theme.fg("accent", "✱")} ${bold(theme, theme.fg("text", "pink"))}${width >= 100 && data.version ? theme.fg("dim", ` ${data.version}`) : ""}`;
+	left += `${sep}${theme.fg("text", data.folder || "")}`;
+	if (data.branch && width >= 80) left += `${sep}${theme.bg ? theme.bg("selectedBg", theme.fg("accent", ` ⎇ ${data.branch} `)) : ` ⎇ ${data.branch} `}`;
+	let right = `${bold(theme, theme.fg("text", "THOTH"))}${theme.fg("muted", " · ")}${theme.fg("accent", (AGENTS[data.agent]?.label ?? "Build").toUpperCase())}`;
+	const ctx = data.context;
+	if (width >= TWO_COLUMNS && ctx?.tokens != null && ctx.window) {
+		right += `${sep}${meter({ theme, percent: ctx.percent, cells: 14 })} ${theme.fg("text", `${Math.round(ctx.percent ?? 0)}% · ${kTokens(ctx.tokens)} / ${kTokens(ctx.window)}`)}`;
+	}
+	const line = footerLine({ theme, width, left: ` ${left}`, right: `${right} ` });
+	return barRows(rows) > 1 ? [line, theme.fg("borderMuted", "─".repeat(width))] : [line];
+}
+
+export const SHORTCUTS = [["ctrl+p", "comandos"], ["ctrl+c", "limpar"], ["/hotkeys", "ajuda"]]; // os atalhos reais do Pink
+
+export function bottomBar({ theme, width, rows, data }) {
+	const sep = theme.fg("dim", " │ ");
+	const left = ` ${theme.fg("muted", data.folder || "")}${data.branch && width >= 80 ? `${sep}${theme.fg("accent", `⎇ ${data.branch}`)}` : ""}`;
+	let keys = SHORTCUTS;
+	const render = (list) => `${list.map(([key, what]) => `${theme.fg("muted", key)} ${theme.fg("dim", what)}`).join(sep)} `;
+	while (keys.length > 1 && visible(left) + visible(render(keys)) + 2 > width) keys = keys.slice(0, -1);
+	const line = footerLine({ theme, width, left, right: render(keys) });
+	return barRows(rows) > 1 ? [theme.fg("borderMuted", "─".repeat(width)), line] : [line];
+}
+
+const rule = (theme, width) => theme.fg("borderMuted", "─".repeat(Math.max(0, width)));
+const heading = (theme, text, extra = "") => `${bold(theme, theme.fg("text", text))}${extra}`;
+
+export function leftColumn({ theme, width, height, data }) {
+	// SESSÕES no alto (a atual destacada), "+ Nova sessão" e, embaixo, FERRAMENTAS com quantas estão ativas
+	const inner = Math.max(4, width - 1);
+	const cell = (text = "") => pad(fit(text, inner), inner);
+	const foot = height >= 8 ? [rule(theme, inner - 1), cell(` ${heading(theme, "FERRAMENTAS")}  ${theme.fg("success", "●")} ${theme.fg("muted", `${data.tools ?? 0} ativas`)}`)] : [];
+	const top = [cell(` ${heading(theme, "SESSÕES")}`), cell()];
+	const room = Math.max(0, height - top.length - foot.length - 1);
+	const sessions = (data.sessions ?? []).slice(0, room);
+	// o horário à direita separa as sessões de mesmo nome ("oi" às 14:32 e "oi" ontem); a atual leva o ● no fim
+	const name = (title, room) => fit(String(title || "(sem título)").replace(/\s+/g, " ").trim(), room);
+	const highlight = (value) => (theme.bg ? theme.bg("selectedBg", value) : value);
+	const entry = (item) => {
+		const when = item.when ? `${theme.fg("dim", item.when)}${item.current ? theme.fg("accent", " ●") : "  "} ` : item.current ? `${theme.fg("accent", "●")} ` : "";
+		const room = inner - 3 - visible(when) - 1;
+		const title = item.current ? bold(theme, theme.fg("accent", name(item.title, room))) : theme.fg("text", name(item.title, room));
+		return footerLine({ theme, width: inner, left: ` ${item.current ? theme.fg("accent", "▌") : " "} ${title}`, right: when });
+	};
+	const list = sessions.map((item) => (item.current ? highlight(entry(item)) : entry(item)));
+	const body = [...top, ...list, cell(`   ${theme.fg("muted", "+ Nova sessão")} ${theme.fg("dim", "/new")}`)].slice(0, Math.max(0, height - foot.length));
+	const lines = [...body, ...Array(Math.max(0, height - body.length - foot.length)).fill(cell()), ...foot];
+	return lines.map((line) => `${pad(line, inner)}${theme.fg("borderMuted", "│")}`);
+}
+
+export function rightColumn({ theme, width, height, data }) {
+	// CONTEXTO, PLANO (o todowrite), ALTERAÇÕES (edit/write desta sessão) e SESSÃO (tokens; custo só quando há)
+	const inner = Math.max(6, width - 3);
+	const out = [heading(theme, "CONTEXTO")];
+	const ctx = data.context;
+	if (ctx?.tokens != null && ctx.window) {
+		out.push(meter({ theme, percent: ctx.percent, cells: inner }), `${theme.fg("accent", `${kTokens(ctx.tokens)} tokens`)}${theme.fg("muted", ` · ${Math.round(ctx.percent ?? 0)}% de ${kTokens(ctx.window)}`)}`);
+	} else {
+		out.push(theme.fg("dim", "ainda sem medida"));
+	}
+	const todos = data.todos ?? [];
+	out.push("", rule(theme, inner), heading(theme, "PLANO", todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
+	if (todos.length) out.push(...todoLines({ theme, todos, width: inner }).slice(1).map((line) => line.replace(/^ {2}/, "")));
+	else out.push(theme.fg("dim", "sem plano nesta sessão"));
+	const changes = data.changes ?? [];
+	out.push("", rule(theme, inner), heading(theme, "ALTERAÇÕES", changes.length ? theme.fg("muted", `  ${changes.length}`) : ""));
+	if (changes.length) {
+		for (const item of changes) {
+			const status = item.status === "novo" ? `${theme.fg("accent", "●")} ${theme.fg("muted", "novo")}` : `${theme.fg("success", "●")} ${theme.fg("muted", "editado")}`;
+			const room = inner - visible(status) - 1;
+			const path = item.path.length > room ? `…${item.path.slice(-(room - 1))}` : item.path;
+			out.push(footerLine({ theme, width: inner, left: theme.fg("text", path), right: status }));
+		}
+	} else {
+		out.push(theme.fg("dim", "nenhum arquivo alterado"));
+	}
+	out.push("", rule(theme, inner), heading(theme, "SESSÃO"));
+	out.push(`${theme.fg("text", formatTokens(data.input))} ${theme.fg("muted", "entrada")}${theme.fg("dim", " │ ")}${theme.fg("text", formatTokens(data.output))} ${theme.fg("muted", "saída")}`);
+	if (data.models?.length) out.push(theme.fg("muted", `modelo ${data.models.map(shortModel).join(", ")}`));
+	if (data.cost > 0) out.push(theme.fg("muted", `$${data.cost.toFixed(2)} gasto`));
+	if (data.project) out.push(theme.fg("muted", `projeto ${data.project}`));
+	const lines = out.slice(0, height).map((line) => pad(fit(line, inner), inner));
+	return [...lines, ...Array(Math.max(0, height - lines.length)).fill(" ".repeat(inner))].map((line) => `${theme.fg("borderMuted", "│")} ${line} `);
+}
+
+export function changesFromBranch(entries, created = new Set()) {
+	// arquivos que as ferramentas edit/write tocaram no ramo atual (o /undo volta o ramo, e a lista volta junto)
+	const seen = new Map();
+	for (const entry of entries ?? []) {
+		const message = entry?.type === "message" ? entry.message : undefined;
+		if (message?.role !== "assistant" || !Array.isArray(message.content)) continue;
+		for (const part of message.content) {
+			const path = part?.type === "toolCall" && (part.name === "edit" || part.name === "write") ? part.arguments?.path : undefined;
+			if (typeof path === "string" && path && !seen.has(path)) seen.set(path, created.has(path) ? "novo" : "editado");
+		}
+	}
+	return [...seen.entries()].map(([path, status]) => ({ path: path.replace(/\\/g, "/"), status }));
+}
 
 export function formatTokens(value) {
 	const n = Number(value) || 0;
@@ -291,38 +427,6 @@ export function thothProject(cwd, vault, readFile) {
 	}
 }
 
-export function sidebarLines({ theme, width, data }) {
-	const w = Math.max(10, width);
-	const line = (text = "") => fit(text, w);
-	const title = (text) => line(theme.bold ? theme.bold(theme.fg("text", text)) : theme.fg("text", text));
-	const dim = (text) => line(theme.fg("muted", text));
-	const out = [];
-	if (data.title) {
-		const words = data.title.length > w * 2 ? `${data.title.slice(0, w * 2 - 1)}…` : data.title;
-		out.push(title(words.slice(0, w)), ...(words.length > w ? [title(words.slice(w, w * 2))] : []), "");
-	}
-	out.push(title("Contexto"));
-	if (data.context?.tokens != null) {
-		out.push(dim(`${formatTokens(data.context.tokens)} tokens`), dim(`${Math.round(data.context.percent ?? 0)}% usado de ${formatTokens(data.context.window)}`));
-	} else {
-		out.push(dim("ainda sem medida"));
-	}
-	out.push(dim(`$${(data.cost ?? 0).toFixed(2)} gasto`), "");
-	if (data.models?.length) {
-		out.push(title("Tokens da sessão"));
-		for (const item of data.models) {
-			out.push(line(`  ${theme.fg("text", item.model)}`), dim(`    ${formatTokens(item.input)} entrada  ${formatTokens(item.output)} saída`));
-		}
-		out.push("");
-	}
-	out.push(title("Modelo"), line(`  ${data.model || theme.fg("muted", "sem modelo")}`), "");
-	if (data.todos?.length) out.push(...todoLines({ theme, todos: data.todos, width: w }), "");
-	if (data.project) out.push(title("Thoth"), dim(`  projeto ${data.project}`), "");
-	if (data.tools?.length) out.push(title("Ferramentas"), dim(`  ${data.tools.length} ativas`), "");
-	out.push(dim(data.folder || ""), ...(data.branch ? [line(theme.fg("text", data.branch))] : []), "", line(`${theme.fg("accent", "•")} ${theme.fg("text", "Pink")} ${theme.fg("muted", data.version || "")}`));
-	return out;
-}
-
 // -- ao sair (owner 2026-10-13: "quando eu saio do pink tem que aparecer a logo do pink, assim como funciona o opencode"):
 // o terminal volta limpo e fica o logo, o título da sessão, tokens e custo, e o comando para continuar
 export function exitBanner({ theme, title, stats, resume }) {
@@ -341,7 +445,7 @@ export function exitBanner({ theme, title, stats, resume }) {
 
 function tilde(cwd) {
 	const home = process.env.USERPROFILE || process.env.HOME || "";
-	return home && cwd.toLowerCase().startsWith(home.toLowerCase()) ? `~${cwd.slice(home.length)}` : cwd;
+	return (home && cwd.toLowerCase().startsWith(home.toLowerCase()) ? `~${cwd.slice(home.length)}` : cwd).replace(/\\/g, "/");
 }
 
 export function hasMessages(ctx) {
@@ -352,8 +456,22 @@ export function hasMessages(ctx) {
 	}
 }
 
-export function install(pi, ctx, { CustomEditor, version = "", matchesKey, onPalette, onAgent }) {
-	const state = { home: !hasMessages(ctx), tui: undefined, branch: "" };
+// depois de trocar de sessão (ou /reload) o ctx antigo lança "ctx is stale" em qualquer leitura; até o session_start novo
+// reinstalar a interface, o que ainda desenha com ele devolve vazio em vez de derrubar o Pink
+export function live(fn, fallback) {
+	return (...args) => {
+		try {
+			return fn(...args);
+		} catch {
+			return typeof fallback === "function" ? fallback(...args) : fallback;
+		}
+	};
+}
+
+export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel"];
+
+export function install(pi, ctx, { CustomEditor, SessionManager, version = "", matchesKey, onPalette, onAgent }) {
+	const state = { home: !hasMessages(ctx), tui: undefined, branch: "", sessions: [] };
 	const redraw = () => state.tui?.requestRender();
 	const leaveHome = () => {
 		if (state.home) {
@@ -367,11 +485,31 @@ export function install(pi, ctx, { CustomEditor, version = "", matchesKey, onPal
 		state.branch = (result?.stdout ?? "").trim();
 		redraw();
 	}).catch(() => undefined);
+	// sessões desta pasta (as mesmas do /sessions): relidas ao abrir e ao fim de cada execução (a sessão nova ganha arquivo e título)
+	const loadSessions = () => void SessionManager?.list?.(ctx.cwd).then((list) => {
+		state.sessions = [...list].sort((a, b) => b.modified - a.modified);
+		redraw();
+	}).catch(() => undefined);
+	loadSessions();
+	PINK.refreshSessions = loadSessions;  // o "Apagar sessão" relê a coluna depois de mover o arquivo
+	pi.on("agent_end", () => {
+		// título automático (owner 2026-10-29): só quando a sessão ainda não tem nome
+		if (!pi.getSessionName?.()) {
+			const title = autoTitle(ctx.sessionManager?.getBranch?.());
+			if (title) pi.setSessionName?.(title);
+		}
+		loadSessions();
+	});
+
+	// a moldura só existe na tela cheia; no modo regular do Pi (--tui-mode regular) fica o rodapé de uma linha
+	const framed = () => (state.tui?.mode ?? "fullscreen") === "fullscreen";
+	const rows = () => state.tui?.terminal?.rows ?? 24;
+	const homeRows = () => (framed() ? rows() - 2 * barRows(rows()) + 1 : rows()); // homeTop/homeBottomPad já descontam uma linha de rodapé
 
 	ctx.ui.setHeader((tui, theme) => {
 		state.tui = tui;
 		return {
-			render: (width) => (state.home ? homeHeader({ theme, width, rows: tui.terminal.rows, subtitle: `coding agent · modelo ${ctx.model?.id ?? "thoth"}` }) : []),
+			render: live((width) => (state.home ? homeHeader({ theme, width, rows: homeRows(), subtitle: `coding agent · modelo ${ctx.model?.id ?? "thoth"}` }) : []), []),
 			invalidate() {},
 		};
 	});
@@ -380,34 +518,76 @@ export function install(pi, ctx, { CustomEditor, version = "", matchesKey, onPal
 		constructor(tui, theme, keybindings) {
 			super(tui, theme, keybindings, { paddingX: 0 });
 			state.tui = tui;
+			state.editor = this;
+			this.pinkKeys = keybindings;
 		}
 
 		// ctrl+p abre a paleta e tab com a caixa vazia troca o agente (OpenCode); o resto segue para o editor do Pi
 		handleInput(data) {
 			if (matchesKey?.(data, "ctrl+p") && onPalette) return void onPalette();
 			if (matchesKey?.(data, "tab") && onAgent && !String(this.getText?.() ?? "").trim()) return void onAgent();
+			// ctrl+n nova sessão; alt+↑/alt+↓ a sessão anterior/seguinte da coluna, salvo onde o Pi já usa a tecla (dequeue fora do Windows)
+			if (matchesKey?.(data, "ctrl+n")) return void runCommand("/new");
+			const step = matchesKey?.(data, "alt+up") ? -1 : matchesKey?.(data, "alt+down") ? 1 : 0;
+			if (step && !this.pinkKeys?.matches?.(data, "app.message.dequeue")) return void openNeighbour(step);
 			super.handleInput(data);
 		}
 
 		render(width) {
+			try {
+				return this.pinkRender(width);
+			} catch {
+				return super.render(width);  // ctx antigo durante a troca de sessão: o editor do Pi, sem moldura
+			}
+		}
+
+		pinkRender(width) {
 			const outer = state.home ? Math.min(width, HOME_WIDTH) : width;
 			const margin = state.home ? Math.floor((width - outer) / 2) : 0;
-			const raw = super.render(Math.max(1, outer - 2));
-			const content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
 			const theme = ctx.ui.theme;
 			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent });
-			const lines = inputBox({ theme, content, width: outer, label }).map((line) => " ".repeat(margin) + line);
+			const text = outer - 4;
+			const inline = text - visible(label) - 2 >= 30; // o rótulo à direita só quando sobra uma faixa de texto decente
+			const raw = super.render(Math.max(1, inline ? text - visible(label) - 2 : text));
+			let content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
+			if (typeof this.getText === "function" && this.getText() === "" && content.length) content = [`${content[0].replace(/\s+$/, "")}${theme.fg("dim", PLACEHOLDER)}`, ...content.slice(1)];
+			const lines = inputBox({ theme, content, width: outer, label, inline }).map((line) => " ".repeat(margin) + line);
 			if (!state.home) return lines;
-			const rows = state.tui?.terminal?.rows ?? 24;
 			const body = [...lines, "", hintsLine({ theme, width })];
-			return [...body, ...Array(homeBottomPad(rows, homeTop(rows) + HEADER_BODY, body.length)).fill("")];
+			return [...body, ...Array(homeBottomPad(homeRows(), homeTop(homeRows()) + HEADER_BODY, body.length)).fill("")];
 		}
 	}
 
+	// trocar de sessão só é permitido a comandos (ExtensionCommandContext): o clique e as teclas digitam o comando na caixa
+	const runCommand = (text) => {
+		if (ctx.isIdle && !ctx.isIdle()) return void ctx.ui.notify?.("Espere a resposta terminar para trocar de sessão", "info");
+		if (!state.editor?.setText) return;
+		state.editor.setText(text);
+		state.editor.handleInput("\r");
+	};
+	const openNeighbour = (step) => {
+		const current = ctx.sessionManager?.getSessionFile?.();
+		const index = state.sessions.findIndex((item) => item.path === current);
+		const target = state.sessions[index === -1 ? (step > 0 ? 0 : -1) : index + step];
+		if (target) runCommand(`/session-open ${target.path}`);
+	};
+	const shownSessions = (height) => state.sessions.slice(0, Math.max(0, height - 2 - (height >= 8 ? 2 : 0) - 1));
+
 	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pi 1.x abre e recolhe cada bloco com um clique,
 	// ctrl+t abre e recolhe todos (e salva); o título do bloco aberto vem do patch thinking-header-when-shown
-	ctx.ui.setHiddenThinkingLabel?.("▸ Pensamento · clique ou ctrl+t para ver");
-	globalThis.__pinkThinkingHeader = "▾ Pensamento · clique ou ctrl+t para recolher";
+	ctx.ui.setHiddenThinkingLabel?.("+ Pensou");
+	globalThis.__pinkThinkingHeader = "− Pensou · clique ou ctrl+t recolhe";
+	globalThis.__pinkThinkingLabel = (message, runIndex) => thinkingLabel(PINK.thinking.get(message?.timestamp)?.[runIndex]?.ms);
+	// "Pink · Build" sobre cada resposta (patch assistant-label); o agente é o da hora da resposta, desconhecido em sessão reaberta
+	// rodapé de cada resposta final (patch assistant-footer), lido a cada quadro: o tempo chega no message_end
+	globalThis.__pinkAssistantFooter = live((message, streaming, width, outputPad = 1) => {
+		if (streaming) return [];
+		const timing = PINK.timing.get(message?.timestamp) ?? {};
+		const line = assistantFooter({ theme: ctx.ui.theme, model: message?.model, agent: PINK.agentOf.get(message?.timestamp), ms: timing.ms, output: message?.usage?.output });
+		return [fit(" ".repeat(outputPad) + line, width)];
+	}, []);
+	// barra rosa cheia à esquerda da mensagem do usuário (patch user-bar), a mesma da caixa de envio
+	globalThis.__pinkUserBar = live((line) => `${ctx.ui.theme.fg("accent", BAR)}${line}`, (line) => line);
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	const project = (() => {
 		try {
@@ -418,50 +598,196 @@ export function install(pi, ctx, { CustomEditor, version = "", matchesKey, onPal
 		}
 	})();
 	Object.defineProperty(globalThis, "__pinkHome", { get: () => state.home, configurable: true });
-	globalThis.__pinkSidebar = {
-		visible: (viewport) => (globalThis.__pinkSidebarOn ?? true) && !state.home && viewport.width >= SIDEBAR_MIN_COLUMNS,
-		render(width) {
-			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
-			const usage = ctx.getContextUsage?.();
-			const theme = ctx.ui.theme;
-			return sidebarLines({ theme, width, data: {
-				...stats,
-				context: usage ? { tokens: usage.tokens, percent: usage.percent, window: usage.contextWindow } : undefined,
-				model: modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent }),
-				todos: PINK.todos,
-				project,
-				tools: pi.getActiveTools?.() ?? [],
-				folder: tilde(ctx.cwd),
-				branch: state.branch,
-				version,
-			} });
-		},
-		invalidate() {},
+	const columns = (width) => frameColumns(width, { home: state.home, on: globalThis.__pinkSidebarOn ?? true });
+	const bars = () => {
+		const usage = ctx.getContextUsage?.();
+		return { version, folder: tilde(ctx.cwd), branch: state.branch, agent: PINK.agent, context: usage ? { tokens: usage.tokens, percent: usage.percent, window: usage.contextWindow } : undefined };
 	};
-	// tarefas sobre a caixa de digitar quando a lateral não cabe (com a lateral, elas aparecem nela)
+	globalThis.__pinkFrame = {
+		// clique na coluna SESSÕES: linha 0 título, 1 em branco, depois as sessões e "+ Nova sessão"
+		mouse: live((slot, event) => {
+			if (slot !== "left" || event?.type !== "click" || event.button !== "left") return undefined;
+			const shown = shownSessions(Math.max(1, rows() - 2 * barRows(rows())));
+			const index = event.y - 2;
+			if (index >= 0 && index < shown.length) runCommand(`/session-open ${shown[index].path}`);
+			else if (index === shown.length) runCommand("/new");
+			else return undefined;
+			return { handled: true };
+		}, undefined),
+		visible: live((slot, viewport) => (slot === "top" || slot === "bottom" ? true : Boolean(columns(viewport.width)[slot])), false),
+		render: live((slot, width) => {
+			const theme = ctx.ui.theme;
+			const height = Math.max(1, rows() - 2 * barRows(rows()));
+			if (slot === "top") return topBar({ theme, width, rows: rows(), data: bars() });
+			if (slot === "bottom") return bottomBar({ theme, width, rows: rows(), data: bars() });
+			if (slot === "left") {
+				const current = ctx.sessionManager?.getSessionFile?.();
+				const title = ctx.sessionManager?.getSessionName?.() || sessionStats(ctx.sessionManager?.getEntries?.()).title || "Sessão atual";
+				const listed = state.sessions.map((item) => ({ title: item.name || item.firstMessage, current: item.path === current, when: relativeTime(item.modified) }));
+				const sessions = listed.some((item) => item.current) ? listed : [{ title, current: true, when: relativeTime(Date.now()) }, ...listed];
+				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pi.getActiveTools?.() ?? []).length } });
+			}
+			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
+			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
+		}, []),
+	};
+	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
 	ctx.ui.setWidget?.("pink-tarefas", (tui, theme) => ({
-		render: (width) => (!PINK.todos.some((item) => item.status === "pending" || item.status === "in_progress") || globalThis.__pinkSidebar.visible({ width: tui.terminal?.columns ?? width }) ? [] : todoLines({ theme, todos: PINK.todos, width })),
+		render: live((width) => (!PINK.todos.some((item) => item.status === "pending" || item.status === "in_progress") || columns(tui.terminal?.columns ?? width).right ? [] : todoLines({ theme, todos: PINK.todos, width })), []),
 		invalidate() {},
 	}));
 	ctx.ui.setFooter((tui, theme) => {
 		state.tui = tui;
 		return {
-			render(width) {
+			render: live((width) => {
+				if (framed()) return []; // na tela cheia, o rodapé é o da moldura (largura toda, sob as colunas)
 				const usage = ctx.getContextUsage?.();
 				const window = usage?.contextWindow ?? ctx.model?.contextWindow;
 				const used = usage && usage.percent !== null && window ? `${Math.round(usage.percent)}%/${Math.round(window / 1000)}k` : "";
 				const left = theme.fg("muted", ` ${tilde(ctx.cwd)}${state.branch ? ` (${state.branch})` : ""}`);
 				const right = `${theme.fg("muted", "ctrl+t pensamento")}${theme.fg("dim", `   ${used ? `ctx ${used}   ` : ""}pink ${version} `)}`;
 				return [footerLine({ theme, width, left, right })];
-			},
+			}, []),
 			invalidate() {},
 		};
 	});
 	return state;
 }
 
+// horário relativo da coluna SESSÕES: hoje "14:32", ontem "ontem", até uma semana "3d", depois "28/10"
+export function relativeTime(when, now = new Date()) {
+	const date = new Date(when);
+	if (Number.isNaN(date.getTime())) return "";
+	const day = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+	const days = Math.round((day(now) - day(date)) / 86400000);
+	const two = (n) => String(n).padStart(2, "0");
+	if (days <= 0) return `${two(date.getHours())}:${two(date.getMinutes())}`;
+	if (days === 1) return "ontem";
+	if (days < 7) return `${days}d`;
+	return `${two(date.getDate())}/${two(date.getMonth() + 1)}`;
+}
+
+// título automático: a primeira mensagem do usuário com mais de 3 palavras (as sessões ficavam todas "oi")
+export function autoTitle(entries, max = 50) {
+	for (const entry of entries ?? []) {
+		const message = entry?.type === "message" ? entry.message : undefined;
+		if (message?.role !== "user") continue;
+		const content = Array.isArray(message.content) ? message.content.filter((part) => part?.type === "text").map((part) => part.text).join(" ") : message.content;
+		const text = String(content ?? "").replace(/\s+/g, " ").trim();
+		if (text.startsWith("/") || text.split(" ").length <= 3) continue;
+		return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+	}
+	return "";
+}
+
+// "Apagar sessão" nunca apaga (regra do owner): move o arquivo para <pasta das sessões>/.trash/, que o Pi não lista
+export function trashSession(file, current, { fs, path, now = Date.now() }) {
+	if (!file) return { ok: false, reason: "sessão sem arquivo" };
+	if (current && path.resolve(file).toLowerCase() === path.resolve(current).toLowerCase()) return { ok: false, reason: "é a sessão atual: troque de sessão antes de apagar" };
+	const dir = path.join(path.dirname(file), ".trash");
+	fs.mkdirSync(dir, { recursive: true });
+	let target = path.join(dir, path.basename(file));
+	if (fs.existsSync(target)) target = path.join(dir, `${now}-${path.basename(file)}`);
+	fs.renameSync(file, target);
+	return { ok: true, target };
+}
+
+// ferramentas e pensamento compactos, como no OpenCode (owner 2026-10-29): uma linha cinza por bloco; ctrl+o (ferramentas)
+// e ctrl+t (pensamento) expandem para a visão completa do Pi, com o diff do edit
+const shorten = (text, max) => {
+	const value = String(text ?? "").replace(/\s+/g, " ").trim();
+	return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+};
+
+export function diffStats(patch) {
+	let add = 0;
+	let del = 0;
+	for (const line of String(patch ?? "").split("\n")) {
+		if (line.startsWith("+") && !line.startsWith("+++")) add += 1;
+		else if (line.startsWith("-") && !line.startsWith("---")) del += 1;
+	}
+	return { add, del };
+}
+
+export function toolSummary(name, args = {}, result) {
+	const file = (value) => String(value ?? "").replace(/\\/g, "/");
+	if (name === "read") return `Leu ${file(args.path)}`;
+	if (name === "write") return `Escreveu ${file(args.path)}${typeof args.content === "string" ? ` · ${args.content.split("\n").length} linhas` : ""}`;
+	if (name === "edit") {
+		const patch = result?.details?.patch ?? result?.details?.diff;
+		const stats = patch ? diffStats(patch) : undefined;
+		return `Editou ${file(args.path)}${stats ? ` +${stats.add} −${stats.del}` : ""}`;
+	}
+	if (name === "bash") return `Rodou: ${shorten(args.command, 60)}`;
+	if (name === "grep") return `Buscou "${shorten(args.pattern, 40)}"`;
+	if (name === "find") return `Procurou ${shorten(args.pattern ?? args.path, 40)}`;
+	if (name === "ls") return `Listou ${file(args.path ?? ".")}`;
+	if (name === "todowrite") {
+		const todos = normalizeTodos(args.todos);
+		return `Plano · ${todos.filter((item) => item.status === "completed").length}/${todos.length}`;
+	}
+	return name;
+}
+
+export function compactToolRenderer(toolName, next) {
+	const base = next?.();
+	const empty = { render: () => [], invalidate() {} };
+	const line = (theme, pad, text, extra = "") => ({ render: (width) => [fit(`${" ".repeat(pad)}${theme.fg("muted", `→ ${text}`)}${extra}`, width)], invalidate() {} });
+	// expandido: a visão do Pi; as do Pi com moldura própria ("default") ganham só o recuo, já que esta é "self"
+	const wrap = (component, pad) => (!component || base?.renderShell === "self" ? component : {
+		render: (width) => component.render(Math.max(1, width - 2 * pad)).map((row) => " ".repeat(pad) + row),
+		invalidate: () => component.invalidate?.(),
+		handleMouse: (event) => component.handleMouse?.(event),
+	});
+	const output = (result, theme, pad) => ({
+		render: (width) => (result?.content ?? []).filter((part) => part?.type === "text").flatMap((part) => String(part.text).split("\n")).map((row) => fit(" ".repeat(pad) + theme.fg("toolOutput", row), width)),
+		invalidate() {},
+	});
+	return {
+		renderShell: "self",
+		renderCall(args, theme, context) {
+			if (context.expanded) return wrap(base?.renderCall?.(args, theme, context) ?? line(theme, 0, `${toolName} ${shorten(JSON.stringify(args ?? {}), 80)}`), context.outputPad);
+			return context.isPartial ? line(theme, context.outputPad, toolSummary(toolName, args ?? {}), theme.fg("dim", " …")) : empty;
+		},
+		renderResult(result, options, theme, context) {
+			if (options.expanded) return wrap(base?.renderResult?.(result, options, theme, context) ?? output(result, theme, 0), context.outputPad);
+			if (options.isPartial) return empty;
+			const time = context.durationMs >= 100 ? theme.fg("dim", ` · ${(context.durationMs / 1000).toFixed(1)}s`) : "";
+			return line(theme, context.outputPad, toolSummary(toolName, context.args ?? {}, result), `${time}${context.isError ? theme.fg("error", " · erro") : ""}`);
+		},
+	};
+}
+
+export function thinkingLabel(ms) {
+	return `+ Pensou${ms > 0 ? ` · ${(ms / 1000).toFixed(1)}s` : ""}`;
+}
+
+export const LANGUAGE_PROMPT = "\n\n# Idioma (Pink)\nResponda no idioma em que o usuário escreve. Quando não der para saber (mensagem curta, só código), responda em português do Brasil.";
+
+// rodapé de cada resposta, como o do OpenCode: "Pink · thoth · 20.5s · 45.6 tok/s" (tempo e velocidade só quando medidos)
+export function shortModel(id) {
+	return String(id ?? "").split("/").at(-1).replace(/-\d{8}$/, "");
+}
+
+export function assistantFooter({ theme, model, agent, ms, output }) {
+	const parts = [bold(theme, theme.fg("accent", "Pink"))];
+	if (agent === "plan") parts.push(theme.fg("accent", AGENTS.plan.label));
+	if (model) parts.push(theme.fg("text", shortModel(model)));
+	if (ms > 0) parts.push(theme.fg("muted", `${(ms / 1000).toFixed(1)}s`));
+	if (ms >= 250 && output > 0) parts.push(theme.fg("muted", `${(output / (ms / 1000)).toFixed(1)} tok/s`)); // janela curta demais não mede velocidade
+	return parts.join(theme.fg("dim", " · "));
+}
+
+
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
-export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [] };
+// agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
+export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set() };
+
+// "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
+export function labelUserMarkdown(markdown, context) {
+	return context?.messageType === "user" ? `**Você**\n\n${markdown}` : markdown;
+}
 
 function userText(entry) {
 	const content = entry?.message?.content;
@@ -479,6 +805,28 @@ function switchAgent(ctx, next = PINK.agent === "build" ? "plan" : "build") {
 }
 
 export const INIT_PROMPT = "Analise este repositório e crie o arquivo AGENTS.md na raiz (ou atualize, se já existir, sem perder o que vale). Inclua, de forma concisa: os comandos de build, teste e lint (e como rodar um único teste), a arquitetura em alto nível e as convenções de código que um agente precisa seguir. Não invente o que não estiver no repositório.";
+
+const DELETE_ITEM = "× Apagar uma sessão…";
+
+async function deleteSession(ctx) {
+	const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+	const current = ctx.sessionManager?.getSessionFile?.();
+	const path = node("node:path");
+	const list = (await SessionManager.list(ctx.cwd)).filter((item) => !current || path.resolve(item.path).toLowerCase() !== path.resolve(current).toLowerCase()).sort((a, b) => b.modified - a.modified).slice(0, 40);
+	if (!list.length) return void ctx.ui.notify?.("Nenhuma outra sessão para apagar (a atual não pode ser apagada)", "info");
+	const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || "(sem título)").replace(/\s+/g, " ").slice(0, 60)}  · ${relativeTime(item.modified)}`);
+	const choice = await ctx.ui.select?.("Apagar qual sessão? (vai para a lixeira .trash)", labels);
+	if (!choice) return;
+	const item = list[labels.indexOf(choice)];
+	if (!(await ctx.ui.confirm?.("Apagar sessão?", `${choice}\nO arquivo vai para ${path.join(path.dirname(item.path), ".trash")} (nada é excluído).`))) return;
+	try {
+		const done = trashSession(item.path, current, { fs: node("node:fs"), path });
+		ctx.ui.notify?.(done.ok ? `Sessão na lixeira: ${done.target}` : `Não apagada: ${done.reason}`, done.ok ? "info" : "error");
+	} catch (error) {
+		ctx.ui.notify?.(`Não apagada: ${error?.message ?? error}`, "error");
+	}
+	PINK.refreshSessions?.();
+}
 
 function registerOpenCodeFunctions(pi) {
 	const command = (name, description, handler) => pi.registerCommand?.(name, { description, handler });
@@ -498,9 +846,15 @@ function registerOpenCodeFunctions(pi) {
 		const list = (await SessionManager.list(ctx.cwd)).sort((a, b) => b.modified - a.modified).slice(0, 40);
 		if (!list.length) return void ctx.ui.notify?.("Nenhuma sessão salva nesta pasta", "info");
 		const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || "(sem título)").replace(/\s+/g, " ").slice(0, 60)}  · ${new Date(item.modified).toLocaleString("pt-BR")}`);
-		const choice = await ctx.ui.select?.("Sessões", labels);
+		const choice = await ctx.ui.select?.("Sessões", [DELETE_ITEM, ...labels]);
+		if (choice === DELETE_ITEM) return void (await deleteSession(ctx));
 		if (choice) await ctx.switchSession(list[labels.indexOf(choice)].path);
 	});
+	command("session-open", "Abrir uma sessão pelo arquivo (o clique e alt+↑/↓ na coluna SESSÕES usam este)", async (args, ctx) => {
+		const target = String(args ?? "").trim();
+		if (target) await ctx.switchSession(target);
+	});
+	command("delete-session", "Apagar sessão (vai para a lixeira .trash, com confirmação)", async (_args, ctx) => deleteSession(ctx));
 	command("todos", "Mostra a lista de tarefas do agente", async (_args, ctx) => {
 		const lines = PINK.todos.length ? todoLines({ theme: ctx.ui.theme, todos: PINK.todos, width: 100 }) : ["Sem tarefas nesta sessão"];
 		ctx.ui.notify?.(lines.join("\n"), "info");
@@ -535,22 +889,54 @@ function registerOpenCodeFunctions(pi) {
 		const snapshot = await gitSnapshot(ctx.cwd).catch(() => undefined);
 		if (snapshot) PINK.snapshots.set(leaf.id, snapshot);
 	});
+	pi.on("message_start", async (event) => {
+		if (event?.message?.role !== "assistant") return;
+		PINK.agentOf.set(event.message.timestamp, PINK.agent);
+		PINK.timing.set(event.message.timestamp, { start: PINK.turnStart ?? Date.now() });  // do pedido ao fim, como o OpenCode
+	});
+	pi.on("message_update", async (event) => {
+		const kind = event?.assistantMessageEvent?.type;
+		if (kind !== "thinking_start" && kind !== "thinking_end") return;
+		const key = event.message?.timestamp;
+		const runs = PINK.thinking.get(key) ?? [];
+		if (kind === "thinking_start") runs.push({ start: Date.now() });
+		else if (runs.length && runs.at(-1).ms === undefined) runs.at(-1).ms = Date.now() - runs.at(-1).start;
+		PINK.thinking.set(key, runs);
+	});
+	pi.on("turn_start", async () => {
+		PINK.turnStart = Date.now();
+	});
+	pi.on("message_end", async (event) => {
+		const timing = event?.message?.role === "assistant" ? PINK.timing.get(event.message.timestamp) : undefined;
+		if (timing?.start) timing.ms = Date.now() - timing.start;
+	});
 	pi.on("tool_call", async (event, ctx) => {
+		const target = event.toolName === "write" ? event.input?.path : undefined;
+		if (typeof target === "string" && target) {
+			try {
+				if (!node("node:fs").existsSync(node("node:path").resolve(ctx.cwd ?? ".", target))) PINK.created.add(target);
+			} catch {
+				// sem como saber: a coluna ALTERAÇÕES mostra "editado"
+			}
+		}
 		if (PINK.agent !== "plan") return;
 		const decision = planDecision(event.toolName, pi.getAllTools?.().find((tool) => tool.name === event.toolName)?.annotations);
 		if (decision === "allow") return;
 		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.("Agente Plano: rodar este comando?", String(event.input?.command ?? event.toolName)))) return;
 		return { block: true, reason: `Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).` };
 	});
-	pi.on("before_agent_start", async (event) => (PINK.agent === "plan" ? { systemPrompt: `${event.systemPrompt ?? ""}${PLAN_PROMPT}` } : undefined));
+	pi.on("before_agent_start", async (event) => ({ systemPrompt: `${event.systemPrompt ?? ""}${LANGUAGE_PROMPT}${PINK.agent === "plan" ? PLAN_PROMPT : ""}` }));
 	pi.on("session_tree", async (_event, ctx) => {
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 	});
 }
 
+const TODO_RUNTIMES = new WeakSet();
+
 async function registerTodoTool(pi) {
-	if (PINK.todoRegistered || !pi.registerTool) return;
-	PINK.todoRegistered = true;
+	// uma vez por runtime: trocar de sessão cria um runtime novo, que precisa da ferramenta de novo (antes sumia: "4 ativas")
+	if (TODO_RUNTIMES.has(pi) || !pi.registerTool) return;
+	TODO_RUNTIMES.add(pi);
 	const { Type } = await import("typebox");
 	const status = Type.Union(["pending", "in_progress", "completed", "cancelled"].map((value) => Type.Literal(value)));
 	pi.registerTool({
@@ -570,6 +956,7 @@ export default function (pi) {
 	// ao sair, o contexto da extensão já foi desligado quando o Pi imprime a linha de retomar: o fechamento é montado no
 	// session_shutdown (contexto ainda ativo) e só recebe o comando de continuar depois
 	pi.on("session_shutdown", async (event, ctx) => {
+		for (const name of PINK_GLOBALS) globalThis[name] = undefined;  // a sessão seguinte reinstala; até lá, nada lê o ctx antigo
 		if (event?.reason !== "quit" || ctx?.mode !== "tui") return;
 		try {
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
@@ -587,12 +974,14 @@ export default function (pi) {
 		},
 	});
 	registerOpenCodeFunctions(pi);
+	pi.registerMarkdownTransformer?.(labelUserMarkdown);
+	pi.registerToolRenderer?.(compactToolRenderer);
 	pi.on("session_start", async (_event, ctx) => {
 		await registerTodoTool(pi);
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 		if (ctx.mode !== "tui") return;
-		const { CustomEditor, VERSION } = await import("@earendil-works/pi-coding-agent");
+		const { CustomEditor, SessionManager, VERSION } = await import("@earendil-works/pi-coding-agent");
 		const { matchesKey } = await import("@earendil-works/pi-tui");
-		install(pi, ctx, { CustomEditor, version: VERSION ?? "", matchesKey, onPalette: () => openPalette(pi, ctx), onAgent: () => switchAgent(ctx) });
+		install(pi, ctx, { CustomEditor, SessionManager, version: VERSION ?? "", matchesKey, onPalette: () => openPalette(pi, ctx), onAgent: () => switchAgent(ctx) });
 	});
 }

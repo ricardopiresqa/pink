@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.1",
+      "version": "1.4.0-pink.3",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
@@ -418,10 +418,31 @@
       "count": 1
     },
     {
-      "id": "sidebar-column",
+      "id": "frame-layout",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "root:new VStack([{component:transcript,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}])}",
-      "replace": "root:new __pinkTui.HStack([{component:new VStack([{component:transcript,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}]),basis:0,grow:1,shrink:1,minSize:20},{component:{render:w=>globalThis.__pinkSidebar?.render(w)??[],invalidate(){globalThis.__pinkSidebar?.invalidate?.()}},basis:36,grow:0,shrink:0,minSize:0,visible:v=>!!globalThis.__pinkSidebar?.visible?.(v)}],{gap:1,align:\"stretch\"})}",
+      "replace": "root:((S,V)=>new VStack([{component:S(\"top\"),basis:\"auto\",grow:0,shrink:0,minSize:0,visible:V(\"top\")},{component:new __pinkTui.HStack([{component:S(\"left\"),basis:\"auto\",grow:0,shrink:0,minSize:0,visible:V(\"left\")},{component:new VStack([{component:transcript,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}]),basis:0,grow:1,shrink:1,minSize:20},{component:S(\"right\"),basis:\"auto\",grow:0,shrink:0,minSize:0,visible:V(\"right\")}],{gap:0,align:\"stretch\"}),basis:0,grow:1,shrink:1,minSize:1},{component:S(\"bottom\"),basis:\"auto\",grow:0,shrink:0,minSize:0,visible:V(\"bottom\")}]))(s=>({render:w=>globalThis.__pinkFrame?.render?.(s,w)??[],handleMouse:e=>globalThis.__pinkFrame?.mouse?.(s,e),invalidate(){}}),s=>v=>!!globalThis.__pinkFrame?.visible?.(s,v))}",
+      "count": 1
+    },
+    {
+      "id": "assistant-footer",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": ",this.outputPad,0))}}}};var PREVIEW_LINES=20",
+      "replace": ",this.outputPad,0))}}globalThis.__pinkAssistantFooter&&!hasToolCalls&&message.content.some(c=>c.type===\"text\"&&c.text.trim())&&(this.contentContainer.addChild(new Spacer(1)),this.contentContainer.addChild({render:w=>globalThis.__pinkAssistantFooter?.(message,this.isStreaming,w,this.outputPad)??[],invalidate(){}}))}};var PREVIEW_LINES=20",
+      "count": 1
+    },
+    {
+      "id": "user-bar",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "render(width){let lines=super.render(width);return lines.length===0||(lines[0]=OSC133_ZONE_START2+lines[0]",
+      "replace": "render(width){let lines=globalThis.__pinkUserBar?super.render(Math.max(1,width-1)).map(line=>globalThis.__pinkUserBar(line)):super.render(width);return lines.length===0||(lines[0]=OSC133_ZONE_START2+lines[0]",
+      "count": 1
+    },
+    {
+      "id": "thinking-label",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "thinkingComponent=hidden?new Text(theme.italic(theme.fg(\"thinkingText\",this.hiddenThinkingLabel)),this.outputPad,0)",
+      "replace": "thinkingComponent=hidden?new Text(globalThis.__pinkThinkingLabel?theme.fg(\"thinkingText\",globalThis.__pinkThinkingLabel(message,runIndex)):theme.italic(theme.fg(\"thinkingText\",this.hiddenThinkingLabel)),this.outputPad,0)",
       "count": 1
     },
     {

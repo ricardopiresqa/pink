@@ -11,7 +11,7 @@ O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está 
 - por privacidade, o Pink **não** envia a telemetria de instalação nem consulta versões no servidor do Pi: os endereços `pi.dev/api/*` foram trocados por `pink.invalid`
   e a telemetria de instalação vem desligada por padrão;
 - a interface no estilo do OpenCode, na extensão `extensions/pink-ui.ts` (código do Pink, MIT), que o pacote carrega por padrão. Ela traz tela inicial, caixa de digitar,
-  lateral, fechamento, paleta de comandos, agentes Build e Plano, `/undo` e `/redo` com arquivos, lista de tarefas (`todowrite`), `/sessions`, `/themes`, `/init` e `/details`;
+  moldura de tela cheia (topo, colunas de sessões e de contexto, rodapé), fechamento, paleta de comandos, agentes Build e Plano, `/undo` e `/redo` com arquivos, lista de tarefas (`todowrite`), `/sessions`, `/themes`, `/init` e `/details`;
 - alguns padrões: tela cheia, pensamento recolhido, início silencioso e barra de rolagem escondida. A troca de modelo passou de `ctrl+p` para `f2`/`shift+f2`, e o `ctrl+p` agora
   abre a paleta (2026-10-28).
 
