@@ -92,10 +92,6 @@ export function inputBox({ theme, content, width, label }) {
 	return [row(""), ...content.map(row), row(""), row(theme.fg("muted", label))];
 }
 
-export function thinkingLink(text) {
-	return `\x1b]8;;pink:thinking\x1b\\${text}\x1b]8;;\x1b\\`;
-}
-
 export function footerLine({ theme, width, left, right }) {
 	const gap = Math.max(1, width - visible(left) - visible(right));
 	return fit(`${left}${" ".repeat(gap)}${right}`, width);
@@ -105,16 +101,136 @@ const THINKING_PT = { minimal: "mínimo", low: "baixo", medium: "médio", high: 
 
 // "thoth  thoth  off" dizia modelo, provedor e nível sem explicar nada: agora o nome do modelo, o provedor só quando é
 // outro, e o pensamento só quando está ligado ("pensamento alto")
-export function modelLabel({ theme, model, thinking }) {
-	if (!model) return theme.fg("muted", "sem modelo");
+// como no OpenCode, o agente (Build/Plano) vem antes do modelo, na cor da marca
+export function modelLabel({ theme, model, thinking, agent }) {
+	const who = AGENTS[agent] ? `${theme.fg("accent", AGENTS[agent].label)}${theme.fg("muted", " · ")}` : "";
+	if (!model) return `${who}${theme.fg("muted", "sem modelo")}`;
 	const name = model.name || model.id;
 	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";
 	const level = THINKING_PT[thinking] ? theme.fg("muted", ` · pensamento ${THINKING_PT[thinking]}`) : "";
-	return `${name}${provider}${level}`;
+	return `${who}${name}${provider}${level}`;
 }
 
 export function hintsLine({ theme, width }) {
-	return center(theme.fg("dim", "/ comandos   ! bash   ctrl+t pensamento   ctrl+o ajuda   ctrl+c limpar/sair"), width);
+	return center(theme.fg("dim", "ctrl+p comandos   tab agente   @ arquivo   ! bash   ctrl+t pensamento   ctrl+c sair"), width);
+}
+
+// -- funções do OpenCode (owner 2026-10-28: "gosto muito do opencode, poderia replicar as funções dele")
+// agentes: Build (padrão, tudo liberado) e Plano (só leitura: analisa e planeja, não edita), trocados com tab na caixa vazia
+export const AGENTS = { build: { label: "Build" }, plan: { label: "Plano" } };
+const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "todowrite", "tool_search"]);
+export const PLAN_PROMPT = "\n\n# Modo Plano (Pink)\nVocê está no agente Plano: só leia, pesquise e planeje. Não edite nem crie arquivos e não rode comandos que mudem o projeto. Termine com um plano em passos; o usuário troca para o agente Build (tab) para executar.";
+
+export function planDecision(toolName, annotations) {
+	if (READ_ONLY_TOOLS.has(toolName) || annotations?.readOnlyHint === true) return "allow";
+	return toolName === "bash" ? "ask" : "block";  // como o agente plan do OpenCode: edição negada, shell só com confirmação
+}
+
+// paleta de comandos (ctrl+p, como no OpenCode): os comandos do Pi com a descrição em português e os das extensões
+export const BUILTIN_COMMANDS = [
+	["new", "Nova sessão"], ["resume", "Trocar de sessão (lista as salvas)"], ["sessions", "Sessões desta pasta"], ["name", "Renomear a sessão"],
+	["model", "Escolher o modelo"], ["thinking", "Nível de pensamento"], ["themes", "Escolher o tema"], ["settings", "Configurações"],
+	["undo", "Desfazer a última mensagem e as mudanças nos arquivos"], ["redo", "Refazer o que o /undo desfez"],
+	["plan", "Agente Plano (só leitura)"], ["build", "Agente Build (edita e roda comandos)"], ["todos", "Lista de tarefas do agente"],
+	["compact", "Compactar o contexto"], ["tree", "Árvore da sessão"], ["fork", "Nova sessão a partir de uma mensagem"], ["clone", "Duplicar a sessão"],
+	["copy", "Copiar a última resposta"], ["export", "Exportar a sessão (HTML ou JSONL)"], ["share", "Compartilhar a sessão"], ["session", "Dados da sessão"],
+	["init", "Criar ou atualizar o AGENTS.md"], ["details", "Mostrar ou esconder a saída das ferramentas"], ["lateral", "Mostrar ou esconder a lateral"],
+	["hotkeys", "Atalhos de teclado"], ["login", "Entrar num provedor"], ["logout", "Sair de um provedor"], ["mcp", "Servidores MCP"],
+	["reload", "Recarregar extensões, temas e atalhos"], ["quit", "Sair do Pink"],
+];
+
+export function paletteItems(extensionCommands = []) {
+	const seen = new Set(BUILTIN_COMMANDS.map(([name]) => name));
+	const extra = extensionCommands.filter((command) => command?.name && !seen.has(command.name)).map((command) => [command.name, command.description || ""]);
+	return [...BUILTIN_COMMANDS, ...extra].map(([name, description]) => `/${name}${description ? `  ${description}` : ""}`);
+}
+
+// lista de tarefas (a ferramenta todowrite do OpenCode): o agente escreve a lista inteira a cada mudança
+const TODO_STATUS = new Set(["pending", "in_progress", "completed", "cancelled"]);
+export function normalizeTodos(todos) {
+	return (Array.isArray(todos) ? todos : []).map((item) => ({ content: String(item?.content ?? "").trim(), status: TODO_STATUS.has(item?.status) ? item.status : "pending" })).filter((item) => item.content);
+}
+
+export function todoLines({ theme, todos, width }) {
+	const mark = { pending: theme.fg("dim", "○"), in_progress: theme.fg("accent", "◐"), completed: theme.fg("success", "✓"), cancelled: theme.fg("dim", "✗") };
+	const done = todos.filter((item) => item.status === "completed").length;
+	return [fit(`${theme.fg("text", "Tarefas")} ${theme.fg("muted", `${done}/${todos.length}`)}`, width),
+		...todos.map((item) => fit(`  ${mark[item.status]} ${item.status === "completed" || item.status === "cancelled" ? theme.fg("dim", item.content) : theme.fg("text", item.content)}`, width))];
+}
+
+export function todosFromBranch(entries) {
+	let todos = [];
+	for (const entry of entries ?? []) {
+		const message = entry?.type === "message" ? entry.message : undefined;
+		if (message?.role === "toolResult" && message.toolName === "todowrite" && message.details?.todos) todos = normalizeTodos(message.details.todos);
+	}
+	return todos;
+}
+
+// /undo e /redo como no OpenCode: voltam a conversa E os arquivos. Os arquivos vão para um índice do Git só do Pink
+// (GIT_INDEX_FILE à parte): o índice, o HEAD e o stash do usuário não mudam; arquivos ignorados pelo .gitignore ficam de fora.
+export function lastUserEntry(branch) {
+	return [...(branch ?? [])].reverse().find((entry) => entry?.type === "message" && entry.message?.role === "user");
+}
+
+export function parseNameStatus(text) {
+	const parts = String(text ?? "").split("\0").filter((part) => part !== "");
+	const out = [];
+	for (let i = 0; i + 1 < parts.length; i += 2) out.push({ status: parts[i][0], path: parts[i + 1] });
+	return out;
+}
+
+function node(name) {
+	return process.getBuiltinModule?.(name);
+}
+
+export function runGit(args, { cwd, env } = {}) {
+	return new Promise((resolve) => {
+		node("node:child_process").execFile("git", args, { cwd, env: env ? { ...process.env, ...env } : process.env, maxBuffer: 64 << 20, windowsHide: true }, (error, stdout) => resolve({ code: error ? (error.code ?? 1) : 0, stdout: String(stdout ?? "") }));
+	});
+}
+
+// o arquivo volta byte a byte: sem converter fim de linha (core.autocrlf=true no Windows trocava LF por CRLF)
+const RAW = ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false"];
+
+export async function gitSnapshot(cwd, run = runGit) {
+	const top = (await run(["rev-parse", "--show-toplevel"], { cwd })).stdout.trim();
+	if (!top) return undefined;  // fora de um repositório Git não há como desfazer arquivos (no OpenCode também é assim)
+	const path = node("node:path");
+	// índice próprio, guardado entre execuções (a segunda foto só relê o que mudou); nunca o índice do usuário
+	// e objetos próprios (o repositório entra só como leitura, por alternates): a foto não suja o .git do projeto
+	const base = path.join(node("node:os").tmpdir(), `pink-undo-${node("node:crypto").createHash("sha1").update(top.toLowerCase()).digest("hex").slice(0, 12)}`);
+	const objects = path.resolve(top, (await run(["rev-parse", "--git-path", "objects"], { cwd: top })).stdout.trim() || ".git/objects");
+	const store = { GIT_OBJECT_DIRECTORY: `${base}.objects`, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects };
+	node("node:fs").mkdirSync(store.GIT_OBJECT_DIRECTORY, { recursive: true });
+	const env = { ...store, GIT_INDEX_FILE: `${base}.idx` };
+	if ((await run([...RAW, "add", "-A", "--", "."], { cwd: top, env })).code !== 0) return undefined;
+	const tree = (await run(["write-tree"], { cwd: top, env })).stdout.trim();
+	return tree ? { top, tree, store } : undefined;
+}
+
+export async function gitRestore(snapshot, run = runGit) {
+	const now = await gitSnapshot(snapshot.top, run);
+	if (!now) return undefined;
+	const changes = parseNameStatus((await run(["diff-tree", "-r", "--no-renames", "--name-status", "-z", snapshot.tree, now.tree], { cwd: snapshot.top, env: now.store })).stdout);
+	const path = node("node:path");
+	const fs = node("node:fs");
+	const inside = (file) => {
+		const full = path.resolve(snapshot.top, file);
+		return full.toLowerCase().startsWith(path.resolve(snapshot.top).toLowerCase() + path.sep) ? full : undefined;
+	};
+	const back = changes.filter((change) => change.status !== "A").map((change) => change.path);
+	const created = changes.filter((change) => change.status === "A").map((change) => change.path);
+	if (back.length) {
+		const env = { ...now.store, GIT_INDEX_FILE: path.join(node("node:os").tmpdir(), `pink-undo-restore-${process.pid}.idx`) };
+		await run(["read-tree", snapshot.tree], { cwd: snapshot.top, env });
+		for (let i = 0; i < back.length; i += 100) await run([...RAW, "checkout-index", "-f", "--", ...back.slice(i, i + 100)], { cwd: snapshot.top, env });
+	}
+	for (const file of created) {
+		const full = inside(file);
+		if (full) fs.rmSync(full, { force: true });  // só o que nasceu depois do ponto restaurado, e só dentro do repositório
+	}
+	return { now, changed: back.length + created.length };
 }
 
 // -- lateral no estilo do OpenCode (owner 2026-10-13): sessão, contexto, tokens por modelo, modelo, Thoth, pasta e versão.
@@ -200,6 +316,7 @@ export function sidebarLines({ theme, width, data }) {
 		out.push("");
 	}
 	out.push(title("Modelo"), line(`  ${data.model || theme.fg("muted", "sem modelo")}`), "");
+	if (data.todos?.length) out.push(...todoLines({ theme, todos: data.todos, width: w }), "");
 	if (data.project) out.push(title("Thoth"), dim(`  projeto ${data.project}`), "");
 	if (data.tools?.length) out.push(title("Ferramentas"), dim(`  ${data.tools.length} ativas`), "");
 	out.push(dim(data.folder || ""), ...(data.branch ? [line(theme.fg("text", data.branch))] : []), "", line(`${theme.fg("accent", "•")} ${theme.fg("text", "Pink")} ${theme.fg("muted", data.version || "")}`));
@@ -235,7 +352,7 @@ export function hasMessages(ctx) {
 	}
 }
 
-export function install(pi, ctx, { CustomEditor, version = "" }) {
+export function install(pi, ctx, { CustomEditor, version = "", matchesKey, onPalette, onAgent }) {
 	const state = { home: !hasMessages(ctx), tui: undefined, branch: "" };
 	const redraw = () => state.tui?.requestRender();
 	const leaveHome = () => {
@@ -265,13 +382,20 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 			state.tui = tui;
 		}
 
+		// ctrl+p abre a paleta e tab com a caixa vazia troca o agente (OpenCode); o resto segue para o editor do Pi
+		handleInput(data) {
+			if (matchesKey?.(data, "ctrl+p") && onPalette) return void onPalette();
+			if (matchesKey?.(data, "tab") && onAgent && !String(this.getText?.() ?? "").trim()) return void onAgent();
+			super.handleInput(data);
+		}
+
 		render(width) {
 			const outer = state.home ? Math.min(width, HOME_WIDTH) : width;
 			const margin = state.home ? Math.floor((width - outer) / 2) : 0;
 			const raw = super.render(Math.max(1, outer - 2));
 			const content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
 			const theme = ctx.ui.theme;
-			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.() });
+			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent });
 			const lines = inputBox({ theme, content, width: outer, label }).map((line) => " ".repeat(margin) + line);
 			if (!state.home) return lines;
 			const rows = state.tui?.terminal?.rows ?? 24;
@@ -280,11 +404,10 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 		}
 	}
 
-	// pensamento recolhível como no OpenCode: o atalho do Pi (ctrl+t) aparece no rodapé e o bloco recolhido diz como abrir
-	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; clique no título (link interno pink:thinking,
-	// tratado pelo Pink no lugar do navegador) ou ctrl+t abre e recolhe
-	ctx.ui.setHiddenThinkingLabel?.(thinkingLink("▸ Pensamento · clique ou ctrl+t para ver"));
-	globalThis.__pinkThinkingHeader = thinkingLink("▾ Pensamento · clique ou ctrl+t para recolher");
+	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pi 1.x abre e recolhe cada bloco com um clique,
+	// ctrl+t abre e recolhe todos (e salva); o título do bloco aberto vem do patch thinking-header-when-shown
+	ctx.ui.setHiddenThinkingLabel?.("▸ Pensamento · clique ou ctrl+t para ver");
+	globalThis.__pinkThinkingHeader = "▾ Pensamento · clique ou ctrl+t para recolher";
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	const project = (() => {
 		try {
@@ -304,7 +427,8 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 			return sidebarLines({ theme, width, data: {
 				...stats,
 				context: usage ? { tokens: usage.tokens, percent: usage.percent, window: usage.contextWindow } : undefined,
-				model: modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.() }),
+				model: modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent }),
+				todos: PINK.todos,
 				project,
 				tools: pi.getActiveTools?.() ?? [],
 				folder: tilde(ctx.cwd),
@@ -314,6 +438,11 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 		},
 		invalidate() {},
 	};
+	// tarefas sobre a caixa de digitar quando a lateral não cabe (com a lateral, elas aparecem nela)
+	ctx.ui.setWidget?.("pink-tarefas", (tui, theme) => ({
+		render: (width) => (!PINK.todos.some((item) => item.status === "pending" || item.status === "in_progress") || globalThis.__pinkSidebar.visible({ width: tui.terminal?.columns ?? width }) ? [] : todoLines({ theme, todos: PINK.todos, width })),
+		invalidate() {},
+	}));
 	ctx.ui.setFooter((tui, theme) => {
 		state.tui = tui;
 		return {
@@ -329,6 +458,112 @@ export function install(pi, ctx, { CustomEditor, version = "" }) {
 		};
 	});
 	return state;
+}
+
+// estado das funções do OpenCode, compartilhado entre os comandos e a interface
+export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [] };
+
+function userText(entry) {
+	const content = entry?.message?.content;
+	return Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
+}
+
+async function openPalette(pi, ctx) {
+	const choice = await ctx.ui.select?.("Comandos  (Enter coloca na caixa de digitar)", paletteItems(pi.getCommands?.() ?? []));
+	if (choice) ctx.ui.setEditorText?.(choice.split("  ")[0]);
+}
+
+function switchAgent(ctx, next = PINK.agent === "build" ? "plan" : "build") {
+	PINK.agent = next;
+	ctx.ui?.notify?.(next === "plan" ? "Agente Plano: só leitura (tab volta ao Build)" : "Agente Build: edita e roda comandos", "info");
+}
+
+export const INIT_PROMPT = "Analise este repositório e crie o arquivo AGENTS.md na raiz (ou atualize, se já existir, sem perder o que vale). Inclua, de forma concisa: os comandos de build, teste e lint (e como rodar um único teste), a arquitetura em alto nível e as convenções de código que um agente precisa seguir. Não invente o que não estiver no repositório.";
+
+function registerOpenCodeFunctions(pi) {
+	const command = (name, description, handler) => pi.registerCommand?.(name, { description, handler });
+	command("plan", "Agente Plano: só lê e planeja, não edita (tab troca)", async (_args, ctx) => switchAgent(ctx, "plan"));
+	command("build", "Agente Build: edita e roda comandos (tab troca)", async (_args, ctx) => switchAgent(ctx, "build"));
+	command("help", "Paleta de comandos (ctrl+p)", async (_args, ctx) => openPalette(pi, ctx));
+	command("details", "Mostra ou esconde a saída das ferramentas (ctrl+o)", async (_args, ctx) => ctx.ui.setToolsExpanded?.(!ctx.ui.getToolsExpanded?.()));
+	command("init", "Cria ou atualiza o AGENTS.md do projeto", async () => pi.sendUserMessage?.(INIT_PROMPT));
+	command("themes", "Escolhe o tema (fica salvo)", async (_args, ctx) => {
+		const name = await ctx.ui.select?.("Temas", (ctx.ui.getAllThemes?.() ?? []).map((theme) => theme.name));
+		if (!name) return;
+		const done = ctx.ui.setTheme?.(name);
+		ctx.ui.notify?.(done?.success ? `Tema ${name}` : `Tema ${name} não carregou: ${done?.error ?? "?"}`, done?.success ? "info" : "error");
+	});
+	command("sessions", "Lista as sessões desta pasta e troca de sessão", async (_args, ctx) => {
+		const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+		const list = (await SessionManager.list(ctx.cwd)).sort((a, b) => b.modified - a.modified).slice(0, 40);
+		if (!list.length) return void ctx.ui.notify?.("Nenhuma sessão salva nesta pasta", "info");
+		const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || "(sem título)").replace(/\s+/g, " ").slice(0, 60)}  · ${new Date(item.modified).toLocaleString("pt-BR")}`);
+		const choice = await ctx.ui.select?.("Sessões", labels);
+		if (choice) await ctx.switchSession(list[labels.indexOf(choice)].path);
+	});
+	command("todos", "Mostra a lista de tarefas do agente", async (_args, ctx) => {
+		const lines = PINK.todos.length ? todoLines({ theme: ctx.ui.theme, todos: PINK.todos, width: 100 }) : ["Sem tarefas nesta sessão"];
+		ctx.ui.notify?.(lines.join("\n"), "info");
+	});
+	command("undo", "Desfaz a última mensagem, as respostas e as mudanças nos arquivos", async (_args, ctx) => {
+		await ctx.waitForIdle?.();
+		const user = lastUserEntry(ctx.sessionManager.getBranch());
+		if (!user) return void ctx.ui.notify?.("Nada para desfazer", "info");
+		const leaf = ctx.sessionManager.getLeafId();
+		const snapshot = PINK.snapshots.get(user.id);
+		if ((await ctx.navigateTree(user.id))?.cancelled) return;
+		const restored = snapshot ? await gitRestore(snapshot) : undefined;
+		PINK.redo.push({ leaf, files: restored?.now });
+		ctx.ui.setEditorText?.(userText(user));
+		ctx.ui.notify?.(restored ? `Desfeito: conversa e ${restored.changed} arquivo(s). /redo refaz` : "Desfeito: conversa (arquivos sem ponto salvo: fora do Git ou de antes desta execução do Pink). /redo refaz", "info");
+	});
+	command("redo", "Refaz o que o /undo desfez, com os arquivos", async (_args, ctx) => {
+		await ctx.waitForIdle?.();
+		const item = PINK.redo.pop();
+		if (!item) return void ctx.ui.notify?.("Nada para refazer", "info");
+		if (item.leaf && (await ctx.navigateTree(item.leaf))?.cancelled) return void PINK.redo.push(item);
+		const restored = item.files ? await gitRestore(item.files) : undefined;
+		ctx.ui.setEditorText?.("");
+		ctx.ui.notify?.(restored ? `Refeito: conversa e ${restored.changed} arquivo(s)` : "Refeito: conversa", "info");
+	});
+	// ponto de restauração dos arquivos antes de cada mensagem (só na TUI, só num repositório Git)
+	pi.on("agent_start", async (_event, ctx) => {
+		const leaf = ctx.sessionManager?.getLeafEntry?.();
+		if (ctx.mode !== "tui" || leaf?.type !== "message" || leaf.message?.role !== "user") return;
+		PINK.redo.length = 0;
+		// shortcut: os pontos ficam na memória do processo; depois de reabrir a sessão, o /undo volta só a conversa
+		const snapshot = await gitSnapshot(ctx.cwd).catch(() => undefined);
+		if (snapshot) PINK.snapshots.set(leaf.id, snapshot);
+	});
+	pi.on("tool_call", async (event, ctx) => {
+		if (PINK.agent !== "plan") return;
+		const decision = planDecision(event.toolName, pi.getAllTools?.().find((tool) => tool.name === event.toolName)?.annotations);
+		if (decision === "allow") return;
+		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.("Agente Plano: rodar este comando?", String(event.input?.command ?? event.toolName)))) return;
+		return { block: true, reason: `Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).` };
+	});
+	pi.on("before_agent_start", async (event) => (PINK.agent === "plan" ? { systemPrompt: `${event.systemPrompt ?? ""}${PLAN_PROMPT}` } : undefined));
+	pi.on("session_tree", async (_event, ctx) => {
+		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
+	});
+}
+
+async function registerTodoTool(pi) {
+	if (PINK.todoRegistered || !pi.registerTool) return;
+	PINK.todoRegistered = true;
+	const { Type } = await import("typebox");
+	const status = Type.Union(["pending", "in_progress", "completed", "cancelled"].map((value) => Type.Literal(value)));
+	pi.registerTool({
+		name: "todowrite",
+		label: "Tarefas",
+		description: "Create and update the session todo list shown to the user. Send the WHOLE list on every change. Use it for work with 3 or more steps: keep exactly one item in_progress and mark items completed as soon as they are done.",
+		parameters: Type.Object({ todos: Type.Array(Type.Object({ content: Type.String({ description: "What to do, short" }), status })) }),
+		annotations: { readOnlyHint: true },
+		async execute(_id, params) {
+			PINK.todos = normalizeTodos(params?.todos);
+			return { content: [{ type: "text", text: PINK.todos.map((item) => `[${item.status}] ${item.content}`).join("\n") || "(empty list)" }], details: { todos: PINK.todos } };
+		},
+	});
 }
 
 export default function (pi) {
@@ -351,9 +586,13 @@ export default function (pi) {
 			ctx.ui.notify?.(globalThis.__pinkSidebarOn ? "Lateral visível" : "Lateral escondida", "info");
 		},
 	});
+	registerOpenCodeFunctions(pi);
 	pi.on("session_start", async (_event, ctx) => {
+		await registerTodoTool(pi);
+		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 		if (ctx.mode !== "tui") return;
 		const { CustomEditor, VERSION } = await import("@earendil-works/pi-coding-agent");
-		install(pi, ctx, { CustomEditor, version: VERSION ?? "" });
+		const { matchesKey } = await import("@earendil-works/pi-tui");
+		install(pi, ctx, { CustomEditor, version: VERSION ?? "", matchesKey, onPalette: () => openPalette(pi, ctx), onAgent: () => switchAgent(ctx) });
 	});
 }

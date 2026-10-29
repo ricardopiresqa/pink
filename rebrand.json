@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "0.84.3-pink.8",
+      "version": "1.4.0-pink.1",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
@@ -14,7 +14,7 @@
         "pink": "dist/bundle/cli.js"
       },
       "thoth": {
-        "fork_of": "@earendil-works/pi-coding-agent@0.84.3",
+        "fork_of": "@earendil-works/pi-coding-agent@1.4.0",
         "license_of_upstream": "MIT (see LICENSE-PI.txt)",
         "rebrand": "rebrand.json in the Thoth repository (pink/)"
       }
@@ -52,16 +52,12 @@
       "to": "extensions/pink-ui.ts"
     }
   ],
-  "shrinkwrap": {
-    "file": "npm-shrinkwrap.json"
-  },
   "env_rename": {
     "files": [
       "dist/bundle/**/*.js"
     ],
     "exclude": [
-      "dist/bundle/chunks/lib-HGQMNYVT.js",
-      "dist/bundle/chunks/chunk-XDUWOHPL.js"
+      "dist/bundle/chunks/lib-4AVRLBHM.js"
     ],
     "regex": "(?<![A-Za-z0-9_])PI_(?=[A-Z])",
     "replace": "PINK_",
@@ -70,14 +66,14 @@
   "replacements": [
     {
       "id": "help-update-source",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "[source|self|pi]",
       "replace": "[source|self|pink]",
       "count": 2
     },
     {
       "id": "update-text",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "regex": true,
       "find": "Update pi(?![\\w-])",
       "replace": "Update pink",
@@ -85,21 +81,21 @@
     },
     {
       "id": "update-reinstall",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Reinstall pi even if",
       "replace": "Reinstall pink even if",
       "count": 1
     },
     {
       "id": "update-alias",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "alias to pi)",
       "replace": "alias to pink)",
       "count": 1
     },
     {
       "id": "update-example",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "regex": true,
       "find": "\\} update pi(?![\\w-])",
       "replace": "} update pink",
@@ -107,70 +103,70 @@
     },
     {
       "id": "update-alias-code",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "source===\"self\"||source===\"pi\"",
       "replace": "source===\"self\"||source===\"pink\"",
       "count": 1
     },
     {
       "id": "banner-news",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "\"pi has joined Earendil\"",
       "replace": "\"pink: a fork of Pi for Thoth\"",
       "count": 1
     },
     {
       "id": "editor-resume",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Pi will resume when the editor exits.",
       "replace": "Pink will resume when the editor exits.",
       "count": 1
     },
     {
       "id": "share-title",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "\"Pi session\"",
       "replace": "\"Pink session\"",
       "count": 1
     },
     {
       "id": "onboarding",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.",
       "replace": "Pink can explain its own features and look up its docs. Ask it how to use or extend Pink.",
       "count": 1
     },
     {
       "id": "tmux-hint",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Pi works best with csi-u",
       "replace": "Pink works best with csi-u",
       "count": 1
     },
     {
       "id": "trust-restart",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "then restart pi.",
       "replace": "then restart pink.",
       "count": 1
     },
     {
       "id": "managed-messages",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "anaged Pi ",
       "replace": "anaged Pink ",
       "count": 3
     },
     {
       "id": "telemetry-text",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "bugs within Pi.",
       "replace": "bugs within Pink.",
       "count": 1
     },
     {
       "id": "auth-usage",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "regex": true,
       "find": "(?m)^(\\s+)pi auth ",
       "replace": "\\1pink auth ",
@@ -178,84 +174,91 @@
     },
     {
       "id": "system-prompt-intro",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "operating inside pi, a coding agent harness",
       "replace": "operating inside pink, a coding agent harness (a fork of Pi)",
       "count": 1
     },
     {
       "id": "system-prompt-docs",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Pi documentation (read only when the user asks about pi itself",
       "replace": "Pink documentation (read only when the user asks about pink itself",
       "count": 1
     },
     {
       "id": "system-prompt-reading",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "When reading pi docs or examples",
       "replace": "When reading pink docs or examples",
       "count": 1
     },
     {
       "id": "system-prompt-packages",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "pi packages (docs/packages.md)",
       "replace": "pink packages (docs/packages.md)",
       "count": 1
     },
     {
       "id": "system-prompt-topics",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "When working on pi topics",
       "replace": "When working on pink topics",
       "count": 1
     },
     {
       "id": "system-prompt-md",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Always read pi .md files completely",
       "replace": "Always read pink .md files completely",
       "count": 1
     },
     {
-      "id": "user-agent-node",
-      "file": "dist/bundle/chunks/chunk-AXIIZGTV.js",
-      "find": "`pi (${nodeOs.platform()}",
-      "replace": "`pink (${nodeOs.platform()}",
+      "id": "privacy-version-url",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://pi.dev/api/latest-version",
+      "replace": "https://pink.invalid/api/latest-version",
       "count": 1
     },
     {
-      "id": "user-agent-browser",
-      "file": "dist/bundle/chunks/chunk-AXIIZGTV.js",
-      "find": "\"pi (browser)\"",
-      "replace": "\"pink (browser)\"",
+      "id": "privacy-installer-url",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://pi.dev/api/installer/releases",
+      "replace": "https://pink.invalid/api/installer/releases",
       "count": 1
     },
     {
-      "id": "user-agent-http",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "`pi/${version} (",
-      "replace": "`pink/${version} (",
+      "id": "privacy-report-url",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://pi.dev/api/report-install",
+      "replace": "https://pink.invalid/api/report-install",
       "count": 1
     },
     {
-      "id": "openrouter-attribution",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "\"HTTP-Referer\":\"https://pi.dev\",\"X-OpenRouter-Title\":\"pi\"",
-      "replace": "\"HTTP-Referer\":\"https://github.com/ricardopiresqa/pink\",\"X-OpenRouter-Title\":\"pink\"",
+      "id": "builtin-ui-extension",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
+      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
-      "id": "nvidia-billing-origin",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "\"X-BILLING-INVOKE-ORIGIN\":\"Pi\"",
-      "replace": "\"X-BILLING-INVOKE-ORIGIN\":\"Pink\"",
+      "id": "no-upstream-changelog",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "this.changelogMarkdown=this.getChangelogForDisplay()",
+      "replace": "this.changelogMarkdown=void 0",
+      "count": 1
+    },
+    {
+      "id": "exit-banner",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "resumeCommand&&process.stdout.write(`${source_default.dim(\"To resume this session:\")} ${resumeCommand}",
+      "replace": "globalThis.__pinkExitBanner&&resumeCommand&&process.stdout.write(globalThis.__pinkExitBanner(resumeCommand)),!globalThis.__pinkExitBanner&&resumeCommand&&process.stdout.write(`${source_default.dim(\"To resume this session:\")} ${resumeCommand}",
       "count": 1
     },
     {
       "id": "ai-agent-cli",
-      "file": "dist/bundle/cli.js",
+      "file": "dist/bundle/cli-runtime.js",
       "find": "process.env.AI_AGENT=\"pi\"",
       "replace": "process.env.AI_AGENT=\"pink\"",
       "count": 1
@@ -268,171 +271,185 @@
       "count": 1
     },
     {
+      "id": "user-agent",
+      "file": "dist/bundle/chunks/chunk-H76KZMOI.js",
+      "find": "if(mode===\"short\")return\"pi\";let product=`pi/${getClientVersion(identity)}`",
+      "replace": "if(mode===\"short\")return\"pink\";let product=`pink/${getClientVersion(identity)}`",
+      "count": 1
+    },
+    {
+      "id": "client-attribution",
+      "file": "dist/bundle/chunks/chunk-H76KZMOI.js",
+      "find": "PI_ATTRIBUTION={name:\"pi\",url:\"https://pi.dev\",categories:[\"cli-agent\"]}",
+      "replace": "PI_ATTRIBUTION={name:\"pink\",url:\"https://github.com/ricardopiresqa/pink\",categories:[\"cli-agent\"]}",
+      "count": 1
+    },
+    {
+      "id": "opencode-client-left-as-upstream",
+      "file": "dist/bundle/chunks/chunk-H76KZMOI.js",
+      "find": "{\"x-opencode-client\":name}",
+      "replace": "{\"x-opencode-client\":\"pi\"}",
+      "count": 1
+    },
+    {
       "id": "privacy-telemetry-off",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getEnableInstallTelemetry(){return this.settings.enableInstallTelemetry??!0}",
-      "replace": "getEnableInstallTelemetry(){return this.settings.enableInstallTelemetry??!1}",
+      "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
+      "find": "enableInstallTelemetry:!0,",
+      "replace": "enableInstallTelemetry:!1,",
       "count": 1
     },
     {
-      "id": "privacy-version-url",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "https://pi.dev/api/latest-version",
-      "replace": "https://pink.invalid/api/latest-version",
-      "count": 1
-    },
-    {
-      "id": "privacy-installer-url",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "https://pi.dev/api/installer/releases",
-      "replace": "https://pink.invalid/api/installer/releases",
-      "count": 1
-    },
-    {
-      "id": "privacy-report-url",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "https://pi.dev/api/report-install",
-      "replace": "https://pink.invalid/api/report-install",
+      "id": "privacy-telemetry-off-module",
+      "file": "dist/core/settings-defaults.js",
+      "find": "enableInstallTelemetry: true,",
+      "replace": "enableInstallTelemetry: false,",
       "count": 1
     },
     {
       "id": "theme-builtin",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
+      "file": "dist/bundle/chunks/chunk-T726RZZU.js",
       "find": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\")))}}return BUILTIN_THEMES",
-      "replace": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\"))),pink:JSON.parse(stripBom(fs3.readFileSync(path5.join(themesDir,\"pink.json\"),\"utf-8\")))}}return BUILTIN_THEMES",
+      "replace": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\"))),pink:JSON.parse(stripBom(fs3.readFileSync(path4.join(themesDir,\"pink.json\"),\"utf-8\")))}}return BUILTIN_THEMES",
       "count": 1
     },
     {
-      "id": "theme-default-rgb",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "return getRgbColorLuminance(rgb2)>=.5?\"light\":\"dark\"}",
-      "replace": "return\"pink\"}",
-      "count": 1
-    },
-    {
-      "id": "theme-default-env",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "theme:getAnsiColorLuminance(bg)>=.5?\"light\":\"dark\",source:\"COLORFGBG\"",
-      "replace": "theme:\"pink\",source:\"COLORFGBG\"",
-      "count": 1
-    },
-    {
-      "id": "theme-default-fallback",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "{theme:\"dark\",source:\"fallback\"",
-      "replace": "{theme:\"pink\",source:\"fallback\"",
-      "count": 1
-    },
-    {
-      "id": "builtin-ui-extension",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
-      "count": 1
-    },
-    {
-      "id": "no-upstream-changelog",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "this.changelogMarkdown=this.getChangelogForDisplay()",
-      "replace": "this.changelogMarkdown=void 0",
+      "id": "theme-default",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "getThemeSetting(){let value=this.settings.theme;if(typeof value==\"string\")return value}",
+      "replace": "getThemeSetting(){let value=this.settings.theme;if(typeof value==\"string\")return value;return\"pink\"}",
       "count": 1
     },
     {
       "id": "quiet-startup-default",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getQuietStartup(){return this.settings.quietStartup??!1}",
-      "replace": "getQuietStartup(){return this.settings.quietStartup??!0}",
+      "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
+      "find": "quietStartup:!1,",
+      "replace": "quietStartup:!0,",
       "count": 1
     },
     {
-      "id": "fullscreen-by-default",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getTuiMode(){return this.settings.tuiMode===\"fullscreen\"?\"fullscreen\":\"regular\"}",
-      "replace": "getTuiMode(){return this.settings.tuiMode===\"regular\"?\"regular\":\"fullscreen\"}",
+      "id": "quiet-startup-false-honored",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "return value===!0||value===\"header\"?value:SETTINGS_DEFAULTS.quietStartup",
+      "replace": "return value===!0||value===!1||value===\"header\"?value:SETTINGS_DEFAULTS.quietStartup",
       "count": 1
     },
     {
       "id": "thinking-collapsed-by-default",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getHideThinkingBlock(){return this.settings.hideThinkingBlock??!1}",
-      "replace": "getHideThinkingBlock(){return this.settings.hideThinkingBlock??!0}",
+      "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
+      "find": "hideThinkingBlock:!1,",
+      "replace": "hideThinkingBlock:!0,",
       "count": 1
     },
     {
       "id": "thinking-collapsed-by-default-module",
-      "file": "dist/core/settings-manager.js",
-      "find": "return this.settings.hideThinkingBlock ?? false;",
-      "replace": "return this.settings.hideThinkingBlock ?? true;",
+      "file": "dist/core/settings-defaults.js",
+      "find": "hideThinkingBlock: false,",
+      "replace": "hideThinkingBlock: true,",
       "count": 1
     },
     {
       "id": "thinking-header-when-shown",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": ":this.contentContainer.addChild(new Markdown(thinkingBlocks.join(",
-      "replace": ":void(globalThis.__pinkThinkingHeader&&this.contentContainer.addChild(new Text(theme.fg(\"thinkingText\",globalThis.__pinkThinkingHeader),this.outputPad,0)))||this.contentContainer.addChild(new Markdown(thinkingBlocks.join(",
-      "count": 1
-    },
-    {
-      "id": "thinking-toggle-on-click",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "openUrl:openBrowser,",
-      "replace": "openUrl:url=>url===\"pink:thinking\"?globalThis.__pinkToggleThinking?.():openBrowser(url),",
-      "count": 1
-    },
-    {
-      "id": "thinking-toggle-registered",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "ld(this.footer),this.hideThinkingBlock=this.settingsManager.getHideThinkingBlock()",
-      "replace": "ld(this.footer),globalThis.__pinkToggleThinking=()=>this.toggleThinkingBlockVisibility(),this.hideThinkingBlock=this.settingsManager.getHideThinkingBlock()",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "this.contentContainer.addChild(new MouseRegion(thinkingComponent,",
+      "replace": "!hidden&&globalThis.__pinkThinkingHeader&&this.contentContainer.addChild(new MouseRegion(new Text(theme.fg(\"thinkingText\",globalThis.__pinkThinkingHeader),this.outputPad,0),event=>{if(event.type===\"click\"&&event.button===\"left\")return this.thinkingVisibilityOverrides.set(runIndex,!0),this.lastMessage&&this.updateContent(this.lastMessage),{handled:!0}})),this.contentContainer.addChild(new MouseRegion(thinkingComponent,",
       "count": 1
     },
     {
       "id": "clean-exit-by-default",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"resume-hint\"?\"resume-hint\":\"transcript\"}",
-      "replace": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"transcript\"?\"transcript\":\"resume-hint\"}",
+      "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
+      "find": "fullscreenExitOutput:\"transcript\",",
+      "replace": "fullscreenExitOutput:\"resume-hint\",",
+      "count": 1
+    },
+    {
+      "id": "clean-exit-transcript-honored",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"resume-hint\"?\"resume-hint\":SETTINGS_DEFAULTS.fullscreenExitOutput}",
+      "replace": "getFullscreenExitOutput(){return this.settings.fullscreenExitOutput===\"transcript\"?\"transcript\":SETTINGS_DEFAULTS.fullscreenExitOutput}",
       "count": 1
     },
     {
       "id": "clean-exit-by-default-module",
+      "file": "dist/core/settings-defaults.js",
+      "find": "fullscreenExitOutput: \"transcript\",",
+      "replace": "fullscreenExitOutput: \"resume-hint\",",
+      "count": 1
+    },
+    {
+      "id": "clean-exit-transcript-honored-module",
       "file": "dist/core/settings-manager.js",
-      "find": "return this.settings.fullscreenExitOutput === \"resume-hint\" ? \"resume-hint\" : \"transcript\";",
-      "replace": "return this.settings.fullscreenExitOutput === \"transcript\" ? \"transcript\" : \"resume-hint\";",
+      "find": "return this.settings.fullscreenExitOutput === \"resume-hint\"\n            ? \"resume-hint\"",
+      "replace": "return this.settings.fullscreenExitOutput === \"transcript\"\n            ? \"transcript\"",
       "count": 1
     },
     {
       "id": "scrollbar-hidden-by-default",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "getFullscreenScrollbar(){let mode=this.settings.fullscreenScrollbar;return mode===\"always\"||mode===\"hidden\"?mode:\"auto\"}",
-      "replace": "getFullscreenScrollbar(){let mode=this.settings.fullscreenScrollbar;return mode===\"always\"||mode===\"auto\"?mode:\"hidden\"}",
+      "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
+      "find": "fullscreenScrollbar:\"auto\",",
+      "replace": "fullscreenScrollbar:\"hidden\",",
+      "count": 1
+    },
+    {
+      "id": "scrollbar-auto-honored",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "return mode===\"always\"||mode===\"hidden\"?mode:SETTINGS_DEFAULTS.fullscreenScrollbar",
+      "replace": "return mode===\"always\"||mode===\"auto\"?mode:SETTINGS_DEFAULTS.fullscreenScrollbar",
       "count": 1
     },
     {
       "id": "scrollbar-hidden-by-default-module",
+      "file": "dist/core/settings-defaults.js",
+      "find": "fullscreenScrollbar: \"auto\",",
+      "replace": "fullscreenScrollbar: \"hidden\",",
+      "count": 1
+    },
+    {
+      "id": "scrollbar-auto-honored-module",
       "file": "dist/core/settings-manager.js",
-      "find": "return mode === \"always\" || mode === \"hidden\" ? mode : \"auto\";",
-      "replace": "return mode === \"always\" || mode === \"auto\" ? mode : \"hidden\";",
+      "find": "return mode === \"always\" || mode === \"hidden\" ? mode : SETTINGS_DEFAULTS.fullscreenScrollbar;",
+      "replace": "return mode === \"always\" || mode === \"auto\" ? mode : SETTINGS_DEFAULTS.fullscreenScrollbar;",
+      "count": 1
+    },
+    {
+      "id": "sidebar-hstack-import",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "import{Box,CancellableLoader,CombinedAutocompleteProvider,Container,",
+      "replace": "import{dist_exports as __pinkTui,Box,CancellableLoader,CombinedAutocompleteProvider,Container,",
       "count": 1
     },
     {
       "id": "sidebar-column",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "fullscreenLayoutRoot=new VStack([{component:this.transcriptScrollView,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}])",
-      "replace": "fullscreenLayoutRoot=new HStack([{component:new VStack([{component:this.transcriptScrollView,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}]),basis:0,grow:1,shrink:1,minSize:20},{component:{render:w=>globalThis.__pinkSidebar?.render(w)??[],invalidate(){globalThis.__pinkSidebar?.invalidate?.()}},basis:36,grow:0,shrink:0,minSize:0,visible:v=>!!globalThis.__pinkSidebar?.visible?.(v)}],{gap:1,align:\"stretch\"})",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "root:new VStack([{component:transcript,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}])}",
+      "replace": "root:new __pinkTui.HStack([{component:new VStack([{component:transcript,basis:0,grow:1,shrink:1,minSize:1},{component:dock,basis:\"auto\",grow:0,shrink:1,minSize:1}]),basis:0,grow:1,shrink:1,minSize:20},{component:{render:w=>globalThis.__pinkSidebar?.render(w)??[],invalidate(){globalThis.__pinkSidebar?.invalidate?.()}},basis:36,grow:0,shrink:0,minSize:0,visible:v=>!!globalThis.__pinkSidebar?.visible?.(v)}],{gap:1,align:\"stretch\"})}",
       "count": 1
     },
     {
       "id": "home-does-not-scroll",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "routeWheel(event){",
-      "replace": "routeWheel(event){if(globalThis.__pinkHome)return;",
+      "file": "dist/bundle/chunks/chunk-T726RZZU.js",
+      "find": "routeWheel(event,delta){",
+      "replace": "routeWheel(event,delta){if(globalThis.__pinkHome)return;",
       "count": 1
     },
     {
-      "id": "exit-banner",
-      "file": "dist/bundle/chunks/chunk-E5KXRMZK.js",
-      "find": "resumeCommand&&process.stdout.write(`${source_default.dim(\"To resume this session:\")} ${resumeCommand}",
-      "replace": "globalThis.__pinkExitBanner&&resumeCommand&&process.stdout.write(globalThis.__pinkExitBanner(resumeCommand)),!globalThis.__pinkExitBanner&&resumeCommand&&process.stdout.write(`${source_default.dim(\"To resume this session:\")} ${resumeCommand}",
+      "id": "export-theme-default",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "leafId:sm.getLeafId(),systemPrompt:void 0,tools:void 0},html=generateHtml(sessionData,opts.themeName)",
+      "replace": "leafId:sm.getLeafId(),systemPrompt:void 0,tools:void 0},html=generateHtml(sessionData,opts.themeName??\"pink\")",
+      "count": 1
+    },
+    {
+      "id": "model-cycle-on-f2",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "\"app.model.cycleForward\":{defaultKeys:\"ctrl+p\",",
+      "replace": "\"app.model.cycleForward\":{defaultKeys:\"f2\",",
+      "count": 1
+    },
+    {
+      "id": "model-cycle-back-on-shift-f2",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "\"app.model.cycleBackward\":{defaultKeys:windowsKeybindings?\"alt+p\":\"shift+ctrl+p\",",
+      "replace": "\"app.model.cycleBackward\":{defaultKeys:\"shift+f2\",",
       "count": 1
     }
   ],
