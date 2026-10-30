@@ -123,6 +123,8 @@ def apply_package_json(root: Path, rule: dict[str, Any]) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     for key, value in rule["set"].items():
         data[key] = value
+    # versão corrigida de dependência com alerta de segurança, sem esperar o upstream
+    data["dependencies"] = {**data.get("dependencies", {}), **rule.get("dependencies", {})}
     files = list(data.get("files", []))
     for extra in rule.get("files_add", ()):
         if extra not in files:

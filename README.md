@@ -36,7 +36,7 @@ Licença: o Pi é MIT, copyright (c) 2025 Mario Zechner (`LICENSE-PI.txt`). Veja
 - **Apagar sessão**: `/delete-session` (também na paleta `ctrl+p` e como primeiro item do `/sessions`). Pede confirmação e não deixa apagar a sessão aberta. Nada é excluído: o arquivo vai para `.trash/`, ao lado das sessões da pasta (`~/.pink/agent/sessions/<pasta>/.trash/`), que o Pink não lista. Para recuperar, mova o arquivo de volta para a pasta de cima. Para esvaziar a lixeira, apague você mesmo a pasta `.trash` (no PowerShell: `Remove-Item -Recurse "$HOME\.pink\agent\sessions\<pasta>\.trash"`).
 - O painel **SESSÃO** (à direita) mostra os tokens, o modelo usado e o custo, este só quando o provedor informa um custo maior que zero.
 
-## Dados do Thoth na lateral (1.4.0-pink.4)
+## Dados do Thoth na lateral (1.4.0-pink.4; pink.5 corrige o undici)
 
 A coluna da direita ganhou a seção **THOTH**, logo abaixo de CONTEXTO, com o que o Thoth desta máquina sabe:
 
