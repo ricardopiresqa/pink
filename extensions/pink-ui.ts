@@ -336,6 +336,7 @@ export function rightColumn({ theme, width, height, data }) {
 	} else {
 		out.push(theme.fg("dim", "ainda sem medida"));
 	}
+	if (data.thoth) out.push("", rule(theme, inner), heading(theme, "THOTH"), ...thothLines({ theme, thoth: data.thoth, width: inner }));
 	const todos = data.todos ?? [];
 	out.push("", rule(theme, inner), heading(theme, "PLANO", todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
 	if (todos.length) out.push(...todoLines({ theme, todos, width: inner }).slice(1).map((line) => line.replace(/^ {2}/, "")));
@@ -425,6 +426,110 @@ export function thothProject(cwd, vault, readFile) {
 	} catch {
 		return "";
 	}
+}
+
+// -- THOTH na lateral (card 86e3px66t): o que vem do Thoth desta máquina, lido em segundo plano. Sem o Thoth o Pink segue:
+// cada fonte que falha vira "—", todas falhando viram "Thoth indisponível". Nada de token na tela: o texto de fora passa por
+// safeText (sem códigos de controle, sequências de 20+ letras/dígitos sem separador, que parecem segredo ou hash, ficam cortadas).
+export const THOTH_POLL_MS = 30000;
+export const THOTH_TIMEOUT_MS = 3000; // dashboard e gateway em 127.0.0.1; o CLI de aprovações tem 15 s (o Python demora ~3 s para subir)
+export const DELEGATION_FRESH_MS = 2 * 3600e3; // shortcut: job RUNNING mais velho que 2 h é de servidor que morreu; o Thoth não marca isso no arquivo
+
+export function safeText(value, max = 60) {
+	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/[A-Za-z0-9_+=]{20,}/g, () => "•••").replace(/\s+/g, " ").trim();
+	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+export function thothSnapshot({ approvals, cards, jobs, calls }, now = Date.now()) {
+	// cada fonte chega crua (ou undefined quando não respondeu); aqui vira só o que a lateral mostra
+	const list = (value) => (Array.isArray(value) ? value : undefined);
+	const waiting = list(approvals)?.filter((item) => item?.state === "WAITING" && !(Date.parse(item?.request?.expires_at) <= now));
+	const running = list(cards?.cards)?.find((card) => card?.state === "RUNNING");
+	const busy = list(jobs)?.filter((job) => (job?.state === "RUNNING" || job?.state === "PREPARED") && now - Date.parse(job?.created_at) < DELEGATION_FRESH_MS);
+	const last = list(calls?.data)?.filter((call) => call?.provider).at(-1);
+	const snapshot = {
+		approvals: waiting && { count: waiting.length, top: waiting.length ? safeText(`${waiting.at(-1).request?.action ?? ""} ${waiting.at(-1).request?.resource ?? ""} · ${waiting.at(-1).request?.project_id ?? ""}`) : "" },
+		card: cards?.cards === undefined ? undefined : running ? { id: safeText(running.task_id, 30), goal: safeText(running.mission?.goal) } : null,
+		delegations: busy && busy.map((job) => safeText(job.persona, 20)),
+		free: calls?.data === undefined ? undefined : last ? safeText(`${last.provider} · ${last.model ?? ""}`) : null,
+	};
+	return { ...snapshot, ok: Object.values(snapshot).some((value) => value !== undefined) };
+}
+
+export function thothLines({ theme, thoth, width }) {
+	if (!thoth?.ok) return [theme.fg("dim", thoth?.loading ? "consultando…" : "Thoth indisponível")];
+	const row = (label, value, tone = "text") => {
+		const left = theme.fg("muted", label);
+		return footerLine({ theme, width, left, right: value === undefined ? theme.fg("dim", "—") : theme.fg(tone, fit(value, Math.max(1, width - visible(left) - 1))) });
+	};
+	const detail = (text) => (text ? [theme.fg("dim", fit(`  ${text}`, width))] : []);
+	const { approvals, card, delegations, free } = thoth;
+	return [
+		row("aprovações", approvals && (approvals.count ? `${approvals.count} aguardando` : "nenhuma"), approvals?.count ? "warning" : "text"),
+		...detail(approvals?.top),
+		row("card", card === undefined ? undefined : card ? card.id : "nenhum em andamento", card ? "accent" : "text"),
+		...detail(card?.goal),
+		row("delegações", delegations && (delegations.length ? `${delegations.length} · ${delegations.join(", ")}` : "nenhuma")),
+		row("thoth free", free === undefined ? undefined : free ?? "sem chamadas"),
+	];
+}
+
+// as fontes reais: o CLI `thoth approvals list --json`, o painel local (/api/work-center/cards), os jobs de
+// ~/.thoth/delegate e as chamadas do gateway thoth free (/v1/thoth/calls). Todas só leem; o token do gateway vai no
+// cabeçalho e nunca para a tela.
+export function thothSources({ vault, project, env = process.env }) {
+	const fs = process.getBuiltinModule?.("node:fs");
+	const path = process.getBuiltinModule?.("node:path");
+	const child = process.getBuiltinModule?.("node:child_process");
+	const getJson = async (url, headers) => {
+		const response = await fetch(url, { headers, signal: AbortSignal.timeout(THOTH_TIMEOUT_MS) });
+		if (!response.ok) throw new Error(String(response.status));
+		return response.json();
+	};
+	const home = env.USERPROFILE || env.HOME || "";
+	return {
+		approvals: () => new Promise((resolve, reject) => {
+			if (!vault || !child) return reject(new Error("no vault"));
+			child.execFile("thoth", ["approvals", "list", "--json", "--workspace", vault], { timeout: 15000, windowsHide: true, maxBuffer: 4 << 20 }, (error, stdout) => {
+				if (error) return reject(error);
+				try {
+					resolve(JSON.parse(stdout));
+				} catch (parse) {
+					reject(parse);
+				}
+			});
+		}),
+		// shortcut: o mapeamento dá o canonical_name e o painel quer o project_id; hoje são iguais em todo projeto com pasta
+		cards: () => (project ? getJson(`http://127.0.0.1:8788/api/work-center/cards?project_id=${encodeURIComponent(project)}`) : Promise.reject(new Error("no project"))),
+		jobs: async () => {
+			const dir = env.THOTH_DELEGATE_DIR || path.join(home, ".thoth", "delegate");
+			const names = (await fs.promises.readdir(dir)).filter((name) => name.endsWith(".json"));
+			const fresh = Date.now() - DELEGATION_FRESH_MS;
+			const jobs = [];
+			for (const name of names) {
+				const file = path.join(dir, name);
+				if ((await fs.promises.stat(file)).mtimeMs < fresh) continue; // o arquivo antigo nem é aberto
+				try {
+					jobs.push(JSON.parse(await fs.promises.readFile(file, "utf8")));
+				} catch {
+					// job sendo gravado agora: entra na próxima leitura
+				}
+			}
+			return jobs;
+		},
+		calls: async () => {
+			let token = env.THOTH_GATEWAY_TOKEN || "";
+			if (!token && env.LOCALAPPDATA) token = (await fs.promises.readFile(path.join(env.LOCALAPPDATA, "thoth", "runtime", "gateway", "token"), "utf8")).trim();
+			if (!token) throw new Error("no gateway token");
+			return getJson("http://127.0.0.1:11435/v1/thoth/calls", { Authorization: `Bearer ${token}` });
+		},
+	};
+}
+
+export async function pollThoth(sources, now = Date.now()) {
+	const names = ["approvals", "cards", "jobs", "calls"];
+	const settled = await Promise.allSettled(names.map((name) => Promise.resolve().then(() => sources[name]())));
+	return thothSnapshot(Object.fromEntries(names.map((name, index) => [name, settled[index].status === "fulfilled" ? settled[index].value : undefined])), now);
 }
 
 // -- ao sair (owner 2026-10-13: "quando eu saio do pink tem que aparecer a logo do pink, assim como funciona o opencode"):
@@ -597,6 +702,32 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			return "";
 		}
 	})();
+	// a seção THOTH só consulta quando a coluna da direita aparece pela primeira vez; um único relógio para o processo todo
+	// (trocar de sessão reinstala a interface e só troca quem redesenha), sem segurar a saída do Pink (unref)
+	const startThoth = () => {
+		PINK.thoth.redraw = redraw;
+		if (PINK.thoth.timer) return;
+		const sources = thothSources({ vault: process.env.THOTH_VAULT_PATH || "", project });
+		const tick = async () => {
+			if (PINK.thoth.busy) return;
+			PINK.thoth.busy = true;
+			try {
+				PINK.thoth.data = await pollThoth(sources);
+			} catch {
+				PINK.thoth.data = { ok: false };
+			} finally {
+				PINK.thoth.busy = false;
+			}
+			try {
+				PINK.thoth.redraw?.();
+			} catch {
+				// interface antiga durante a troca de sessão: o próximo quadro já mostra o dado novo
+			}
+		};
+		PINK.thoth.timer = setInterval(tick, THOTH_POLL_MS);
+		PINK.thoth.timer.unref?.();
+		void tick();
+	};
 	Object.defineProperty(globalThis, "__pinkHome", { get: () => state.home, configurable: true });
 	const columns = (width) => frameColumns(width, { home: state.home, on: globalThis.__pinkSidebarOn ?? true });
 	const bars = () => {
@@ -627,9 +758,10 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 				const sessions = listed.some((item) => item.current) ? listed : [{ title, current: true, when: relativeTime(Date.now()) }, ...listed];
 				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pi.getActiveTools?.() ?? []).length } });
 			}
+			startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
@@ -782,7 +914,7 @@ export function assistantFooter({ theme, model, agent, ms, output }) {
 
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
-export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set() };
+export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined } };
 
 // "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
 export function labelUserMarkdown(markdown, context) {

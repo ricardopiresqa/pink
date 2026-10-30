@@ -36,6 +36,17 @@ Licença: o Pi é MIT, copyright (c) 2025 Mario Zechner (`LICENSE-PI.txt`). Veja
 - **Apagar sessão**: `/delete-session` (também na paleta `ctrl+p` e como primeiro item do `/sessions`). Pede confirmação e não deixa apagar a sessão aberta. Nada é excluído: o arquivo vai para `.trash/`, ao lado das sessões da pasta (`~/.pink/agent/sessions/<pasta>/.trash/`), que o Pink não lista. Para recuperar, mova o arquivo de volta para a pasta de cima. Para esvaziar a lixeira, apague você mesmo a pasta `.trash` (no PowerShell: `Remove-Item -Recurse "$HOME\.pink\agent\sessions\<pasta>\.trash"`).
 - O painel **SESSÃO** (à direita) mostra os tokens, o modelo usado e o custo, este só quando o provedor informa um custo maior que zero.
 
+## Dados do Thoth na lateral (1.4.0-pink.4)
+
+A coluna da direita ganhou a seção **THOTH**, logo abaixo de CONTEXTO, com o que o Thoth desta máquina sabe:
+
+- **aprovações**: quantas estão aguardando (`thoth approvals list --json`, só as que ainda não venceram) e a mais recente;
+- **card**: o card em andamento (`RUNNING`) do projeto da pasta, lido no painel local (`127.0.0.1:8788/api/work-center/cards`);
+- **delegações**: os jobs de persona em andamento (`~/.thoth/delegate`, ou `THOTH_DELEGATE_DIR`), com o nome da persona;
+- **thoth free**: o provedor e o modelo que responderam a última chamada do gateway (`127.0.0.1:11435/v1/thoth/calls`, com o token do gateway, que nunca aparece na tela).
+
+Tudo só lê, em segundo plano, a cada 30 s (timeout de 3 s; 15 s para o CLI), e só depois que a coluna aparece. Fonte que não responde vira `—`; nenhuma respondendo, a seção diz **Thoth indisponível** e o Pink segue normalmente. O texto que vem de fora passa por um filtro: sem códigos de controle, e sequências longas que parecem segredo ou hash ficam cortadas (`sk_A1b…`). As aprovações precisam de `THOTH_VAULT_PATH` e do `thoth` no PATH.
+
 ## Fundo igual ao da referência no Windows Terminal
 
 O Pink não pinta o fundo: ele usa o do terminal. Para o `#100d13` da referência, acrescente este esquema na lista `"schemes"` do `settings.json` do Windows Terminal (Configurações → Abrir arquivo JSON) e escolha **Pink** em Perfil → Aparência → Esquema de cores. Nada do Pink muda a sua configuração.
