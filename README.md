@@ -42,7 +42,6 @@ A coluna da direita ganhou a seção **THOTH**, logo abaixo de CONTEXTO, com o q
 
 - **aprovações**: quantas estão aguardando (`thoth approvals list --json`, só as que ainda não venceram) e a mais recente;
 - **card**: o card em andamento (`RUNNING`) do projeto da pasta, lido no painel local (`127.0.0.1:8788/api/work-center/cards`);
-- **delegações**: os jobs de persona em andamento (`~/.thoth/delegate`, ou `THOTH_DELEGATE_DIR`), com o nome da persona;
 - **thoth free**: o provedor e o modelo que responderam a última chamada do gateway (`127.0.0.1:11435/v1/thoth/calls`, com o token do gateway, que nunca aparece na tela).
 
 Tudo só lê, em segundo plano, a cada 30 s (timeout de 3 s; 15 s para o CLI), e só depois que a coluna aparece. Fonte que não responde vira `—`; nenhuma respondendo, a seção diz **Thoth indisponível** e o Pink segue normalmente. O texto que vem de fora passa por um filtro: sem códigos de controle, e sequências longas que parecem segredo ou hash ficam cortadas (`sk_A1b…`). As aprovações precisam de `THOTH_VAULT_PATH` e do `thoth` no PATH.

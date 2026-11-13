@@ -433,24 +433,21 @@ export function thothProject(cwd, vault, readFile) {
 // safeText (sem códigos de controle, sequências de 20+ letras/dígitos sem separador, que parecem segredo ou hash, ficam cortadas).
 export const THOTH_POLL_MS = 30000;
 export const THOTH_TIMEOUT_MS = 3000; // dashboard e gateway em 127.0.0.1; o CLI de aprovações tem 15 s (o Python demora ~3 s para subir)
-export const DELEGATION_FRESH_MS = 2 * 3600e3; // shortcut: job RUNNING mais velho que 2 h é de servidor que morreu; o Thoth não marca isso no arquivo
 
 export function safeText(value, max = 60) {
 	const text = String(value ?? "").replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/[A-Za-z0-9_+=]{20,}/g, () => "•••").replace(/\s+/g, " ").trim();
 	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-export function thothSnapshot({ approvals, cards, jobs, calls }, now = Date.now()) {
+export function thothSnapshot({ approvals, cards, calls }, now = Date.now()) {
 	// cada fonte chega crua (ou undefined quando não respondeu); aqui vira só o que a lateral mostra
 	const list = (value) => (Array.isArray(value) ? value : undefined);
 	const waiting = list(approvals)?.filter((item) => item?.state === "WAITING" && !(Date.parse(item?.request?.expires_at) <= now));
 	const running = list(cards?.cards)?.find((card) => card?.state === "RUNNING");
-	const busy = list(jobs)?.filter((job) => (job?.state === "RUNNING" || job?.state === "PREPARED") && now - Date.parse(job?.created_at) < DELEGATION_FRESH_MS);
 	const last = list(calls?.data)?.filter((call) => call?.provider).at(-1);
 	const snapshot = {
 		approvals: waiting && { count: waiting.length, top: waiting.length ? safeText(`${waiting.at(-1).request?.action ?? ""} ${waiting.at(-1).request?.resource ?? ""} · ${waiting.at(-1).request?.project_id ?? ""}`) : "" },
 		card: cards?.cards === undefined ? undefined : running ? { id: safeText(running.task_id, 30), goal: safeText(running.mission?.goal) } : null,
-		delegations: busy && busy.map((job) => safeText(job.persona, 20)),
 		free: calls?.data === undefined ? undefined : last ? safeText(`${last.provider} · ${last.model ?? ""}`) : null,
 	};
 	return { ...snapshot, ok: Object.values(snapshot).some((value) => value !== undefined) };
@@ -463,19 +460,18 @@ export function thothLines({ theme, thoth, width }) {
 		return footerLine({ theme, width, left, right: value === undefined ? theme.fg("dim", "—") : theme.fg(tone, fit(value, Math.max(1, width - visible(left) - 1))) });
 	};
 	const detail = (text) => (text ? [theme.fg("dim", fit(`  ${text}`, width))] : []);
-	const { approvals, card, delegations, free } = thoth;
+	const { approvals, card, free } = thoth;
 	return [
 		row("aprovações", approvals && (approvals.count ? `${approvals.count} aguardando` : "nenhuma"), approvals?.count ? "warning" : "text"),
 		...detail(approvals?.top),
 		row("card", card === undefined ? undefined : card ? card.id : "nenhum em andamento", card ? "accent" : "text"),
 		...detail(card?.goal),
-		row("delegações", delegations && (delegations.length ? `${delegations.length} · ${delegations.join(", ")}` : "nenhuma")),
 		row("thoth free", free === undefined ? undefined : free ?? "sem chamadas"),
 	];
 }
 
-// as fontes reais: o CLI `thoth approvals list --json`, o painel local (/api/work-center/cards), os jobs de
-// ~/.thoth/delegate e as chamadas do gateway thoth free (/v1/thoth/calls). Todas só leem; o token do gateway vai no
+// as fontes reais: o CLI `thoth approvals list --json`, o painel local (/api/work-center/cards) e as chamadas do
+// gateway thoth free (/v1/thoth/calls). Todas só leem; o token do gateway vai no
 // cabeçalho e nunca para a tela.
 export function thothSources({ vault, project, env = process.env }) {
 	const fs = process.getBuiltinModule?.("node:fs");
@@ -486,7 +482,6 @@ export function thothSources({ vault, project, env = process.env }) {
 		if (!response.ok) throw new Error(String(response.status));
 		return response.json();
 	};
-	const home = env.USERPROFILE || env.HOME || "";
 	return {
 		approvals: () => new Promise((resolve, reject) => {
 			if (!vault || !child) return reject(new Error("no vault"));
@@ -501,22 +496,6 @@ export function thothSources({ vault, project, env = process.env }) {
 		}),
 		// shortcut: o mapeamento dá o canonical_name e o painel quer o project_id; hoje são iguais em todo projeto com pasta
 		cards: () => (project ? getJson(`http://127.0.0.1:8788/api/work-center/cards?project_id=${encodeURIComponent(project)}`) : Promise.reject(new Error("no project"))),
-		jobs: async () => {
-			const dir = env.THOTH_DELEGATE_DIR || path.join(home, ".thoth", "delegate");
-			const names = (await fs.promises.readdir(dir)).filter((name) => name.endsWith(".json"));
-			const fresh = Date.now() - DELEGATION_FRESH_MS;
-			const jobs = [];
-			for (const name of names) {
-				const file = path.join(dir, name);
-				if ((await fs.promises.stat(file)).mtimeMs < fresh) continue; // o arquivo antigo nem é aberto
-				try {
-					jobs.push(JSON.parse(await fs.promises.readFile(file, "utf8")));
-				} catch {
-					// job sendo gravado agora: entra na próxima leitura
-				}
-			}
-			return jobs;
-		},
 		calls: async () => {
 			let token = env.THOTH_GATEWAY_TOKEN || "";
 			if (!token && env.LOCALAPPDATA) token = (await fs.promises.readFile(path.join(env.LOCALAPPDATA, "thoth", "runtime", "gateway", "token"), "utf8")).trim();
@@ -527,7 +506,7 @@ export function thothSources({ vault, project, env = process.env }) {
 }
 
 export async function pollThoth(sources, now = Date.now()) {
-	const names = ["approvals", "cards", "jobs", "calls"];
+	const names = ["approvals", "cards", "calls"];
 	const settled = await Promise.allSettled(names.map((name) => Promise.resolve().then(() => sources[name]())));
 	return thothSnapshot(Object.fromEntries(names.map((name, index) => [name, settled[index].status === "fulfilled" ? settled[index].value : undefined])), now);
 }
