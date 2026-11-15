@@ -5,6 +5,10 @@
 // - Headroom: o MCP da máquina (127.0.0.1:8789), só se ele se apresentar como headroom;
 // - graphify: o MCP do grafo do projeto (graphify-out/graph.json), só em pasta confiável.
 // Tudo falha aberto: sem a ferramenta, o Pink segue igual.
+//
+// Google Antigravity (card 1dfwh7kffnt) é do Pink, sempre ligado (owner 2026-11-15: "instalou o pink já vem tudo"):
+// Gemini e Claude pela conta Google, UMA conta no /login google, e a cota na coluna COTA. O uso viola os termos do Google
+// e a conta pode ser suspensa (risco aceito pelo owner em 2026-11-15). Base MIT fixada no rebrand.json (NOTICE.md).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +21,8 @@ export const TOOLS = [
 	{ id: "headroom", label: "Headroom", what: "MCP de compressão de contexto da máquina (precisa do Headroom no ar)" },
 	{ id: "graphify", label: "graphify", what: "MCP do grafo do projeto (precisa de graphify-out/graph.json e do graphify-mcp)" },
 ];
+export const ANTIGRAVITY_PACKAGE = "@cortexkit/pi-antigravity-auth";
+const ANTIGRAVITY_CORE = "@cortexkit/antigravity-auth-core";
 const RTK_TIMEOUT_MS = 2000;
 
 export const agentDir = (env = process.env) => env.PINK_CODING_AGENT_DIR || path.join(os.homedir(), ".pink", "agent");
@@ -94,6 +100,40 @@ export function graphFor(cwd, trusted, env, exists = fs.existsSync, platform = p
 	return bin ? { graph, bin } : undefined;
 }
 
+// a cota pelo mesmo cliente do pacote (retrieveUserQuotaSummary, com o User-Agent e os endpoints dele). Só com o login
+// do Antigravity: o refresh guardado traz "|projeto"; uma chave do Google AI Studio no mesmo provedor não é enviada.
+export async function antigravityQuota({ core, getKey, readAuth }) {
+	const stored = readAuth()?.google;
+	if (stored?.type !== "oauth" || typeof stored.refresh !== "string" || !stored.refresh.includes("|")) return undefined;
+	const token = await getKey?.("google");
+	if (typeof token !== "string" || !token) return undefined;
+	const { projectId, managedProjectId } = core.parseRefreshParts(stored.refresh);
+	const { summary } = await core.fetchQuotaSummary({ accessToken: token, endpoints: core.ANTIGRAVITY_ENDPOINT_FALLBACKS, projectId, managedProjectId });
+	return core.aggregateQuotaSummary(summary);
+}
+
+// o pi que a base do Antigravity recebe: o provedor aparece como "Google Antigravity" no /login e no /model, o menu
+// /antigravity (só do modo cofre, que o Pink não usa) não entra, e um gancho dela que falhe não chega à tela (o provedor
+// fica recusando no próprio pedido e o Pink avisa ao abrir: state.unavailable). O resto passa direto para o pi do Pink.
+export const ANTIGRAVITY_NAME = "Google Antigravity";
+export function antigravityHost(pi, state = {}) {
+	const rename = (config) => {
+		const unavailable = /unavailable/i.test(String(config?.name ?? ""));
+		state.unavailable = unavailable;
+		const name = unavailable ? `${ANTIGRAVITY_NAME} (indisponível)` : ANTIGRAVITY_NAME;
+		return { ...config, name, ...(config?.oauth ? { oauth: { ...config.oauth, name: ANTIGRAVITY_NAME } } : {}) };
+	};
+	return new Proxy(pi, {
+		get(target, key) {
+			if (key === "registerProvider") return (name, config) => target.registerProvider(name, rename(config));
+			if (key === "registerCommand") return (name, spec) => (name === "antigravity" ? undefined : target.registerCommand?.(name, spec));
+			if (key === "on") return (event, handler) => target.on(event, async (...args) => { try { return await handler(...args); } catch { return undefined; } });
+			const value = target[key];
+			return typeof value === "function" ? value.bind(target) : value;
+		},
+	});
+}
+
 export async function natives(pi, deps) {
 	const { env = process.env, exists = fs.existsSync, fetcher = fetch, here, load = (file) => import(pathToFileURL(file).href), read, write = fs.writeFileSync, mkdir = fs.mkdirSync, platform = process.platform } = deps;
 	const file = path.join(agentDir(env), "pink-tools.json");
@@ -137,6 +177,30 @@ export async function natives(pi, deps) {
 		}
 	}
 
+	// Google Antigravity: sempre ligado; o que a pessoa vê é do Pink (nome do provedor, sem o menu de cofre de terceiros)
+	let antigravityOn = false;
+	let antigravityBroken = false;
+	const antigravityState = {};
+	const antigravity = findPackage(here, ANTIGRAVITY_PACKAGE, exists);
+	if (antigravity) {
+		try {
+			// sem os caminhos, a base guarda o estado dela em ~/.pi/agent: tudo vai para a pasta do agente do Pink
+			const vaultDir = path.join(agentDir(env), "antigravity");
+			const extension = await load(path.join(antigravity, "dist", "index.js"));
+			// settingsFile também: sem ele a base lê a configuração do plugin do OpenCode (account_models) no XDG do usuário
+			await extension.registerCortexKitPiAntigravity(antigravityHost(pi, antigravityState), { vaultDir, modeFile: path.join(vaultDir, "mode.json"), rosterFile: path.join(vaultDir, "roster.json"), settingsFile: path.join(vaultDir, "settings.json") });
+			antigravityOn = true;
+			const corePath = findPackage(antigravity, ANTIGRAVITY_CORE, exists) ?? findPackage(here, ANTIGRAVITY_CORE, exists);
+			const core = corePath ? await load(path.join(corePath, "dist", "index.js")) : undefined;
+			const readAuth = () => JSON.parse((read ?? fs.readFileSync)(path.join(agentDir(env), "auth.json"), "utf8"));
+			// a pink-ui chama na coluna COTA (como o __pinkMcp): sem o core, a cota fica de fora e os modelos seguem
+			if (core) globalThis.__pinkAntigravityQuota = (getKey) => antigravityQuota({ core, getKey, readAuth });
+		} catch {
+			// base quebrada ou incompatível com esta versão: o Pink segue sem o Antigravity (aviso curto, sem o erro)
+			antigravityBroken = true;
+		}
+	}
+
 	// o caminho do rtk é procurado ao abrir, a cada sessão e ao ligar no /ferramentas (não a cada comando do bash)
 	let rtkBin;
 	const findRtk = () => { rtkBin = on.rtk && env.PINK_RTK !== "0" ? onPath("rtk", env, exists, platform) : undefined; return Boolean(rtkBin); };
@@ -166,6 +230,8 @@ export async function natives(pi, deps) {
 		report.rtk = findRtk();
 		syncGraphify(ctx);
 		if (!choices.exists && ctx?.mode === "tui") ctx.ui?.notify?.("O Pink tem ferramentas opcionais (Ponytail, RTK, Headroom, graphify): /ferramentas", "info");
+		if (antigravityBroken && ctx?.mode === "tui") ctx.ui?.notify?.("Google Antigravity indisponível nesta instalação: reinstale o Pink", "warning");
+		else if (antigravityState.unavailable && ctx?.mode === "tui") ctx.ui?.notify?.(`Google Antigravity indisponível: o Pink não conseguiu ler ${path.join(agentDir(env), "antigravity")}. Feche o Pink, apague essa pasta e faça /login de novo`, "warning");
 	});
 
 	pi.registerCommand?.("ferramentas", {
@@ -198,7 +264,7 @@ export async function natives(pi, deps) {
 			}
 		},
 	});
-	return { report, headroomDone, file };
+	return { report, headroomDone, file, antigravity: antigravityOn };
 }
 
 export default async function (pi) {

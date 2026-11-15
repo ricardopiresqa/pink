@@ -29,6 +29,25 @@ pink --help
 
 Licença: o Pi é MIT, copyright (c) 2025 Mario Zechner (`LICENSE-PI.txt`). Veja `NOTICE.md` para o que mudou.
 
+## Google Antigravity (1.4.0-pink.7)
+
+O Pink já vem com o Google Antigravity: os modelos Gemini e Claude da sua conta Google, sem chave de API.
+
+> **Atenção:** usar o Antigravity fora do aplicativo do Google viola os termos de uso do Google. A conta pode ser
+> suspensa ou bloqueada. Se isso for um problema, não faça o login.
+
+- **Entrar:** `/login`, escolha **Google Antigravity** e conclua o login no navegador. É uma conta só, sem rodízio entre
+  contas; um novo `/login` troca a conta. O login fica em `~/.pink/agent/auth.json`, como os outros do Pink, e nunca
+  aparece na tela.
+- **Modelos:** no `/model` (ou `f2`), os `google/antigravity-…`: Gemini 4 (Argon, Carbon, Hydrogen), Gemini 3.8 Flash,
+  Claude Sonnet 5.5, Claude Opus 5.5 e gpt-oss. Alguns pedem plano Pro ou Ultra do Google.
+- **Cota:** a seção **COTA**, na coluna da direita, mostra o quanto já foi usado em 5 horas e na semana, separado em
+  **Antigravity · Gemini** e **Antigravity · Claude e outros** (e **Antigravity · Gemini Argon**, se a conta tiver essa
+  cota), e quando volta. Atualiza a cada 3 minutos; sem login, a seção não mostra o Antigravity.
+- **Indisponível:** se o Pink não conseguir ler o estado do Antigravity, ele avisa ao abrir e o provedor aparece como
+  "Google Antigravity (indisponível)". Feche o Pink, apague a pasta `~/.pink/agent/antigravity` e faça `/login` de novo.
+- O provedor `google` do Pink passa a ser o do Antigravity: uma chave do Google AI Studio nesse provedor não serve.
+
 ## Várias sessões ao mesmo tempo (1.4.0-pink.6)
 
 No terminal, `pink` abre com uma lateral à esquerda: cada item é uma sessão do Pink rodando ao mesmo tempo, e o resto da tela é a sessão escolhida. Funciona em qualquer terminal, sem outro programa.

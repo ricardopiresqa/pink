@@ -16,6 +16,10 @@ O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está 
   dos temas de código do Codex (2026-11-15);
 - ferramentas opcionais, todas desligadas até a pessoa ligar no `/ferramentas` (`extensions/pink-natives.ts`, 2026-11-15): o Ponytail (`@dietrichgebert/ponytail`, MIT, copyright de Dietrich Gebert) vem como
   dependência npm de versão fixa; RTK, Headroom e graphify **não** vêm junto (o RTK tem partes BUSL-1.1): o Pink só usa os que já estão instalados na máquina;
+- o Google Antigravity, sempre ligado (2026-11-15): Gemini e Claude pela conta Google, uma conta no `/login google`, e a
+  cota na coluna COTA. A base é `@cortexkit/pi-antigravity-auth` 3.1.2 (MIT, copyright dos autores do CortexKit), dependência
+  npm de versão fixa; o Pink a carrega em `extensions/pink-natives.ts` com o nome do provedor trocado para "Google
+  Antigravity" e sem o menu de cofre dela. O uso viola os termos do Google e a conta pode ser suspensa;
 - só as próprias pastas de skills (`~/.pink/agent/skills`, `.pink/skills`, pacotes e MCP): as pastas `.agents/skills`, compartilhadas com outros agentes, ficam de fora;
 - alguns padrões: tela cheia, pensamento recolhido, início silencioso e barra de rolagem escondida. A troca de modelo passou de `ctrl+p` para `f2`/`shift+f2`, e o `ctrl+p` agora
   abre a paleta (2026-10-28).

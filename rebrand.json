@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.6",
+      "version": "1.4.0-pink.7",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "piConfig": {
         "name": "pink",
@@ -19,7 +19,7 @@
         "rebrand": "rebrand.json in the Thoth repository (pink/)"
       }
     },
-    "dependencies": {"undici": "8.12.3", "@dietrichgebert/ponytail": "5.3.3"},
+    "dependencies": {"undici": "8.12.3", "@dietrichgebert/ponytail": "5.3.3", "@cortexkit/pi-antigravity-auth": "3.1.2"},
     "optionalDependencies": {"node-pty": "1.1.0", "@xterm/headless": "5.5.0"},
     "files_add": [
       "LICENSE-PI.txt",
@@ -1972,6 +1972,14 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
       "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "count": 1
+    },
+    {
+      "id": "no-remote-catalog-for-builtins",
+      "why": "vale para todos os provedores embutidos do mapa (radius e openrouter ficam de fora): o catalogo remoto deles aponta para pink.invalid (sem servidor) e nunca trouxe modelo; registrar um provedor de mesmo nome (o Google Antigravity no google) disparava essa consulta morta, com 4 s de espera; card 1dfwh7kffnt",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "withRemoteCatalog(provider,options.catalogBaseUrl,builtinModelDataGeneratedAt)",
+      "replace": "provider",
       "count": 1
     },
     {
