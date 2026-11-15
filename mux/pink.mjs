@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Pink com várias sessões ao mesmo tempo (owner 2026-11-15, card 1dfwh7kffcu): uma lateral à esquerda lista as sessões e o
-// resto da tela é a sessão ativa. O modo interativo do Pi segura uma sessão por vez, então cada sessão é um Pink filho num
+// resto da tela é a sessão ativa. O modo interativo do Pink segura uma sessão por vez, então cada sessão é um Pink filho num
 // terminal virtual (node-pty + @xterm/headless) e este processo só desenha a lateral, a tela do filho ativo e repassa o teclado.
 // Sem terminal interativo, com comando de uma vez (-p, --help, install...) ou sem node-pty, roda o Pink normal, sem lateral.
 import { execFile } from "node:child_process";
@@ -20,18 +20,18 @@ const ACTIVE_BG = "48;2;73;36;61";
 // cliques, roda e arrasto em SGR (a sessão rola e seleciona texto com eles); Shift+arrastar seleciona pelo terminal
 const MOUSE_ON = "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
 const MOUSE_OFF = "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
-// no Windows o ConPTY consome o pedido de mouse do Pi e o terminal virtual nunca o vê: repassa sempre
+// no Windows o ConPTY consome o pedido de mouse do Pink e o terminal virtual nunca o vê: repassa sempre
 const ALWAYS_FORWARD_MOUSE = process.platform === "win32";
 const SUBCOMMANDS = new Set(["install", "uninstall", "remove", "update", "list", "auth", "mcp", "config"]);
 const ONE_SHOT = new Set(["-p", "--print", "--mode", "-h", "--help", "-v", "--version", "--export", "--list-models"]);
 const FIRST_ONLY = new Set(["-c", "--continue", "-r", "--resume"]); // continuar a mesma sessão em dois processos estragaria o arquivo
 const FIRST_ONLY_VALUE = new Set(["--session", "--session-id", "--fork"]);
-// opções do Pi que recebem valor (pink --help); qualquer outro texto solto é a mensagem inicial, que fica só na primeira sessão
+// opções do Pink que recebem valor (pink --help); qualquer outro texto solto é a mensagem inicial, que fica só na primeira sessão
 const TAKES_VALUE = new Set(["--provider", "--model", "--api-key", "--system-prompt", "--append-system-prompt", "--mode", "--session-dir", "--models", "--thinking", "--skill", "--prompt-template", "--theme", "--use-theme", "--export", "--tui-mode", "--extension", "-e", "--tools"]);
 const SPIN = ["◐", "◓", "◑", "◒"];
 const PINK = "38;2;255;110;180";
 
-// o lançador põe "--provider thoth --model thoth" antes de tudo; o Pi só reconhece subcomando como 1º argumento
+// o lançador põe "--provider thoth --model thoth" antes de tudo; o Pink só reconhece subcomando como 1º argumento
 export function subcommandFirst(argv) {
 	let i = 0;
 	while (i < argv.length && argv[i].startsWith("-")) {
@@ -107,7 +107,7 @@ export function fit(text, width) {
 export function shortTitle(title, index) {
 	// o título vem do processo da sessão: sem caracteres de controle ele não consegue mexer no terminal ao ser desenhado
 	const clean = (title ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, "").replace(/^\s*p(?:i|ink)\s*-\s*/i, "").trim();
-	// só o nome do programa (antes da pasta ser confiável o Pi ainda não pôs a pasta no título) conta como vazio
+	// só o nome do programa (antes da pasta ser confiável o Pink ainda não pôs a pasta no título) conta como vazio
 	return clean && !/^p(?:i|ink)$/i.test(clean) ? clean : `Sessão ${index + 1}`;
 }
 
@@ -141,7 +141,7 @@ export function sidebarWidth(columns) {
 	return columns < NARROW ? 5 : Math.min(MAX_SIDEBAR, Math.max(SIDEBAR, Math.round(columns * 0.2)));
 }
 
-// o Pi põe no título "pink - nome - pasta" ou "pink - pasta"; a pasta conhecida vem antes, porque pode ter " - " no nome
+// o Pink põe no título "pink - nome - pasta" ou "pink - pasta"; a pasta conhecida vem antes, porque pode ter " - " no nome
 export function sessionLabel(title, index, folder = "") {
 	const text = shortTitle(title, index);
 	if (folder && text === folder) return { name: `Sessão ${index + 1}`, folder };
@@ -223,7 +223,7 @@ const samePath = (a, b) => {
 const oneLine = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, " ").replace(/\s+/g, " ").trim();
 const textOf = (content) => (typeof content === "string" ? content : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join(" ") : "");
 
-// onde o Pi grava as sessões (sessions.md): variável da pasta de sessões, senão <pasta do agente>/sessions
+// onde o Pink grava as sessões (sessions.md): variável da pasta de sessões, senão <pasta do agente>/sessions
 // shortcut: ignora o sessionDir do settings.json; quem usa precisa da variável PINK_CODING_AGENT_SESSION_DIR
 export function sessionsDir(env = process.env, home = homedir()) {
 	if (env.PINK_CODING_AGENT_SESSION_DIR) return env.PINK_CODING_AGENT_SESSION_DIR;
@@ -262,8 +262,8 @@ function readHead(file) {
 	return { cwd, name: name || first };
 }
 
-// "pink --session <id>" (o comando que aparece ao sair) acha a sessão em qualquer pasta: o Pi só procura na pasta atual.
-// Id parcial que casa com mais de uma sessão não é resolvido aqui (fica com o Pi, que pergunta na pasta atual).
+// "pink --session <id>" (o comando que aparece ao sair) acha a sessão em qualquer pasta: o Pink só procura na pasta atual.
+// Id parcial que casa com mais de uma sessão não é resolvido aqui (fica com o Pink, que pergunta na pasta atual).
 export function findSession(dir, id) {
 	if (!/^[0-9a-f-]{4,}$/i.test(id ?? "")) return undefined;
 	let folders = [];
@@ -471,7 +471,7 @@ export function serializeLine(line, columns, scratch) {
 }
 
 async function runPlain() {
-	process.argv = process.argv.filter((arg) => arg !== "--sem-sessoes"); // o cli.js do Pi relê process.argv e recusa a opção
+	process.argv = process.argv.filter((arg) => arg !== "--sem-sessoes"); // o cli.js do Pink relê process.argv e recusa a opção
 	await import(pathToFileURL(CLI).href);
 }
 
@@ -501,7 +501,7 @@ async function main() {
 	let picker; // seletor da nova sessão aberto: { folders, saved, input, scroll, error, hits, room }
 	// sessão salva que está aberta agora: retomada por aqui (mesmo arquivo), aberta com -c/-r/--session (qualquer uma da pasta)
 	// ou gravada por uma sessão aberta desta pasta depois que ela começou. Na dúvida conta como aberta (só impede excluir)
-	// shortcut: o /resume feito dentro do Pi não chega até aqui; uma conversa antiga reaberta assim e ainda sem mensagem nova aparece com "excluir"
+	// shortcut: o /resume feito dentro do Pink não chega até aqui; uma conversa antiga reaberta assim e ainda sem mensagem nova aparece com "excluir"
 	const isOpen = (item) => sessions.some((session) => (session.file && samePath(session.file, item.file)) || (samePath(session.cwd, item.cwd) && (session.resumed || item.mtime >= session.started - 2000)));
 	let modes = {};
 	let pending;
@@ -584,7 +584,7 @@ async function main() {
 			schedule();
 			return true;
 		});
-		term.onData((data) => child.write(data)); // respostas às perguntas do Pi ao terminal (posição do cursor, cores)
+		term.onData((data) => child.write(data)); // respostas às perguntas do Pink ao terminal (posição do cursor, cores)
 		child.onData((data) => term.write(data, () => { if (isActive()) schedule(); }));
 		child.onExit(({ exitCode }) => {
 			session.exited = true;
@@ -795,7 +795,7 @@ async function main() {
 				const action = leftPress(part.mouse) && hitAt(layout, part.mouse.x - 1, part.mouse.y - 1);
 				if (action) act(action);
 			} else if (part.mouse.x > side + 1 && current && (ALWAYS_FORWARD_MOUSE || current.term.modes.mouseTrackingMode !== "none")) {
-				// shortcut: repassa sempre em SGR; um filho que pedir outro formato de mouse não entende (o Pi não usa mouse)
+				// shortcut: repassa sempre em SGR; um filho que pedir outro formato de mouse não entende (o Pink não usa mouse)
 				current.child.write(`\x1b[<${part.mouse.button};${part.mouse.x - side - 1};${part.mouse.y}${part.mouse.press ? "M" : "m"}`);
 			}
 		}

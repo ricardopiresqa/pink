@@ -1,4 +1,4 @@
-// Pink UI (F50b): the OpenCode look on top of the Pi engine.
+// Pink UI (F50b): the OpenCode look on top of the Pink engine.
 //
 //   home (empty session)   a big PINK in the middle, the input box right under it, a line of hints
 //   session                the logo goes away; full-screen frame: top bar, SESSÕES | conversation + input box | CONTEXTO/PLANO/
@@ -20,7 +20,7 @@ export const LOGO = [
 ];
 export const HOME_WIDTH = 78; // the input box on the home screen, like OpenCode's centered prompt
 export const BAR = "▌"; // a barra rosa cheia da caixa de envio e da mensagem do usuário (#ff6eb4, a cor accent do tema)
-// códigos que não ocupam coluna: CSI (cor, cursor), OSC (links) e APC/DCS/PM/SOS (o Pi marca o cursor com
+// códigos que não ocupam coluna: CSI (cor, cursor), OSC (links) e APC/DCS/PM/SOS (o Pink marca o cursor com
 // \x1b_pi:c\x07). Contar o marcador como texto deixava a faixa da caixa de digitar 7 colunas mais curta.
 const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b[\]_P^X][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
 const ANSI_SPLIT = /(\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b[\]_P^X][^\u0007\u001b]*(?:\u0007|\u001b\\))/;
@@ -90,7 +90,7 @@ export function inputBox({ theme, content, width, label, inline = false, hints =
 	// senão ele vai para a linha das dicas, à esquerda
 	const text = Math.max(1, width - 3); // a barra e um espaço de cada lado
 	const panel = (value) => (theme.bg ? theme.bg("userMessageBg", value) : value);
-	// o editor do Pi devolve a linha com "resetar cor" no meio (cursor, texto): sem reaplicar o fundo depois de cada reset,
+	// o editor do Pink devolve a linha com "resetar cor" no meio (cursor, texto): sem reaplicar o fundo depois de cada reset,
 	// a faixa do texto ficava preta e só o rodapé da caixa ficava rosado
 	const open = theme.bg ? theme.bg("userMessageBg", "\u0000").split("\u0000")[0] : "";
 	const keep = (value) => (open ? value.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + open) : value);
@@ -139,7 +139,7 @@ export function planDecision(toolName, annotations) {
 	return toolName === "bash" ? "ask" : "block";  // como o agente plan do OpenCode: edição negada, shell só com confirmação
 }
 
-// paleta de comandos (ctrl+p, como no OpenCode): os comandos do Pi com a descrição em português e os das extensões
+// paleta de comandos (ctrl+p, como no OpenCode): os comandos do Pink com a descrição em português e os das extensões
 export const BUILTIN_COMMANDS = [
 	["new", "Nova sessão"], ["resume", "Trocar de sessão (lista as salvas)"], ["sessions", "Sessões desta pasta"], ["delete-session", "Apagar sessão (vai para a lixeira .trash)"], ["name", "Renomear a sessão"],
 	["model", "Escolher o modelo"], ["thinking", "Nível de pensamento"], ["themes", "Escolher o tema"], ["settings", "Configurações"],
@@ -700,7 +700,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 		loadSessions();
 	});
 
-	// a moldura só existe na tela cheia; no modo regular do Pi (--tui-mode regular) fica o rodapé de uma linha
+	// a moldura só existe na tela cheia; no modo regular do Pink (--tui-mode regular) fica o rodapé de uma linha
 	const framed = () => (state.tui?.mode ?? "fullscreen") === "fullscreen";
 	const rows = () => state.tui?.terminal?.rows ?? 24;
 	const homeRows = () => (framed() ? rows() - 2 * barRows(rows()) + 1 : rows()); // homeTop/homeBottomPad já descontam uma linha de rodapé
@@ -721,11 +721,11 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			this.pinkKeys = keybindings;
 		}
 
-		// ctrl+p abre a paleta e tab com a caixa vazia troca o agente (OpenCode); o resto segue para o editor do Pi
+		// ctrl+p abre a paleta e tab com a caixa vazia troca o agente (OpenCode); o resto segue para o editor do Pink
 		handleInput(data) {
 			if (matchesKey?.(data, "ctrl+p") && onPalette) return void onPalette();
 			if (matchesKey?.(data, "tab") && onAgent && !String(this.getText?.() ?? "").trim()) return void onAgent();
-			// ctrl+n nova sessão; alt+↑/alt+↓ a sessão anterior/seguinte da coluna, salvo onde o Pi já usa a tecla (dequeue fora do Windows)
+			// ctrl+n nova sessão; alt+↑/alt+↓ a sessão anterior/seguinte da coluna, salvo onde o Pink já usa a tecla (dequeue fora do Windows)
 			if (matchesKey?.(data, "ctrl+n")) return void runCommand("/new");
 			const step = matchesKey?.(data, "alt+up") ? -1 : matchesKey?.(data, "alt+down") ? 1 : 0;
 			if (step && !this.pinkKeys?.matches?.(data, "app.message.dequeue")) return void openNeighbour(step);
@@ -736,7 +736,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			try {
 				return this.pinkRender(width);
 			} catch {
-				return super.render(width);  // ctx antigo durante a troca de sessão: o editor do Pi, sem moldura
+				return super.render(width);  // ctx antigo durante a troca de sessão: o editor do Pink, sem moldura
 			}
 		}
 
@@ -774,7 +774,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	};
 	const shownSessions = (height) => state.sessions.slice(0, Math.max(0, height - 2 - (height >= 8 ? 2 : 0) - 1));
 
-	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pi 1.x abre e recolhe cada bloco com um clique,
+	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pink abre e recolhe cada bloco com um clique,
 	// ctrl+t abre e recolhe todos (e salva); o título do bloco aberto vem do patch thinking-header-when-shown
 	ctx.ui.setHiddenThinkingLabel?.("+ Pensou");
 	globalThis.__pinkThinkingHeader = "− Pensou · clique ou ctrl+t recolhe";
@@ -939,7 +939,7 @@ export function autoTitle(entries, max = 50) {
 	return "";
 }
 
-// "Apagar sessão" nunca apaga (regra do owner): move o arquivo para <pasta das sessões>/.trash/, que o Pi não lista
+// "Apagar sessão" nunca apaga (regra do owner): move o arquivo para <pasta das sessões>/.trash/, que o Pink não lista
 export function trashSession(file, current, { fs, path, now = Date.now() }) {
 	if (!file) return { ok: false, reason: "sessão sem arquivo" };
 	if (current && path.resolve(file).toLowerCase() === path.resolve(current).toLowerCase()) return { ok: false, reason: "é a sessão atual: troque de sessão antes de apagar" };
@@ -952,7 +952,7 @@ export function trashSession(file, current, { fs, path, now = Date.now() }) {
 }
 
 // ferramentas e pensamento compactos, como no OpenCode (owner 2026-10-29): uma linha cinza por bloco; ctrl+o (ferramentas)
-// e ctrl+t (pensamento) expandem para a visão completa do Pi, com o diff do edit
+// e ctrl+t (pensamento) expandem para a visão completa do Pink, com o diff do edit
 const shorten = (text, max) => {
 	const value = String(text ?? "").replace(/\s+/g, " ").trim();
 	return value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -992,7 +992,7 @@ export function compactToolRenderer(toolName, next) {
 	const base = next?.();
 	const empty = { render: () => [], invalidate() {} };
 	const line = (theme, pad, text, extra = "") => ({ render: (width) => [fit(`${" ".repeat(pad)}${theme.fg("muted", `→ ${text}`)}${extra}`, width)], invalidate() {} });
-	// expandido: a visão do Pi; as do Pi com moldura própria ("default") ganham só o recuo, já que esta é "self"
+	// expandido: a visão do Pink; as do Pink com moldura própria ("default") ganham só o recuo, já que esta é "self"
 	const wrap = (component, pad) => (!component || base?.renderShell === "self" ? component : {
 		render: (width) => component.render(Math.max(1, width - 2 * pad)).map((row) => " ".repeat(pad) + row),
 		invalidate: () => component.invalidate?.(),
@@ -1072,7 +1072,7 @@ export function createRun(now = Date.now) {
 	};
 }
 
-// a nova tentativa automática do Pi (erro do provedor, contexto estourado) é agent_end + agent_start: continua o mesmo pedido
+// a nova tentativa automática do Pink (erro do provedor, contexto estourado) é agent_end + agent_start: continua o mesmo pedido
 export const RETRY_WINDOW_MS = 120000;
 export function continueRun(previous, endedAt, now = Date.now()) {
 	return previous?.failed && now - endedAt < RETRY_WINDOW_MS ? previous : undefined;
@@ -1190,7 +1190,7 @@ function registerOpenCodeFunctions(pi) {
 		ctx.ui.notify?.(restored ? `Refeito: conversa e ${restored.changed} arquivo(s)` : "Refeito: conversa", "info");
 	});
 	// "Trabalhando · 1m 12s · ↓ 3.1k tokens" ao vivo; no fim, o rodapé da última resposta guarda o total do pedido
-	// (registrado antes do ponto de restauração: o Pi espera cada gancho, e o git não pode atrasar o relógio)
+	// (registrado antes do ponto de restauração: o Pink espera cada gancho, e o git não pode atrasar o relógio)
 	pi.on("agent_start", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
 		const run = (PINK.run = continueRun(PINK.lastRun, PINK.lastRunEnd) ?? createRun());
@@ -1297,7 +1297,7 @@ async function registerTodoTool(pi) {
 }
 
 export default function (pi) {
-	// ao sair, o contexto da extensão já foi desligado quando o Pi imprime a linha de retomar: o fechamento é montado no
+	// ao sair, o contexto da extensão já foi desligado quando o Pink imprime a linha de retomar: o fechamento é montado no
 	// session_shutdown (contexto ainda ativo) e só recebe o comando de continuar depois
 	pi.on("session_shutdown", async (event, ctx) => {
 		for (const name of PINK_GLOBALS) globalThis[name] = undefined;  // a sessão seguinte reinstala; até lá, nada lê o ctx antigo
@@ -1308,7 +1308,7 @@ export default function (pi) {
 			const banner = exitBanner({ theme: ctx.ui.theme, title: stats.title, stats, resume: "\u0000" });
 			globalThis.__pinkExitBanner = (resume) => banner.replace("\u0000", resume);
 		} catch {
-			globalThis.__pinkExitBanner = undefined;  // sem fechamento, o Pi imprime a linha dele
+			globalThis.__pinkExitBanner = undefined;  // sem fechamento, o Pink imprime a linha dele
 		}
 	});
 	pi.registerCommand?.("lateral", {

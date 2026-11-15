@@ -64,6 +64,11 @@
     {
       "from": "mux/pink.mjs",
       "to": "dist/mux/pink.mjs"
+    },
+    {
+      "from": "CHANGELOG.md",
+      "to": "CHANGELOG.md",
+      "overwrite": true
     }
   ],
   "env_rename": {
@@ -231,7 +236,7 @@
         "docs/PINK.md"
       ],
       "regex": "identify as Pi's document on \\S+ instead of registering:",
-      "replace": "identify with Pi's Client ID Metadata Document (below) instead of registering:",
+      "replace": "identify with the upstream Client ID Metadata Document (below) instead of registering:",
       "min_count": 1
     },
     {
@@ -440,7 +445,1039 @@
       "regex": "(#[\\w-]*?)(?<![\\w])pi(?=[\\w-]*\\))",
       "replace": "\\1pink",
       "min_count": 1
+    },
+    {
+      "id": "code-bundle-env-glob",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "PI_\\*",
+      "replace": "PINK_*",
+      "min_count": 2
+    },
+    {
+      "id": "code-bundle-env-prefix",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "startsWith\\(\"PI_\"\\)",
+      "replace": "startsWith(\"PINK_\")",
+      "min_count": 1
+    },
+    {
+      "id": "code-bundle-config-hint",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "run \\\\`pi config\\\\`",
+      "replace": "run \\\\`pink config\\\\`",
+      "min_count": 1
+    },
+    {
+      "id": "code-bundle-mcp-client",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "new McpClient\\(\\{name:\"pi\",",
+      "replace": "new McpClient({name:\"pink\",",
+      "min_count": 1
+    },
+    {
+      "id": "code-mcp-client-name",
+      "files": [
+        "dist/extensions/mcp/runtime.js"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?m)^(\\s*)name: \"pi\",$",
+      "replace": "\\1name: \"pink\",",
+      "min_count": 1
+    },
+    {
+      "id": "code-docs-argv",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\[\"pi\", \"--",
+      "replace": "[\"pink\", \"--",
+      "min_count": 1
+    },
+    {
+      "id": "code-docs-title",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\"pi - ",
+      "replace": "\"pink - ",
+      "min_count": 1
+    },
+    {
+      "id": "code-docs-possessive",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.$`])pi's\\b",
+      "replace": "Pink's",
+      "min_count": 2
+    },
+    {
+      "id": "code-doom-credit",
+      "files": [
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "the original pink integration",
+      "replace": "the original upstream integration",
+      "min_count": 1
+    },
+    {
+      "id": "code-official-distribution",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "the official Pi distribution",
+      "replace": "the official upstream distribution",
+      "min_count": 1
+    },
+    {
+      "id": "code-cimd",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?i)pi's Client ID Metadata Document",
+      "replace": "the upstream Client ID Metadata Document",
+      "min_count": 2
+    },
+    {
+      "id": "code-upstream-bug",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Bug in v0\\.30\\.0:",
+      "replace": "Bug in upstream v0.30.0:",
+      "min_count": 1
+    },
+    {
+      "id": "code-mascot",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "the pi (mascot|agent character)",
+      "replace": "the upstream \\1",
+      "min_count": 2
+    },
+    {
+      "id": "code-bug-disclaimer",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "the Pi developers \\(Earendil\\)",
+      "replace": "Earendil, the upstream developers,",
+      "min_count": 1
+    },
+    {
+      "id": "code-bug-version",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "your pi version",
+      "replace": "your version",
+      "min_count": 1
+    },
+    {
+      "id": "code-bundle-bug-version",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "your pi version",
+      "replace": "your version",
+      "min_count": 1
+    },
+    {
+      "id": "code-bug-prompt-devs",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "a report for the pi developers",
+      "replace": "a report for the upstream developers",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-exit",
+      "files": [
+        "examples/**/*.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Exit pi cleanly",
+      "replace": "Exit pink cleanly",
+      "min_count": 1
+    },
+    {
+      "id": "code-radius-intro",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Radius is a service crafted for Pi by the builders of Pi, Earendil Works",
+      "replace": "Radius is an Earendil Works service (not part of Pink)",
+      "min_count": 1
+    },
+    {
+      "id": "code-bug-command",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Report a bug to the Pi developers",
+      "replace": "Report a bug to the upstream developers",
+      "min_count": 1
+    },
+    {
+      "id": "code-announcement",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\\"pi has joined Earendil\\\"",
+      "replace": "\"The upstream project has joined Earendil\"",
+      "min_count": 1
+    },
+    {
+      "id": "code-prompt-preamble",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "operating inside pi, a coding agent harness",
+      "replace": "operating inside pink, a coding agent harness",
+      "min_count": 1
+    },
+    {
+      "id": "code-prompt-docs",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "asks about pi itself",
+      "replace": "asks about pink itself",
+      "min_count": 1
+    },
+    {
+      "id": "code-bug-prompt",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "a bug report about pi, the coding agent",
+      "replace": "a bug report about pink, the coding agent",
+      "min_count": 1
+    },
+    {
+      "id": "code-cli-usage",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.\\-/@$])pi(?= (?:update|config|auth|install|remove|list|uninstall|-p|--mode|--version|--help)\\b)",
+      "replace": "pink",
+      "min_count": 5
+    },
+    {
+      "id": "code-install-command",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "npm (install|uninstall) -g(?: --ignore-scripts)? @earendil-works/pi-coding-agent",
+      "replace": "npm \\1 -g @thoth/pink",
+      "min_count": 3
+    },
+    {
+      "id": "code-no-nix",
+      "files": [
+        "docs/quickstart.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?s)\\nWith Nix on macOS or Linux.*?(?=\\nVerify the installation:)",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "code-uninstall-only-npm",
+      "files": [
+        "docs/quickstart.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?s)\\nIf you used the installer, run it again and choose \\*\\*Uninstall Pink\\*\\*:.*?(?=\\nNone of these methods)",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "code-no-nix-update",
+      "files": [
+        "docs/cli.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": " Update Pink with that package manager, for example `nix profile upgrade pi`\\.",
+      "replace": " Update Pink with that package manager.",
+      "min_count": 1
+    },
+    {
+      "id": "code-upstream-issue",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "https://github\\.com/(?:earendil-works|badlogic)/pi(?:-mono)?/issues/(\\d+)",
+      "replace": "upstream issue \\1",
+      "min_count": 1,
+      "comments_only": true
+    },
+    {
+      "id": "code-upstream-issue-short",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\((?:earendil-works|badlogic)/pi(?:-mono)?#(\\d+)\\)",
+      "replace": "(upstream issue \\1)",
+      "min_count": 1,
+      "comments_only": true
+    },
+    {
+      "id": "code-upstream-repo-url",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "https://github\\.com/(?:earendil-works|badlogic)/pi(?:-mono)?(?:/[^\\s\\\"'`)]*)?",
+      "replace": "https://pink.invalid",
+      "min_count": 3
+    },
+    {
+      "id": "code-no-containerization-nav",
+      "files": [
+        "docs/docs.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": ",\\s*\\{\\s*\"title\": \"Isolate Pi\",\\s*\"path\": \"containerization\\.md\"\\s*\\}",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "code-no-containerization-index",
+      "files": [
+        "docs/index.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\[Termux on Android\\]\\(termux\\.md\\), or \\[Containerization\\]\\(containerization\\.md\\)",
+      "replace": "or [Termux on Android](termux.md)",
+      "min_count": 1
+    },
+    {
+      "id": "code-no-containerization-security",
+      "files": [
+        "docs/security.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\n\\nFor setup instructions and the limitations of each isolation method, see \\[[^\\]]*\\]\\(containerization\\.md\\)\\.",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "code-how-pink-works-link",
+      "files": [
+        "docs/**/*.md",
+        "docs/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "how-pi-works\\.md",
+      "replace": "how-pink-works.md",
+      "min_count": 2
+    },
+    {
+      "id": "code-doom-file",
+      "files": [
+        "examples/**/*.sh",
+        "examples/**/*.md",
+        "examples/**/*.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "doomgeneric_pi\\.c",
+      "replace": "doomgeneric_pink.c",
+      "min_count": 2
+    },
+    {
+      "id": "code-product-name",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "dist/**/*.json",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json",
+        "schemas/**/*.json",
+        "docs/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![{\\w$])Pi(?![\\w}$-])",
+      "replace": "Pink",
+      "min_count": 50
+    },
+    {
+      "id": "code-pi-compounds",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?i)\\bpi-(specific|generated|managed)\\b",
+      "replace": "Pink-\\1",
+      "min_count": 1,
+      "comments_only": true
+    },
+    {
+      "id": "code-proxy-text",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "dist/**/*.json",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json",
+        "schemas/**/*.json",
+        "docs/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Pi-managed HTTP clients",
+      "replace": "Pink-managed HTTP clients",
+      "min_count": 2
+    },
+    {
+      "id": "code-env-vars",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w$])PI_(?=[A-Z*])",
+      "replace": "PINK_",
+      "min_count": 1
+    },
+    {
+      "id": "code-config-dir",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.])\\.pi(?=[/\\\\`'\\\"])",
+      "replace": ".pink",
+      "min_count": 1
+    },
+    {
+      "id": "code-config-dir-comments",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.])\\.pi(?=[/\\\\`'\\\".]|$)",
+      "replace": ".pink",
+      "min_count": 10,
+      "comments_only": true
+    },
+    {
+      "id": "code-urls",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "dist/**/*.json",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json",
+        "schemas/**/*.json",
+        "docs/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "https://pi\\.dev(?!/oauth)",
+      "replace": "https://pink.invalid",
+      "min_count": 10
+    },
+    {
+      "id": "code-bare-domain",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w./:-])pi\\.dev\\b(?![/\\w])",
+      "replace": "upstream",
+      "min_count": 1,
+      "comments_only": true
+    },
+    {
+      "id": "code-comment-possessive",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.$])pi's\\b",
+      "replace": "Pink's",
+      "min_count": 1,
+      "comments_only": true
+    },
+    {
+      "id": "code-comment-name",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.\\-/@\\\"'(#$`])pi(?![\\w.\\-/@\\\"':),(`\\[$])",
+      "replace": "pink",
+      "min_count": 20,
+      "comments_only": true
+    },
+    {
+      "id": "code-mcp-registers-as",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "registers as `pi`",
+      "replace": "registers as `pink`",
+      "min_count": 1
+    },
+    {
+      "id": "code-mcp-client-default",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Default: `pi`\\.",
+      "replace": "Default: `pink`.",
+      "min_count": 1
+    },
+    {
+      "id": "code-docs-run-command",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(Run|running) `pi`",
+      "replace": "\\1 `pink`",
+      "min_count": 2
+    },
+    {
+      "id": "code-docs-ai-agent",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`AI_AGENT=pi`",
+      "replace": "`AI_AGENT=pink`",
+      "min_count": 1
+    },
+    {
+      "id": "code-docs-update-alias",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`pink update pi`",
+      "replace": "`pink update pink`",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-label",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`pi \\$\\{",
+      "replace": "`pink ${",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-command",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "command: \"pi\"",
+      "replace": "command: \"pink\"",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-process",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`pi` (sub)?process",
+      "replace": "`pink` \\1process",
+      "min_count": 3
+    },
+    {
+      "id": "code-example-titles",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\"pi (RPC Demo|default spinner)",
+      "replace": "\"Pink \\1",
+      "min_count": 3
+    },
+    {
+      "id": "code-example-overlay",
+      "files": [
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "overlay in pi\\.",
+      "replace": "overlay in pink.",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-usage",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs",
+        "examples/**/*.sh",
+        "examples/**/*.json",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<=`)pi(?= -{1,2}\\w)",
+      "replace": "pink",
+      "min_count": 3
+    },
+    {
+      "id": "code-sdk-mcp-command",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.\\-/@$])pi(?= mcp\\b)",
+      "replace": "pink",
+      "min_count": 1
+    },
+    {
+      "id": "code-cimd-redundant",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(Client ID Metadata Documents?) on upstream\\b",
+      "replace": "\\1",
+      "min_count": 1
+    },
+    {
+      "id": "code-cimd-where",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Where upstream serves the upstream Client ID",
+      "replace": "Where upstream serves its Client ID",
+      "min_count": 1
+    },
+    {
+      "id": "code-upstream-bug-path",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(Bug in upstream v0\\.30\\.0: Sessions were saved to )~/\\.pink/agent/",
+      "replace": "\\1the agent folder root",
+      "min_count": 1
     }
+  ],
+  "move_files": [
+    {
+      "from": "docs/how-pi-works.md",
+      "to": "docs/how-pink-works.md"
+    },
+    {
+      "from": "examples/extensions/doom-overlay/doom/doomgeneric_pi.c",
+      "to": "examples/extensions/doom-overlay/doom/doomgeneric_pink.c"
+    }
+  ],
+  "remove_files": [
+    "docs/containerization.md"
   ],
   "replacements": [
     {
@@ -1384,9 +2421,11 @@
     "protocol identifiers sent to third parties: openai-codex originator, xai referrer, x-opencode-client",
     "code identifiers (getPiUserAgent, checkForNewPiVersion, extension API parameter named pi, the pi key of package manifests, session entry type pi.share)",
     "import specifiers of the Pi libraries (@earendil-works/pi-ai, pi-tui, pi-agent-core ...)",
-    "docs/: product name, commands and .pink paths renamed (doc_renames); package names, the extension API object pi and docs/containerization.md (third-party kits) stay",
+    "docs/: product name, commands and .pink paths renamed (doc_renames); package names and the extension API object pi stay; docs/containerization.md (third-party kits) is removed",
+    "dist/ outside the bundle (the library/SDK): reads the upstream PI_* environment variables, like the @earendil-works/* dependencies it imports (renaming broke the PI_ATTRIBUTION import); the running CLI (the bundle) reads PINK_*",
+    "schemas and theme $schema/$id point to https://pink.invalid/...: no published schema URL, so editors do not validate themes from the URL (the schemas ship in schemas/)",
     "https://pi.dev/oauth (MCP OAuth client metadata document): changing it needs a Pink-hosted metadata document, owner decision pending",
     "LICENSE-PI.txt and NOTICE.md: the MIT license requires keeping the upstream copyright notice",
-    "the Pi CHANGELOG.md stays in the package but Pink never shows it at startup (Pi release notes are not Pink's)"
+    "CHANGELOG.md is replaced by Pink's own (add_files overwrite); Pink never shows a changelog at startup"
   ]
 }

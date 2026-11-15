@@ -80,7 +80,9 @@ def _files(root: Path, patterns: list[str], exclude: list[str] | None = None) ->
     found: set[Path] = set()
     for pattern in patterns:
         found.update(Path(item) for item in glob.glob(str(root / pattern), recursive=True) if Path(item).is_file())
-    skip = {(root / item).resolve() for item in exclude or ()}
+    skip = {(root / item).resolve() for item in exclude or () if "*" not in item}
+    for pattern in (item for item in exclude or () if "*" in item):
+        skip.update(Path(item).resolve() for item in glob.glob(str(root / pattern), recursive=True))
     return sorted(path for path in found if path.resolve() not in skip)
 
 
@@ -103,12 +105,29 @@ def apply_replacements(root: Path, items: list[dict[str, Any]]) -> list[dict[str
     return report
 
 
+# shortcut: linha que começa com * conta como comentário (também *gerador() ou markdown dentro de string); hoje só
+# regras de texto usam comments_only. Se uma regra for tocar algo assim, trocar por um tokenizador de JS.
+COMMENT_LINE = re.compile(r"(?m)^[ \t]*(?://|/?\*).*$")
+
+
 def apply_env_rename(root: Path, rule: dict[str, Any]) -> dict[str, Any]:
     total, touched = 0, []
     pattern = re.compile(rule["regex"])
     for path in _files(root, rule["files"], rule.get("exclude")):
         text = path.read_text(encoding="utf-8")
-        new, count = pattern.subn(rule["replace"], text)
+        if rule.get("comments_only"):
+            # só linhas inteiras de comentário (//, /*, *): o `pi` minúsculo no código é o objeto da API das extensões
+            hits = [0]
+
+            def in_comment(line: re.Match[str], hits: list[int] = hits) -> str:
+                changed, n = pattern.subn(rule["replace"], line.group(0))
+                hits[0] += n
+                return changed
+
+            new = COMMENT_LINE.sub(in_comment, text)
+            count = hits[0]
+        else:
+            new, count = pattern.subn(rule["replace"], text)
         if count:
             path.write_text(new, encoding="utf-8", newline="")
             total += count
@@ -171,6 +190,18 @@ def apply_spec(root: Path, spec: dict[str, Any], source: Path = HERE) -> list[di
     report.append(apply_env_rename(root, spec["env_rename"]))
     # a documentação que o modelo lê (docs/, README): o nome do produto e os caminhos, em vários arquivos de uma vez
     report += [apply_env_rename(root, rule) for rule in spec.get("doc_renames", ())]
+    # arquivos com o nome do Pi (os links já foram trocados pelas regras acima) e os que não servem ao Pink
+    for item in spec.get("move_files", ()):
+        origin, target = root / item["from"], root / item["to"]
+        if not origin.is_file() or target.exists():
+            raise PatchError(f"move_files: cannot move {item['from']} to {item['to']}")
+        origin.rename(target)
+        report.append({"id": "move_file", "from": item["from"], "to": item["to"]})
+    for name in spec.get("remove_files", ()):
+        if not (root / name).is_file():
+            raise PatchError(f"remove_files: {name} not found")
+        (root / name).unlink()
+        report.append({"id": "remove_file", "file": name})
     if spec.get("shrinkwrap"):
         report.append(apply_shrinkwrap(root, spec["shrinkwrap"], package))
     return report

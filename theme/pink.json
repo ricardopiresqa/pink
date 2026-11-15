@@ -1,5 +1,5 @@
 {
-  "$schema": "https://pi.dev/schemas/theme.schema.json",
+  "$schema": "https://pink.invalid/schemas/theme.schema.json",
   "name": "pink",
   "appearance": "dark",
   "vars": {
