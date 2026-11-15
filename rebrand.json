@@ -33,6 +33,10 @@
       "to": "dist/modes/interactive/theme/pink.json"
     },
     {
+      "from": "theme/extra-themes.json",
+      "to": "dist/modes/interactive/theme/extra-themes.json"
+    },
+    {
       "from": "LICENSE-PI.txt",
       "to": "LICENSE-PI.txt"
     },
@@ -69,6 +73,332 @@
     "replace": "PINK_",
     "min_count": 40
   },
+  "doc_renames": [
+    {
+      "id": "docs-radius-section",
+      "files": [
+        "docs/providers.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?s)\\n### Radius\\n.*?(?=\\n### )",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "docs-radius-key-row",
+      "files": [
+        "docs/providers.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\| Radius \\| `RADIUS_API_KEY` \\|\\n",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "docs-bug-section",
+      "files": [
+        "docs/sessions.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?s)\\n## Report a bug\\n.*?(?=\\n## |\\Z)",
+      "replace": "\n",
+      "min_count": 1
+    },
+    {
+      "id": "docs-share-radius",
+      "files": [
+        "docs/sessions.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "By default, Pi uses a Radius artifact when Radius authentication is configured; otherwise, it uses a private GitHub gist\\. Set (\\[`sessionShareDestination`\\]\\([^)]*\\)) to `gist` or `radius` to force one destination\\.",
+      "replace": "Pi uploads it to a private GitHub gist (\\1).",
+      "min_count": 1
+    },
+    {
+      "id": "docs-share-setting-values",
+      "files": [
+        "docs/settings.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`\"auto\" \\\\\\| \"gist\" \\\\\\| \"radius\"`",
+      "replace": "`\"auto\" \\\\| \"gist\"`",
+      "min_count": 1
+    },
+    {
+      "id": "docs-share-setting-text",
+      "files": [
+        "docs/settings.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`auto` uses Radius when authenticated and otherwise creates a GitHub gist\\. `gist` always uses a gist\\. `radius` requires Radius authentication and never falls back to a gist\\.",
+      "replace": "Both values create a private GitHub gist.",
+      "min_count": 1
+    },
+    {
+      "id": "docs-share-usage",
+      "files": [
+        "docs/usage.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "By default, Radius authentication makes the artifact visible to your Radius organization; otherwise, Pi creates a private GitHub gist through the GitHub CLI\\. The (\\[`sessionShareDestination`\\]\\([^)]*\\)) setting can force either destination\\.",
+      "replace": "Pi creates a private GitHub gist through the GitHub CLI (setting: \\1).",
+      "min_count": 1
+    },
+    {
+      "id": "docs-bug-command-row",
+      "files": [
+        "docs/slash-commands.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\| `/bug \\[description\\]` \\|[^\\n]*\\n",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "docs-cimd-text",
+      "files": [
+        "docs/mcp.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "identify as Pi's document on \\S+ instead of registering:",
+      "replace": "identify with Pi's Client ID Metadata Document (below) instead of registering:",
+      "min_count": 1
+    },
+    {
+      "id": "docs-version-check-row",
+      "files": [
+        "docs/environment-variables.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Disable the `[^`]*` latest-version request",
+      "replace": "Disable the latest-version check",
+      "min_count": 1
+    },
+    {
+      "id": "docs-pi-compounds",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?i)\\bpi-(specific|generated|managed)\\b",
+      "replace": "Pink-\\1",
+      "min_count": 3
+    },
+    {
+      "id": "docs-installer",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "curl -fsSL https://pi\\.dev/install\\.sh \\| sh|irm https://pi\\.dev/install\\.ps1 \\| iex",
+      "replace": "npm install -g @thoth/pink",
+      "min_count": 1
+    },
+    {
+      "id": "docs-schema-line",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?m)^[ \\t]*\\\"\\$schema\\\": \\\"https://pi\\.dev/[^\\\"]*\\\",?\\r?\\n",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "docs-schema-tip",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Add `\\\"\\$schema\\\": \\\"https://pi\\.dev/[^\\\"]*\\\"` to `([\\w.]+)` for editor validation and completion\\.",
+      "replace": "The JSON schema of `\\1` ships in the package `schemas/` folder.",
+      "min_count": 1
+    },
+    {
+      "id": "docs-md-links",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\[([^\\]]+)\\]\\((?:(?<![\\w.-])(?:https?://)?(?:[\\w-]+\\.)?pi\\.dev(?!/oauth)(?:/[^\\s)\\]\\\"'`>]*)?|https?://github\\.com/(?:earendil-works|badlogic)/pi[\\w-]*(?:/[^\\s)\\]\\\"'`>#]*)?(?:#[\\w-]*)?)\\)",
+      "replace": "\\1",
+      "min_count": 1
+    },
+    {
+      "id": "docs-bare-links",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.-])(?:https?://)?(?:[\\w-]+\\.)?pi\\.dev(?!/oauth)(?:/[^\\s)\\]\\\"'`>]*)?|https?://github\\.com/(?:earendil-works|badlogic)/pi[\\w-]*(?:/[^\\s)\\]\\\"'`>#]*)?(?:#[\\w-]*)?",
+      "replace": "https://pink.invalid",
+      "min_count": 1
+    },
+    {
+      "id": "docs-radius-env-row",
+      "files": [
+        "docs/environment-variables.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\| `PI_RADIUS_GATEWAY` \\|[^\\n]*\\n",
+      "replace": "",
+      "min_count": 1
+    },
+    {
+      "id": "docs-remote-catalog",
+      "files": [
+        "docs/models.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Pi starts with its bundled catalog and can overlay newer catalog data from \\S+?\\. Cached catalog data remains available offline; run `pi update --models` to force a refresh\\.",
+      "replace": "Pi uses its bundled catalog (the remote catalog of the upstream project is turned off).",
+      "min_count": 1
+    },
+    {
+      "id": "docs-env-vars-glob",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "`PI_\\*`",
+      "replace": "`PINK_*`",
+      "min_count": 1
+    },
+    {
+      "id": "docs-env-vars",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w])PI_(?=[A-Z])",
+      "replace": "PINK_",
+      "min_count": 10
+    },
+    {
+      "id": "docs-config-dir",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.])\\.pi(?=[/`])",
+      "replace": ".pink",
+      "min_count": 10
+    },
+    {
+      "id": "docs-product-name",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![{\\w])Pi(?![\\w}-])",
+      "replace": "Pink",
+      "min_count": 50
+    },
+    {
+      "id": "docs-command-name",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![\\w.\\-/@\\\"'(#])pi(?![\\w.\\-/@\\\"':),(`\\[])",
+      "replace": "pink",
+      "min_count": 20
+    },
+    {
+      "id": "docs-anchors",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(#[\\w-]*?)(?<![\\w])pi(?=[\\w-]*\\))",
+      "replace": "\\1pink",
+      "min_count": 1
+    }
+  ],
   "replacements": [
     {
       "id": "chatgpt-agent-name",
@@ -151,6 +481,190 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Radius is a service crafted for Pi by the builders of Pi, Earendil Works",
       "replace": "Radius",
+      "count": 1
+    },
+    {
+      "id": "no-radius-network",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://radius.pi.dev",
+      "replace": "https://pink.invalid",
+      "count": 33
+    },
+    {
+      "id": "no-remote-catalog",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "DEFAULT_CATALOG_BASE_URL=\"https://pi.dev\"",
+      "replace": "DEFAULT_CATALOG_BASE_URL=\"https://pink.invalid\"",
+      "count": 1
+    },
+    {
+      "id": "no-upstream-changelog-link",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "changelogUrl=\"https://pi.dev/changelog\"",
+      "replace": "changelogUrl=\"pink --version\"",
+      "count": 1
+    },
+    {
+      "id": "no-upstream-installer",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "'powershell -c \"irm https://pi.dev/install.ps1 | iex\"':\"curl -fsSL https://pi.dev/install.sh | sh\"",
+      "replace": "\"npm install -g @thoth/pink\":\"npm install -g @thoth/pink\"",
+      "count": 1
+    },
+    {
+      "id": "share-viewer-help",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "(default: https://pi.dev/session/)",
+      "replace": "(default: the GitHub gist page)",
+      "count": 1
+    },
+    {
+      "id": "share-viewer-default",
+      "file": "dist/bundle/chunks/chunk-BSS6T6KQ.js",
+      "find": "DEFAULT_SHARE_VIEWER_URL=\"https://pi.dev/session/\"",
+      "replace": "DEFAULT_SHARE_VIEWER_URL=\"https://gist.github.com/\"",
+      "count": 1
+    },
+    {
+      "id": "share-viewer-gist",
+      "file": "dist/bundle/chunks/chunk-BSS6T6KQ.js",
+      "find": "return`${process.env.PI_SHARE_VIEWER_URL||DEFAULT_SHARE_VIEWER_URL}#${gistId}`",
+      "replace": "return process.env.PI_SHARE_VIEWER_URL?`${process.env.PI_SHARE_VIEWER_URL}#${gistId}`:`${DEFAULT_SHARE_VIEWER_URL}${gistId}`",
+      "count": 1
+    },
+    {
+      "id": "no-upstream-download",
+      "file": "dist/bundle/chunks/chunk-BSS6T6KQ.js",
+      "find": "Download from: https://github.com/earendil-works/pi/releases/latest",
+      "replace": "Reinstall with: npm install -g @thoth/pink",
+      "count": 1
+    },
+    {
+      "id": "easter-egg-earendil-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "handleDementedDelves(){",
+      "replace": "handleDementedDelves(){return;",
+      "count": 1
+    },
+    {
+      "id": "easter-egg-author-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "handleArminSaysHi(){",
+      "replace": "handleArminSaysHi(){return;",
+      "count": 1
+    },
+    {
+      "id": "bug-disclaimer-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "This report goes to the Pi developers (Earendil)",
+      "replace": "This report goes to the Pink developers",
+      "count": 1
+    },
+    {
+      "id": "extensions-migration-url",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration",
+      "replace": "docs/extensions.md (Pink package)",
+      "count": 1
+    },
+    {
+      "id": "extensions-doc-url",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md",
+      "replace": "docs/extensions.md (Pink package)",
+      "count": 1
+    },
+    {
+      "id": "mcp-state-for-sidebar",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "function createMcpExtension(options={}){return pi=>{let servers=[],",
+      "replace": "function createMcpExtension(options={}){return pi=>{globalThis.__pinkMcp=()=>{try{return servers.map(s=>({name:s.entry.name,state:describeState(s,!1)}))}catch{return[]}};let servers=[],",
+      "count": 1
+    },
+    {
+      "id": "crash-warning-no-bug",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": ". Run /bug to report it; the crash details are attached automatically.",
+      "replace": ".",
+      "count": 1
+    },
+    {
+      "id": "crash-instructions-no-bug",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "regex": true,
+      "find": "To report this crash: [^\\n]{0,200}?The crash details are attached automatically\\.",
+      "replace": "Restart pink to continue.",
+      "count": 1
+    },
+    {
+      "id": "bug-hint-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "suggestBugReport(){",
+      "replace": "suggestBugReport(){return;",
+      "count": 1
+    },
+    {
+      "id": "bug-hint-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "If this looks like a ${APP_NAME} bug, /bug sends a report to the developers.",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "bug-hint-text-module",
+      "file": "dist/modes/interactive/interactive-mode.js",
+      "find": "If this looks like a ${APP_NAME} bug, /bug sends a report to the developers.",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "crash-start-module",
+      "file": "dist/modes/interactive/interactive-mode.js",
+      "find": "\"start pi and\"",
+      "replace": "\"start pink and\"",
+      "count": 1
+    },
+    {
+      "id": "crash-instructions-module",
+      "file": "dist/modes/interactive/interactive-mode.js",
+      "regex": true,
+      "find": "To report this crash: \\$\\{resume\\} run /bug\\. The crash details are attached automatically\\.",
+      "replace": "Restart pink to continue.",
+      "count": 1
+    },
+    {
+      "id": "chatgpt-port-text",
+      "file": "dist/bundle/chunks/openai-chatgpt.js",
+      "find": "another pi session",
+      "replace": "another pink session",
+      "count": 1
+    },
+    {
+      "id": "mcp-project-path",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "or .pi/mcp.json.",
+      "replace": "or .pink/mcp.json.",
+      "count": 2
+    },
+    {
+      "id": "mcp-project-path-cli",
+      "file": "dist/bundle/chunks/cli-MIMUTM5L.js",
+      "find": "or .pi/mcp.json.",
+      "replace": "or .pink/mcp.json.",
+      "count": 1
+    },
+    {
+      "id": "finish-reason-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "When false, pi infers",
+      "replace": "When false, pink infers",
+      "count": 1
+    },
+    {
+      "id": "share-destination-values",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "values:[\"auto\",\"gist\",\"radius\"]",
+      "replace": "values:[\"auto\",\"gist\"]",
       "count": 1
     },
     {
@@ -447,7 +961,7 @@
       "id": "theme-builtin",
       "file": "dist/bundle/chunks/chunk-T726RZZU.js",
       "find": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\")))}}return BUILTIN_THEMES",
-      "replace": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\"))),pink:JSON.parse(stripBom(fs3.readFileSync(path4.join(themesDir,\"pink.json\"),\"utf-8\")))}}return BUILTIN_THEMES",
+      "replace": "light:JSON.parse(stripBom(fs3.readFileSync(lightPath,\"utf-8\"))),pink:JSON.parse(stripBom(fs3.readFileSync(path4.join(themesDir,\"pink.json\"),\"utf-8\"))),...JSON.parse(stripBom(fs3.readFileSync(path4.join(themesDir,\"extra-themes.json\"),\"utf-8\")))}}return BUILTIN_THEMES",
       "count": 1
     },
     {
@@ -617,8 +1131,9 @@
     "protocol identifiers sent to third parties: openai-codex originator, xai referrer, x-opencode-client",
     "code identifiers (getPiUserAgent, checkForNewPiVersion, extension API parameter named pi, the pi key of package manifests, session entry type pi.share)",
     "import specifiers of the Pi libraries (@earendil-works/pi-ai, pi-tui, pi-agent-core ...)",
-    "docs/ and CHANGELOG.md: upstream Pi documentation, with docs/PINK.md mapping the names",
-    "https://pi.dev/session/ (the /share viewer) and https://pi.dev/changelog (links the user opens on purpose)",
+    "docs/: product name, commands and .pink paths renamed (doc_renames); package names, the extension API object pi and docs/containerization.md (third-party kits) stay",
+    "https://pi.dev/oauth (MCP OAuth client metadata document): changing it needs a Pink-hosted metadata document, owner decision pending",
+    "LICENSE-PI.txt and NOTICE.md: the MIT license requires keeping the upstream copyright notice",
     "the Pi CHANGELOG.md stays in the package but Pink never shows it at startup (Pi release notes are not Pink's)"
   ]
 }

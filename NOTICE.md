@@ -12,6 +12,8 @@ O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está 
   e a telemetria de instalação vem desligada por padrão;
 - a interface no estilo do OpenCode, na extensão `extensions/pink-ui.ts` (código do Pink, MIT), que o pacote carrega por padrão. Ela traz tela inicial, caixa de digitar,
   moldura de tela cheia (topo, colunas de sessões e de contexto, rodapé), fechamento, paleta de comandos, agentes Build e Plano, `/undo` e `/redo` com arquivos, lista de tarefas (`todowrite`), `/sessions`, `/themes`, `/init` e `/details`;
+- temas extras (`theme/extra-themes.json`, gerado por `theme/make_themes.mjs`): os temas do OpenCode (MIT, copyright dos autores do opencode) convertidos para o formato do Pink, cores inspiradas nos temas do Claude Code e as paletas públicas base16, catppuccin e one-half
+  dos temas de código do Codex (2026-11-15);
 - alguns padrões: tela cheia, pensamento recolhido, início silencioso e barra de rolagem escondida. A troca de modelo passou de `ctrl+p` para `f2`/`shift+f2`, e o `ctrl+p` agora
   abre a paleta (2026-10-28).
 

@@ -31,6 +31,16 @@ const TAKES_VALUE = new Set(["--provider", "--model", "--api-key", "--system-pro
 const SPIN = ["◐", "◓", "◑", "◒"];
 const PINK = "38;2;255;110;180";
 
+// o lançador põe "--provider thoth --model thoth" antes de tudo; o Pi só reconhece subcomando como 1º argumento
+export function subcommandFirst(argv) {
+	let i = 0;
+	while (i < argv.length && argv[i].startsWith("-")) {
+		if (ONE_SHOT.has(argv[i].split("=")[0])) return argv; // "pink -p list": a mensagem é "list", não o subcomando
+		i += TAKES_VALUE.has(argv[i]) ? 2 : 1;
+	}
+	return i > 0 && SUBCOMMANDS.has(argv[i]) ? argv.slice(i) : argv;
+}
+
 export function wantsMux(argv, env, tty) {
 	if (!tty || env.PINK_MUX_CHILD === "1" || env.PINK_NO_MUX === "1" || argv.includes("--sem-sessoes")) return false;
 	if (argv.some((arg) => ONE_SHOT.has(arg.split("=")[0]))) return false;
@@ -252,6 +262,45 @@ function readHead(file) {
 	return { cwd, name: name || first };
 }
 
+// "pink --session <id>" (o comando que aparece ao sair) acha a sessão em qualquer pasta: o Pi só procura na pasta atual.
+// Id parcial que casa com mais de uma sessão não é resolvido aqui (fica com o Pi, que pergunta na pasta atual).
+export function findSession(dir, id) {
+	if (!/^[0-9a-f-]{4,}$/i.test(id ?? "")) return undefined;
+	let folders = [];
+	try {
+		folders = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+	} catch {
+		return undefined;
+	}
+	const found = [];
+	for (const folder of folders) {
+		let names = [];
+		try {
+			names = readdirSync(path.join(dir, folder.name));
+		} catch {
+			continue;
+		}
+		for (const n of names) if (n.endsWith(".jsonl") && n.toLowerCase().includes(`_${id.toLowerCase()}`)) found.push(path.join(dir, folder.name, n));
+		if (found.length > 1) return undefined;
+	}
+	return found.length === 1 ? { file: found[0], cwd: readHead(found[0]).cwd } : undefined;
+}
+
+// troca o id pelo arquivo e entra na pasta da sessão, para retomar de qualquer lugar
+export function resolveSessionArg(argv, dir, exists = existsSync) {
+	const at = argv.findIndex((arg) => arg === "--session" || arg.startsWith("--session="));
+	if (at < 0 || argv.includes("--session-dir")) return { argv };
+	const inline = argv[at].startsWith("--session=");
+	const id = inline ? argv[at].slice("--session=".length) : argv[at + 1];
+	if (id === undefined || exists(id)) return { argv };
+	const found = findSession(dir, id);
+	if (!found) return { argv };
+	const out = [...argv];
+	if (inline) out[at] = `--session=${found.file}`;
+	else out[at + 1] = found.file;
+	return { argv: out, cwd: found.cwd && exists(found.cwd) ? found.cwd : undefined };
+}
+
 // as sessões salvas de todas as pastas, da mais recente para a mais antiga (no máximo `limit`)
 export function listSessions(dir, limit = 300) {
 	const files = [];
@@ -427,6 +476,9 @@ async function runPlain() {
 }
 
 async function main() {
+	const resumed = resolveSessionArg(subcommandFirst(process.argv.slice(2)), sessionsDir());
+	process.argv = [...process.argv.slice(0, 2), ...resumed.argv];
+	if (resumed.cwd) process.chdir(resumed.cwd);
 	const argv = process.argv.slice(2).filter((arg) => arg !== "--sem-sessoes");
 	const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 	if (!wantsMux(process.argv.slice(2), process.env, tty)) return runPlain();

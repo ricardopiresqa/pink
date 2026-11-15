@@ -341,6 +341,12 @@ export function rightColumn({ theme, width, height, data }) {
 		out.push(theme.fg("dim", "ainda sem medida"));
 	}
 	if (data.thoth) out.push("", rule(theme, inner), heading(theme, "THOTH"), ...thothLines({ theme, thoth: data.thoth, width: inner }));
+	if (data.plan) out.push("", rule(theme, inner), heading(theme, "COTA"), ...planLines({ theme, plan: data.plan, width: inner }));
+	if (data.mcp) {
+		out.push("", rule(theme, inner));
+		if (data.hits) data.hits.mcp = out.length; // a linha do título: o clique abre e fecha a lista
+		out.push(...mcpLines({ theme, mcp: data.mcp, open: data.mcpOpen, width: inner }));
+	}
 	const todos = data.todos ?? [];
 	out.push("", rule(theme, inner), heading(theme, "PLANO", todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
 	if (todos.length) out.push(...todoLines({ theme, todos, width: inner }).slice(1).map((line) => line.replace(/^ {2}/, "")));
@@ -507,6 +513,105 @@ export function thothSources({ vault, project, env = process.env }) {
 			return getJson("http://127.0.0.1:11435/v1/thoth/calls", { Authorization: `Bearer ${token}` });
 		},
 	};
+}
+
+// -- COTA: o mesmo uso do plano do painel local (thoth-client uso estado --json): 5 horas e semana do Claude e do Codex
+export const PLAN_POLL_MS = 180000; // o CLI leva ~15 s (pergunta ao Codex e soma o mês): de 3 em 3 minutos basta
+export function planSnapshot(raw, now = Date.now() / 1000) {
+	const pick = (usage) => {
+		const out = {};
+		for (const key of ["h5", "week"]) {
+			const window = usage?.[key];
+			const pct = Number(window?.pct), resets = Number(window?.resets_at);
+			if (!Number.isFinite(pct) || !Number.isFinite(resets)) continue;
+			out[key] = resets <= now ? { pct: 0 } : { pct: Math.max(0, Math.min(100, pct)), resets };
+		}
+		return Object.keys(out).length ? out : undefined;
+	};
+	const claude = raw?.claude?.installed ? pick(raw.claude.usage) ?? null : undefined;
+	const codex = raw?.codex?.installed ? pick(raw.codex.usage) ?? null : undefined;
+	return { ok: claude !== undefined || codex !== undefined, claude, codex };
+}
+
+export function resetLabel(epoch, now = new Date()) {
+	if (!epoch) return "";
+	const when = new Date(epoch * 1000);
+	const hm = `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+	if (when.toDateString() === now.toDateString()) return hm;
+	return `${["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][when.getDay()]} ${hm}`;
+}
+
+export function planLines({ theme, plan, width, now = new Date() }) {
+	if (!plan?.ok) return [theme.fg("dim", plan?.loading ? "consultando…" : "sem dado do plano (thoth-client uso)")];
+	const out = [];
+	for (const [name, usage] of [["Claude", plan.claude], ["Codex", plan.codex]]) {
+		if (usage === undefined) continue;
+		out.push(theme.fg("text", name));
+		if (!usage) {
+			out.push(theme.fg("dim", name === "Claude" ? "  ligue: thoth-client uso ativar" : "  sem leitura ainda"));
+			continue;
+		}
+		for (const [key, label] of [["h5", "5 h"], ["week", "semana"]]) {
+			const window = usage[key];
+			if (!window) continue;
+			const tone = window.pct >= 90 ? "error" : window.pct >= 70 ? "warning" : "muted";
+			const right = theme.fg(tone, `${Math.round(window.pct)}%${window.resets ? ` · volta ${resetLabel(window.resets, now)}` : ""}`);
+			const left = theme.fg("muted", `  ${label}`);
+			out.push(footerLine({ theme, width, left, right }));
+			out.push(`  ${meter({ theme, percent: window.pct, cells: Math.max(4, width - 2) })}`);
+		}
+	}
+	return out.length ? out : [theme.fg("dim", "nenhum plano conectado")];
+}
+
+// -- MCP (como a lateral do OpenCode): título com a contagem; clique abre a lista completa com o estado de cada um
+export function mcpLines({ theme, mcp, open, width }) {
+	const connected = mcp.filter((item) => String(item.state).startsWith("connected")).length;
+	const out = [heading(theme, `${open ? "▾" : "▸"} MCP`, theme.fg("muted", `  ${connected}/${mcp.length} conectados`))];
+	if (!open) return out;
+	if (!mcp.length) return [...out, theme.fg("dim", "nenhum MCP (pink mcp add)")];
+	for (const item of mcp) {
+		const state = safeText(item.state, 40);
+		const tone = state.startsWith("connected") ? "success" : state === "disabled" ? "dim" : state.startsWith("failed") || state === "needs sign-in" ? "error" : "warning";
+		const left = `${theme.fg(tone, "●")} ${theme.fg("text", safeText(item.name, 30))}`;
+		out.push(footerLine({ theme, width, left, right: theme.fg("muted", state.replace(/^connected · /, "")) }));
+	}
+	return out;
+}
+
+// a cota do Claude vem do login do Pink (assinatura Pro/Max): o mesmo uso da conta que o /usage do Claude Code mostra,
+// sem precisar do Claude Code aberto. Só com token de assinatura (sk-ant-oat…); chave de API não tem essa cota e não é enviada.
+export function claudeUsageWindows(body, now = Date.now() / 1000) {
+	const out = {};
+	for (const [key, name] of [["five_hour", "h5"], ["seven_day", "week"]]) {
+		const pct = Number(body?.[key]?.utilization);
+		const resets = Date.parse(body?.[key]?.resets_at ?? "") / 1000;
+		if (!Number.isFinite(pct) || !Number.isFinite(resets)) continue;
+		out[name] = resets <= now ? { pct: 0 } : { pct: Math.max(0, Math.min(100, pct)), resets };
+	}
+	return Object.keys(out).length ? out : undefined;
+}
+
+export async function readClaudeFromPink(getKey, fetcher = fetch) {
+	const token = await getKey?.("anthropic");
+	if (typeof token !== "string" || !token.startsWith("sk-ant-oat")) return undefined;
+	const response = await fetcher("https://api.anthropic.com/api/oauth/usage", { headers: { Authorization: `Bearer ${token}`, "anthropic-beta": "oauth-2025-04-20" }, signal: AbortSignal.timeout(10000) });
+	if (!response.ok) return undefined;
+	return claudeUsageWindows(await response.json());
+}
+
+export function readPlan(run = node("node:child_process")?.execFile) {
+	return new Promise((resolve, reject) => {
+		if (!run) return reject(new Error("no child_process"));
+		run("thoth-client", ["uso", "estado", "--json"], { timeout: 60000, windowsHide: true, maxBuffer: 4 << 20 }, (error, stdout) => {
+			if (error) return reject(error);
+			try {
+				resolve(planSnapshot(JSON.parse(stdout)));
+			} catch (parse) {
+				reject(parse);
+			}
+		});
+	});
 }
 
 export async function pollThoth(sources, now = Date.now()) {
@@ -718,6 +823,28 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 		PINK.thoth.timer = setInterval(tick, THOTH_POLL_MS);
 		PINK.thoth.timer.unref?.();
 		void tick();
+		const planTick = async () => {
+			if (PINK.plan.busy) return;
+			PINK.plan.busy = true;
+			const [cli, own] = await Promise.allSettled([readPlan(), readClaudeFromPink((provider) => ctx.modelRegistry?.getApiKeyForProvider?.(provider))]);
+			try {
+				const data = cli.status === "fulfilled" ? cli.value : { ok: false };
+				// o uso medido pelo login do Pink vale mais que o da linha de status do Claude Code (que só atualiza com ele aberto)
+				PINK.plan.data = own.status === "fulfilled" && own.value ? { ...data, ok: true, claude: own.value } : data;
+			} catch {
+				PINK.plan.data = { ok: false };
+			} finally {
+				PINK.plan.busy = false;
+			}
+			try {
+				PINK.thoth.redraw?.();
+			} catch {
+				// troca de sessão: o próximo quadro mostra
+			}
+		};
+		PINK.plan.timer = setInterval(planTick, PLAN_POLL_MS);
+		PINK.plan.timer.unref?.();
+		void planTick();
 	};
 	Object.defineProperty(globalThis, "__pinkHome", { get: () => state.home, configurable: true });
 	// dentro do multiplexador (pink/mux) a lateral dele já lista as sessões: a coluna SESSÕES daqui sairia duplicada
@@ -729,7 +856,14 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	globalThis.__pinkFrame = {
 		// clique na coluna SESSÕES: linha 0 título, 1 em branco, depois as sessões e "+ Nova sessão"
 		mouse: live((slot, event) => {
-			if (slot !== "left" || event?.type !== "click" || event.button !== "left") return undefined;
+			if (event?.type !== "click" || event.button !== "left") return undefined;
+			if (slot === "right") {
+				if (event.y !== PINK.rightHits.mcp) return undefined;
+				PINK.mcpOpen = !PINK.mcpOpen;
+				PINK.thoth.redraw?.();
+				return { handled: true };
+			}
+			if (slot !== "left") return undefined;
 			const shown = shownSessions(Math.max(1, rows() - 2 * barRows(rows())));
 			const index = event.y - 2;
 			if (index >= 0 && index < shown.length) runCommand(`/session-open ${shown[index].path}`);
@@ -753,7 +887,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, plan: PINK.plan.data, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
@@ -906,7 +1040,7 @@ export function assistantFooter({ theme, model, agent, ms, output }) {
 
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
-export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined } };
+export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
 
 // "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
 export function labelUserMarkdown(markdown, context) {

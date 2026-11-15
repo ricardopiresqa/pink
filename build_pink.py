@@ -113,9 +113,10 @@ def apply_env_rename(root: Path, rule: dict[str, Any]) -> dict[str, Any]:
             path.write_text(new, encoding="utf-8", newline="")
             total += count
             touched.append(str(path.relative_to(root)).replace("\\", "/"))
+    name = rule.get("id", "env_rename")
     if total < rule["min_count"]:
-        raise PatchError(f"env_rename: expected at least {rule['min_count']} renames, applied {total}")
-    return {"id": "env_rename", "count": total, "files": touched}
+        raise PatchError(f"{name}: expected at least {rule['min_count']} renames, applied {total}")
+    return {"id": name, "count": total, "files": touched}
 
 
 def apply_package_json(root: Path, rule: dict[str, Any]) -> dict[str, Any]:
@@ -168,6 +169,8 @@ def apply_spec(root: Path, spec: dict[str, Any], source: Path = HERE) -> list[di
     report += add_files(root, spec["add_files"], source)
     report += apply_replacements(root, spec["replacements"])
     report.append(apply_env_rename(root, spec["env_rename"]))
+    # a documentação que o modelo lê (docs/, README): o nome do produto e os caminhos, em vários arquivos de uma vez
+    report += [apply_env_rename(root, rule) for rule in spec.get("doc_renames", ())]
     if spec.get("shrinkwrap"):
         report.append(apply_shrinkwrap(root, spec["shrinkwrap"], package))
     return report
