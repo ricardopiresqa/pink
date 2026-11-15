@@ -97,6 +97,10 @@ export function inputBox({ theme, content, width, label, inline = false, hints =
 	const row = (value) => `${theme.fg("accent", BAR)}${panel(keep(` ${pad(fit(value, text), text)} `))}`;
 	const tip = theme.fg("dim", hints);
 	const lines = inline && label ? [footerLine({ theme, width: text, left: content[0] ?? "", right: label }), ...content.slice(1)] : content;
+	if (!inline && label && visible(label) + 1 + visible(tip) > text) {
+		// rótulo e dicas não cabem juntos: o rótulo ganha a linha dele, em vez de cortar as dicas
+		return [row(""), ...lines.map(row), row(""), row(theme.fg("muted", label)), row(footerLine({ theme, width: text, left: "", right: tip }))];
+	}
 	const last = inline || !label ? footerLine({ theme, width: text, left: "", right: tip }) : footerLine({ theme, width: text, left: theme.fg("muted", label), right: tip });
 	return [row(""), ...lines.map(row), row(""), row(last)];
 }
@@ -631,8 +635,10 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			const theme = ctx.ui.theme;
 			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent });
 			const text = outer - 4;
-			const inline = text - visible(label) - 2 >= 30; // o rótulo à direita só quando sobra uma faixa de texto decente
-			const raw = super.render(Math.max(1, inline ? text - visible(label) - 2 : text));
+			// o rótulo fica embaixo, na linha das dicas: à direita da 1ª linha ele estreitava o editor e o pedido quebrava em
+			// ~35 colunas na tela inicial (owner 2026-11-15)
+			const inline = false;
+			const raw = super.render(Math.max(1, text));
 			let content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
 			if (typeof this.getText === "function" && this.getText() === "" && content.length) content = [`${content[0].replace(/\s+$/, "")}${theme.fg("dim", PLACEHOLDER)}`, ...content.slice(1)];
 			const lines = inputBox({ theme, content, width: outer, label, inline }).map((line) => " ".repeat(margin) + line);
