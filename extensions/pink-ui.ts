@@ -257,9 +257,9 @@ export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: s�
 export const PLACEHOLDER = "Peça a próxima etapa...";
 export const BOX_HINTS = "Enter enviar · shift+tab pensar · ctrl+t ver pensamento";
 
-export function frameColumns(width, { home = false, on = true } = {}) {
+export function frameColumns(width, { home = false, on = true, sessions = true } = {}) {
 	if (home || !on) return { left: false, right: false };
-	return { left: width >= THREE_COLUMNS, right: width >= TWO_COLUMNS };
+	return { left: sessions && width >= THREE_COLUMNS, right: width >= TWO_COLUMNS };
 }
 
 export function barRows(rows) {
@@ -567,7 +567,12 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			redraw();
 		}
 	};
-	pi.on("agent_start", leaveHome);
+	// sessão do multiplexador (pink/mux): progresso (OSC 9;4) enquanto trabalha e sino ao terminar, para a lateral mostrar o estado
+	const signal = (text) => process.env.PINK_MUX_CHILD === "1" && process.stdout.isTTY && process.stdout.write(text);
+	pi.on("agent_start", () => {
+		signal("\x1b]9;4;3\x07");
+		leaveHome();
+	});
 	pi.on("input", leaveHome);
 	void pi.exec?.("git", ["branch", "--show-current"], { cwd: ctx.cwd }).then((result) => {
 		state.branch = (result?.stdout ?? "").trim();
@@ -581,6 +586,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	loadSessions();
 	PINK.refreshSessions = loadSessions;  // o "Apagar sessão" relê a coluna depois de mover o arquivo
 	pi.on("agent_end", () => {
+		signal("\x1b]9;4;0\x07\x07");
 		// título automático (owner 2026-10-29): só quando a sessão ainda não tem nome
 		if (!pi.getSessionName?.()) {
 			const title = autoTitle(ctx.sessionManager?.getBranch?.());
@@ -714,7 +720,8 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 		void tick();
 	};
 	Object.defineProperty(globalThis, "__pinkHome", { get: () => state.home, configurable: true });
-	const columns = (width) => frameColumns(width, { home: state.home, on: globalThis.__pinkSidebarOn ?? true });
+	// dentro do multiplexador (pink/mux) a lateral dele já lista as sessões: a coluna SESSÕES daqui sairia duplicada
+	const columns = (width) => frameColumns(width, { home: state.home, on: globalThis.__pinkSidebarOn ?? true, sessions: process.env.PINK_MUX_CHILD !== "1" });
 	const bars = () => {
 		const usage = ctx.getContextUsage?.();
 		return { version, folder: tilde(ctx.cwd), branch: state.branch, agent: PINK.agent, context: usage ? { tokens: usage.tokens, percent: usage.percent, window: usage.contextWindow } : undefined };

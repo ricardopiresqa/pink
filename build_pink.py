@@ -125,6 +125,9 @@ def apply_package_json(root: Path, rule: dict[str, Any]) -> dict[str, Any]:
         data[key] = value
     # versão corrigida de dependência com alerta de segurança, sem esperar o upstream
     data["dependencies"] = {**data.get("dependencies", {}), **rule.get("dependencies", {})}
+    # opcionais: se não instalarem (node-pty compila no Linux), o Pink instala e roda sem a lateral de sessões
+    if rule.get("optionalDependencies"):
+        data["optionalDependencies"] = {**data.get("optionalDependencies", {}), **rule["optionalDependencies"]}
     files = list(data.get("files", []))
     for extra in rule.get("files_add", ()):
         if extra not in files:

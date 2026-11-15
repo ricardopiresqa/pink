@@ -4,14 +4,14 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.5",
+      "version": "1.4.0-pink.6",
       "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
       "piConfig": {
         "name": "pink",
         "configDir": ".pink"
       },
       "bin": {
-        "pink": "dist/bundle/cli.js"
+        "pink": "dist/mux/pink.mjs"
       },
       "thoth": {
         "fork_of": "@earendil-works/pi-coding-agent@1.4.0",
@@ -20,6 +20,7 @@
       }
     },
     "dependencies": {"undici": "8.12.3"},
+    "optionalDependencies": {"node-pty": "1.1.0", "@xterm/headless": "5.5.0"},
     "files_add": [
       "LICENSE-PI.txt",
       "NOTICE.md",
@@ -51,6 +52,10 @@
     {
       "from": "extensions/pink-ui.ts",
       "to": "extensions/pink-ui.ts"
+    },
+    {
+      "from": "mux/pink.mjs",
+      "to": "dist/mux/pink.mjs"
     }
   ],
   "env_rename": {

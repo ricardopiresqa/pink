@@ -29,6 +29,19 @@ pink --help
 
 Licença: o Pi é MIT, copyright (c) 2025 Mario Zechner (`LICENSE-PI.txt`). Veja `NOTICE.md` para o que mudou.
 
+## Várias sessões ao mesmo tempo (1.4.0-pink.6)
+
+No terminal, `pink` abre com uma lateral à esquerda: cada item é uma sessão do Pink rodando ao mesmo tempo, e o resto da tela é a sessão escolhida. Funciona em qualquer terminal, sem outro programa.
+
+- Tudo por clique, sem atalhos: clique numa sessão para abri-la, no **×** para fechá-la, em **+ nova sessão** para começar outra e em **sair do Pink** para sair. A lateral ocupa cerca de 20% da tela (26 a 36 colunas); cada sessão mostra o nome e, embaixo, o estado ou a pasta.
+- Na lateral, `◐` gira enquanto a sessão trabalha e `!` marca a que terminou e espera você, até você abri-la.
+- A roda do mouse rola a conversa da sessão, como no Pink sem lateral. Para selecionar texto pelo terminal, segure **Shift** enquanto arrasta.
+- Sair com mais de uma sessão aberta, ou fechar uma sessão que está trabalhando, pede confirmação (`[ sim ]` / `[ não ]`, ou `s` no teclado; Enter desiste).
+- Terminal com menos de 60 colunas: a lateral fica só com número e estado (clique para trocar, `+` para abrir); fechar e sair são de dentro da sessão. Sair de dentro da sessão (como sempre no Pink) fecha só aquela; ao fechar a última, o Pink sai. Fechar a janela do terminal no X não passa pelo Pink: quem confirma é o terminal (o Windows Terminal já pergunta quando há várias abas).
+- Cada sessão é um Pink à parte num terminal virtual (`node-pty` + `@xterm/headless`): se uma travar, as outras seguem. As sessões abertas depois da primeira não repetem `--continue`, `--resume`, `--session` nem a mensagem inicial.
+- Sem lateral: `pink --sem-sessoes` ou `PINK_NO_MUX=1`. Comandos de uma vez (`-p`, `--help`, `install`...) e terminal não interativo rodam o Pink de sempre. `node-pty` e `@xterm/headless` são dependências opcionais: se não instalarem (no Linux o `node-pty` compila na instalação), o Pink instala e roda sem lateral.
+- Limites: cada sessão mostra só a tela atual, sem o histórico de rolagem do terminal. No modo de tela cheia (o padrão), a conversa rola dentro do Pink, como antes; com `--tui-mode regular` o que sai do topo não volta. O terminal virtual não fala o protocolo de teclado Kitty, então atalhos que dependem dele (como `shift+enter` em alguns terminais) seguem o modo antigo.
+
 ## Sessões (1.4.0-pink.3)
 
 - A coluna **SESSÕES** mostra o horário de cada sessão à direita (`14:32` hoje, `ontem`, `3d`, depois `28/10`), então sessões de mesmo nome se distinguem. A sessão sem nome ganha um título automático, a primeira mensagem sua com mais de 3 palavras (comandos `/...` não contam).
