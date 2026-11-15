@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -678,6 +679,8 @@ def test_google_antigravity_is_native_one_account_with_quota_and_no_leaks(ui_fac
     for text in ("COTA", "Antigravity · Gemini", "Antigravity · Claude e outros", "25% · volta", "90% · volta"):
         assert text in a["column"], text
     assert a["widths"] == [36] and a["leaks"] is False and a["none"] is None
+    # /login em português: o navegador cai numa página de erro em localhost (sem servidor na 51121) e a pessoa cola o endereço
+    assert a["login"] == [{"url": "https://accounts.google.com/x", "instructions": "Entre com a conta do Google. No fim o navegador mostra um erro em localhost: é esperado. Copie o endereço inteiro dessa página e cole no Pink."}, {"message": "Cole o endereço inteiro da página de erro (http://localhost:51121/...):"}]
     # base quebrada: um aviso curto, sem o texto do erro; base que se registrou "unavailable": onde está o estado e a saída
     assert a["notes"]["broken"] == [["warning", "Google Antigravity indisponível nesta instalação: reinstale o Pink"]]
     [(level, text)] = a["notes"]["unavailable"]
@@ -685,12 +688,21 @@ def test_google_antigravity_is_native_one_account_with_quota_and_no_leaks(ui_fac
     assert text.endswith("apague essa pasta e faça /login de novo") and "Resolve it" not in text and "Vault" not in text
 
 
-def test_the_installed_pink_lists_the_antigravity_models_from_the_real_base_without_dot_pi(cli: Path, tmp_path: Path) -> None:
-    """Vincent 2026-11-15: a base real (não a falsa) carrega no Pink empacotado e não cria ~/.pi."""
-    done = run_pink(cli, tmp_path, "--list-models", "antigravity")
-    google = [line for line in done.stdout.splitlines() if line.split()[:1] == ["google"]]
-    assert done.returncode == 0 and len(google) >= 3, done.stdout + done.stderr
-    assert not (tmp_path / ".pi").exists() and "Vault" not in done.stdout + done.stderr
+def test_the_installed_pink_loads_the_real_antigravity_base_ready_for_login_without_dot_pi(cli: Path, tmp_path: Path) -> None:
+    """Vincent/Argus 2026-11-15: a base real carrega no Pink empacotado, pede /login e não cria ~/.pi.
+
+    A pasta do agente fica sob a home: em %TEMP% a base recusa a pasta (writable-by-others) e cai em "indisponível".
+    """
+    agent = Path.home() / f".pink-test-{uuid.uuid4().hex[:8]}"
+    try:
+        done = run_pink(cli, tmp_path, "-p", "ping", "--provider", "google", "--model", "claude-sonnet-5-5", "--no-session", PINK_CODING_AGENT_DIR=str(agent))
+        said = done.stdout + done.stderr
+        assert done.returncode != 0 and "No API key found for google" in said and "Vault" not in said, said
+        assert (agent / "antigravity").is_dir() and not (tmp_path / ".pi").exists()
+        listed = run_pink(cli, tmp_path, "--list-models", "antigravity")  # sob %TEMP%: indisponível, mas os modelos seguem no /model
+        assert sum(line.split()[:1] == ["google"] for line in listed.stdout.splitlines()) >= 3, listed.stdout + listed.stderr
+    finally:
+        shutil.rmtree(agent, ignore_errors=True)
 
 
 def test_pink_reads_only_its_own_skills_and_ships_the_natives(package_dir: Path) -> None:

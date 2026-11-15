@@ -552,7 +552,7 @@ out.natives = await (async () => {
 		if (f.includes("ponytail")) return load(f);
 		return { registerCortexKitPiAntigravity: async (pi, seams) => {
 			agSeams.push(seams);
-			pi.registerProvider("google", { name: "Google Antigravity (CortexKit OAuth)", oauth: { name: "Google Antigravity (CortexKit)", login: () => "kept" } });
+			pi.registerProvider("google", { name: "Google Antigravity (CortexKit OAuth)", oauth: { name: "Google Antigravity (CortexKit)", login: (cb) => { cb.onAuth({ url: "https://accounts.google.com/x" }); cb.onPrompt({ message: "Paste the Antigravity OAuth callback URL or code:" }); return "kept"; } } });
 			pi.registerProvider("google", { name: "Google Antigravity (CortexKit, unavailable)" });
 			pi.registerCommand("antigravity", { description: "vault menu" });
 			pi.on("session_start", async () => { throw new Error("Vault enrollment or source settings cannot be read."); });
@@ -563,8 +563,8 @@ out.natives = await (async () => {
 	const auth = (google) => JSON.stringify({ google });
 	delete globalThis.__pinkAntigravityQuota;
 	const agPi = fakePi(rewrite);
-	const agProviders = [];
-	agPi.pi.registerProvider = (name, config) => agProviders.push([name, config.name, config.oauth?.name ?? null, config.oauth?.login?.() ?? null]);
+	const agProviders = [], agLogin = [];
+	agPi.pi.registerProvider = (name, config) => agProviders.push([name, config.name, config.oauth?.name ?? null, config.oauth?.login?.({ onAuth: (info) => agLogin.push(info), onPrompt: (p) => agLogin.push(p) }) ?? null]);
 	const agEnv = env();
 	// sem pink-tools.json (quem acabou de instalar): o Antigravity entra mesmo assim
 	const agStart = await natives.natives(agPi.pi, deps({ env: agEnv, exists: agExists, load: agLoad, read: (f) => { if (f.endsWith("auth.json")) return auth({ type: "oauth", refresh: "REFRESH-SECRET|proj-1|managed-1", access: "ACCESS-SECRET" }); throw new Error("ENOENT"); } }));
@@ -591,7 +591,7 @@ out.natives = await (async () => {
 	const windows = ui.antigravityWindows(agSummary, Date.parse("2026-11-15T12:00:00Z") / 1000);
 	const agColumn = ui.rightColumn({ theme: plain, width: 36, height: 80, data: { input: 0, output: 0, cost: 0, plan: { ok: true, antigravity: windows } } });
 	const antigravity = {
-		on: agStart.antigravity, seams: agSeams.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.replace(/\\/g, "/").split("pink-fake-agent/")[1]]))), piEnv: Object.keys(agEnv).filter((k) => k.startsWith("PI_")), hooks: agHooks, providers: agProviders, commands: Object.keys(agPi.commands).sort(), loads: agLoads,
+		on: agStart.antigravity, seams: agSeams.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.replace(/\\/g, "/").split("pink-fake-agent/")[1]]))), piEnv: Object.keys(agEnv).filter((k) => k.startsWith("PI_")), hooks: agHooks, providers: agProviders, login: agLogin, commands: Object.keys(agPi.commands).sort(), loads: agLoads,
 		quota: quota === agSummary, keys, quotaCalls: agQuotaCalls, apiKeyQuota: apiKeyQuota ?? null, noLogin: noLogin ?? null, broken: agBrokenStart.antigravity, notes: agNotes,
 		menu: agMenuRows.some((row) => /antigravity/i.test(row)), windows, column: agColumn.join("\n"), widths: [...new Set(agColumn.map(ui.visible))],
 		leaks: JSON.stringify(agQuotaCalls).includes("SECRET") || agColumn.join("\n").includes("SECRET"), none: ui.antigravityWindows({ groups: {} }) ?? null,
