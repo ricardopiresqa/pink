@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -654,43 +653,6 @@ def test_ponytail_rtk_headroom_and_graphify_come_with_pink_and_fail_open(ui_fact
     assert a["downServers"] == [] and a["downNotes"][0][0] == "warning" and "fora do ar" in a["downNotes"][0][1]
     # Esc sai do menu na primeira volta; erro ao salvar aparece e a escolha vale na sessão
     assert a["escRows"] == [5] and a["failNotes"][0][0] == "error" and "disco cheio" in a["failNotes"][0][1] and a["failTool"] == "rtk git status"
-
-
-def test_google_antigravity_is_native_one_account_with_quota_and_no_leaks(ui_facts: dict) -> None:
-    """Card 1dfwh7kffnt; owner 2026-11-15 ("instalou o pink já vem tudo"): sempre ligado, nome do Pink na tela, cota na COTA."""
-    a = ui_facts["natives"]["antigravity"]
-    # entra sem pink-tools.json e sem o /ferramentas; o estado da base fica na pasta do agente do Pink (nada em ~/.pi)
-    assert a["on"] is True and a["menu"] is False and a["piEnv"] == []
-    assert a["seams"] == [{"vaultDir": "antigravity", "modeFile": "antigravity/mode.json", "rosterFile": "antigravity/roster.json", "settingsFile": "antigravity/settings.json"}]
-    # um gancho da base que lança erro não chega à tela; os outros respondem normalmente
-    assert a["hooks"] == [None, None, "fechou"]  # o session_start da base (engolido), o do pink-natives e o shutdown da base
-    # na tela só "Google Antigravity"; o login segue o da base; o menu de cofre não entra; os outros ganchos passam
-    assert a["providers"] == [["google", "Google Antigravity", "Google Antigravity", "kept"], ["google", "Google Antigravity (indisponível)", None, None]]
-    assert "antigravity" not in a["commands"]
-    assert [p.split("/node_modules/")[-1] for p in a["loads"]] == ["@cortexkit/pi-antigravity-auth/dist/index.js", "@cortexkit/antigravity-auth-core/dist/index.js"]
-    # cota: o token do provedor google e os projetos do login vão para o cliente da base, com os endpoints dela
-    assert a["quota"] is True and a["keys"] == ["google"]
-    assert a["quotaCalls"] == [{"accessToken": "<o token>", "endpoints": ["https://daily.example", "https://prod.example"], "projectId": "proj-1", "managedProjectId": "managed-1"}]
-    assert a["apiKeyQuota"] is None and a["noLogin"] is None and a["broken"] is False
-    # COTA mostra o usado (1 - o que sobra): Gemini 25% em 5 h e 90% na semana; a janela que já virou zera
-    at = lambda iso: datetime.fromisoformat(iso).timestamp()  # noqa: E731
-    assert a["windows"] == [{"label": "Gemini", "usage": {"h5": {"pct": 25, "resets": at("2099-01-01T10:00:00+00:00")}, "week": {"pct": 90, "resets": at("2099-01-05T10:00:00+00:00")}}}, {"label": "Claude e outros", "usage": {"h5": {"pct": 0}}}]
-    for text in ("COTA", "Antigravity · Gemini", "Antigravity · Claude e outros", "25% · volta", "90% · volta"):
-        assert text in a["column"], text
-    assert a["widths"] == [36] and a["leaks"] is False and a["none"] is None
-    # base quebrada: um aviso curto, sem o texto do erro; base que se registrou "unavailable": onde está o estado e a saída
-    assert a["notes"]["broken"] == [["warning", "Google Antigravity indisponível nesta instalação: reinstale o Pink"]]
-    [(level, text)] = a["notes"]["unavailable"]
-    assert level == "warning" and text.startswith("Google Antigravity indisponível: o Pink não conseguiu ler ") and "antigravity" in text
-    assert text.endswith("apague essa pasta e faça /login de novo") and "Resolve it" not in text and "Vault" not in text
-
-
-def test_the_installed_pink_lists_the_antigravity_models_from_the_real_base_without_dot_pi(cli: Path, tmp_path: Path) -> None:
-    """Vincent 2026-11-15: a base real (não a falsa) carrega no Pink empacotado e não cria ~/.pi."""
-    done = run_pink(cli, tmp_path, "--list-models", "antigravity")
-    google = [line for line in done.stdout.splitlines() if line.split()[:1] == ["google"]]
-    assert done.returncode == 0 and len(google) >= 3, done.stdout + done.stderr
-    assert not (tmp_path / ".pi").exists() and "Vault" not in done.stdout + done.stderr
 
 
 def test_pink_reads_only_its_own_skills_and_ships_the_natives(package_dir: Path) -> None:

@@ -534,71 +534,8 @@ out.natives = await (async () => {
 		execs, relativePath, onlyRelative, raceServers: Object.keys(race.servers), raceReport: raceStart.report.headroom,
 		toggledOff, toggledOn, downNotes, downServers: Object.keys(down.servers), escRows, failNotes, failTool,
 	};
-	// Google Antigravity (card 1dfwh7kffnt): sempre ligado; base e core falsos, sem rede nem login de verdade
-	const agPkg = /pink-fake-pkg[\\/]node_modules[\\/]@cortexkit[\\/](pi-antigravity-auth|antigravity-auth-core)[\\/]package\.json$/i;
-	const agExists = (p) => every(p) || agPkg.test(p);
-	const agLoads = [];
-	const agQuotaCalls = [];
-	const agSummary = { groups: { gemini: { windows: [{ window: "5h", remainingFraction: 0.75, resetTime: "2099-01-01T10:00:00Z" }, { window: "weekly", remainingFraction: 0.1, resetTime: "2099-01-05T10:00:00Z" }] }, "non-gemini": { windows: [{ window: "5h", remainingFraction: 1, resetTime: "2000-01-01T00:00:00Z" }] } } };
-	const fakeCore = {
-		ANTIGRAVITY_ENDPOINT_FALLBACKS: ["https://daily.example", "https://prod.example"],
-		parseRefreshParts: (r) => { const [refreshToken, projectId = "", managedProjectId = ""] = r.split("|"); return { refreshToken, projectId: projectId || undefined, managedProjectId: managedProjectId || undefined }; },
-		fetchQuotaSummary: async (o) => { agQuotaCalls.push({ ...o, accessToken: o.accessToken === "ya29.ACCESS-SECRET" ? "<o token>" : "<outro>" }); return { summary: { raw: true } }; },
-		aggregateQuotaSummary: (s) => (s?.raw ? agSummary : undefined),
-	};
-	const agLoad = async (f) => {
-		agLoads.push(f.replace(/\\/g, "/"));
-		if (f.includes("antigravity-auth-core")) return fakeCore;
-		if (f.includes("ponytail")) return load(f);
-		return { registerCortexKitPiAntigravity: async (pi, seams) => {
-			agSeams.push(seams);
-			pi.registerProvider("google", { name: "Google Antigravity (CortexKit OAuth)", oauth: { name: "Google Antigravity (CortexKit)", login: () => "kept" } });
-			pi.registerProvider("google", { name: "Google Antigravity (CortexKit, unavailable)" });
-			pi.registerCommand("antigravity", { description: "vault menu" });
-			pi.on("session_start", async () => { throw new Error("Vault enrollment or source settings cannot be read."); });
-			pi.on("session_shutdown", async () => "fechou");
-		} };
-	};
-	const agSeams = [];
-	const auth = (google) => JSON.stringify({ google });
-	delete globalThis.__pinkAntigravityQuota;
-	const agPi = fakePi(rewrite);
-	const agProviders = [];
-	agPi.pi.registerProvider = (name, config) => agProviders.push([name, config.name, config.oauth?.name ?? null, config.oauth?.login?.() ?? null]);
-	const agEnv = env();
-	// sem pink-tools.json (quem acabou de instalar): o Antigravity entra mesmo assim
-	const agStart = await natives.natives(agPi.pi, deps({ env: agEnv, exists: agExists, load: agLoad, read: (f) => { if (f.endsWith("auth.json")) return auth({ type: "oauth", refresh: "REFRESH-SECRET|proj-1|managed-1", access: "ACCESS-SECRET" }); throw new Error("ENOENT"); } }));
-	// o gancho da base que falha não chega ao Pink; o que responde passa
-	const agHooks = [];
-	for (const name of ["session_start", "session_shutdown"]) for (const fn of agPi.handlers[name] ?? []) agHooks.push(await fn({}, { cwd }).then((v) => v ?? null, (e) => `lançou: ${e.message}`));
-	const keys = [];
-	const quota = await globalThis.__pinkAntigravityQuota?.(async (provider) => { keys.push(provider); return "ya29.ACCESS-SECRET"; });
-	delete globalThis.__pinkAntigravityQuota;
-	// chave do Google AI Studio no mesmo provedor e sem login: nada é enviado
-	const apiKeyQuota = await natives.antigravityQuota({ core: { ...fakeCore, fetchQuotaSummary: async () => { throw new Error("não devia chamar"); } }, getKey: async () => "AIza-KEY", readAuth: () => JSON.parse(auth({ type: "api_key", key: "AIza-KEY" })) });
-	const noLogin = await natives.antigravityQuota({ core: fakeCore, getKey: async () => undefined, readAuth: () => ({}) });
-	// base quebrada: o Pink segue, sem Antigravity
-	const agBroken = fakePi(rewrite);
-	agBroken.pi.registerProvider = () => {};
-	const agBrokenStart = await natives.natives(agBroken.pi, deps({ exists: agExists, load: async () => { throw new Error("incompatível"); }, read: readNone }));
-	const agNotes = { broken: [], unavailable: [] };
-	await session(agBroken.handlers, { cwd, mode: "tui", ui: { notify: (text, level) => agNotes.broken.push([level, text]) } });
-	await session(agPi.handlers, { cwd, mode: "tui", ui: { notify: (text, level) => agNotes.unavailable.push([level, text]) } });
-	agNotes.broken = agNotes.broken.filter(([, text]) => /antigravity/i.test(text));
-	agNotes.unavailable = agNotes.unavailable.filter(([, text]) => /antigravity/i.test(text));
-	const agMenuRows = [];
-	await agBroken.commands.ferramentas.handler("", { cwd, ui: { notify: () => {}, select: async (_t, rows) => { agMenuRows.push(...rows); return undefined; } } });
-	const windows = ui.antigravityWindows(agSummary, Date.parse("2026-11-15T12:00:00Z") / 1000);
-	const agColumn = ui.rightColumn({ theme: plain, width: 36, height: 80, data: { input: 0, output: 0, cost: 0, plan: { ok: true, antigravity: windows } } });
-	const antigravity = {
-		on: agStart.antigravity, seams: agSeams.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.replace(/\\/g, "/").split("pink-fake-agent/")[1]]))), piEnv: Object.keys(agEnv).filter((k) => k.startsWith("PI_")), hooks: agHooks, providers: agProviders, commands: Object.keys(agPi.commands).sort(), loads: agLoads,
-		quota: quota === agSummary, keys, quotaCalls: agQuotaCalls, apiKeyQuota: apiKeyQuota ?? null, noLogin: noLogin ?? null, broken: agBrokenStart.antigravity, notes: agNotes,
-		menu: agMenuRows.some((row) => /antigravity/i.test(row)), windows, column: agColumn.join("\n"), widths: [...new Set(agColumn.map(ui.visible))],
-		leaks: JSON.stringify(agQuotaCalls).includes("SECRET") || agColumn.join("\n").includes("SECRET"), none: ui.antigravityWindows({ groups: {} }) ?? null,
-	};
 	return {
 		argus2,
-		antigravity,
 		trusted, beforeTrust, untrusted, untrustedReport: started.report.graphify, commands: Object.keys(all.commands).sort(), loaded: loaded[0], skills, quiet: allEnv.PONYTAIL_QUIET_STARTUP, rtk,
 		fresh: freshNow, notes, freshTool, afterMenuTool, freshAfter: Object.keys(fresh.servers).sort(),
 		otherHeadroom: Object.keys(other.servers).includes("headroom"), failOpen: await tool(broken.handlers, "git status"), rtkOff: await tool(off.handlers, "git status"),

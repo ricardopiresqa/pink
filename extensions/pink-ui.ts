@@ -533,27 +533,6 @@ export function planSnapshot(raw, now = Date.now() / 1000) {
 	return { ok: claude !== undefined || codex !== undefined, claude, codex };
 }
 
-// Antigravity (card 1dfwh7kffnt): o resumo do pacote (aggregateQuotaSummary) tem, por fila, janelas "5h"/"weekly" com a
-// fração que SOBRA; a COTA mostra o usado, como no Claude e no Codex. Gemini e "Claude e outros" têm filas separadas.
-export function antigravityWindows(summary, now = Date.now() / 1000) {
-	const pools = { gemini: "Gemini", "non-gemini": "Claude e outros", "gemini-argon": "Gemini Argon" };
-	const out = [];
-	for (const [pool, label] of Object.entries(pools)) {
-		const usage = {};
-		for (const window of summary?.groups?.[pool]?.windows ?? []) {
-			const key = window?.window === "5h" ? "h5" : window?.window === "weekly" ? "week" : undefined;
-			const left = Number(window?.remainingFraction), resets = Date.parse(window?.resetTime ?? "") / 1000;
-			if (!key || !Number.isFinite(left)) continue;
-			const pct = Math.round(Math.max(0, Math.min(100, (1 - left) * 100)) * 10) / 10; // 0,9 × 100 dá 90.00000000000001
-			// a janela que já virou começa do zero (como planSnapshot); sem horário de volta, só o percentual
-			const next = !Number.isFinite(resets) ? { pct } : resets <= now ? { pct: 0 } : { pct, resets };
-			if (!usage[key] || next.pct > usage[key].pct) usage[key] = next; // duas janelas iguais na fila: vale a mais gasta
-		}
-		if (Object.keys(usage).length) out.push({ label, usage });
-	}
-	return out.length ? out : undefined;
-}
-
 export function resetLabel(epoch, now = new Date()) {
 	if (!epoch) return "";
 	const when = new Date(epoch * 1000);
@@ -565,8 +544,7 @@ export function resetLabel(epoch, now = new Date()) {
 export function planLines({ theme, plan, width, now = new Date() }) {
 	if (!plan?.ok) return [theme.fg("dim", plan?.loading ? "consultando…" : "sem dado do plano (thoth-client uso)")];
 	const out = [];
-	const antigravity = (plan.antigravity ?? []).map((item) => [`Antigravity · ${item.label}`, item.usage]);
-	for (const [name, usage] of [["Claude", plan.claude], ["Codex", plan.codex], ...antigravity]) {
+	for (const [name, usage] of [["Claude", plan.claude], ["Codex", plan.codex]]) {
 		if (usage === undefined) continue;
 		out.push(theme.fg("text", name));
 		if (!usage) {
@@ -848,14 +826,11 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 		const planTick = async () => {
 			if (PINK.plan.busy) return;
 			PINK.plan.busy = true;
-			const getKey = (provider) => ctx.modelRegistry?.getApiKeyForProvider?.(provider);
-			const [cli, own, google] = await Promise.allSettled([readPlan(), readClaudeFromPink(getKey), Promise.resolve().then(() => globalThis.__pinkAntigravityQuota?.(getKey))]);
+			const [cli, own] = await Promise.allSettled([readPlan(), readClaudeFromPink((provider) => ctx.modelRegistry?.getApiKeyForProvider?.(provider))]);
 			try {
-				let data = cli.status === "fulfilled" ? cli.value : { ok: false };
+				const data = cli.status === "fulfilled" ? cli.value : { ok: false };
 				// o uso medido pelo login do Pink vale mais que o da linha de status do Claude Code (que só atualiza com ele aberto)
-				if (own.status === "fulfilled" && own.value) data = { ...data, ok: true, claude: own.value };
-				const antigravity = google.status === "fulfilled" ? antigravityWindows(google.value) : undefined;
-				PINK.plan.data = antigravity ? { ...data, ok: true, antigravity } : data;
+				PINK.plan.data = own.status === "fulfilled" && own.value ? { ...data, ok: true, claude: own.value } : data;
 			} catch {
 				PINK.plan.data = { ok: false };
 			} finally {
