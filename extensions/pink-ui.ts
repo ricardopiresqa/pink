@@ -1262,7 +1262,14 @@ function registerOpenCodeFunctions(pi) {
 		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.("Agente Plano: rodar este comando?", String(event.input?.command ?? event.toolName)))) return;
 		return { block: true, reason: `Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).` };
 	});
-	pi.on("before_agent_start", async (event) => ({ systemPrompt: `${event.systemPrompt ?? ""}${LANGUAGE_PROMPT}${PINK.agent === "plan" ? PLAN_PROMPT : ""}` }));
+	// seções do prompt, não o prompt inteiro: devolver systemPrompt forçava o texto e apagava as seções das outras extensões (Ponytail)
+	pi.on("before_agent_start", async (event) => {
+		const sections = event?.systemPromptOptions?.sections;
+		if (!sections || typeof sections !== "object") return { systemPrompt: `${event.systemPrompt ?? ""}${LANGUAGE_PROMPT}${PINK.agent === "plan" ? PLAN_PROMPT : ""}` };
+		sections.pink_language = LANGUAGE_PROMPT.trim();
+		if (PINK.agent === "plan") sections.pink_plan = PLAN_PROMPT.trim();
+		else delete sections.pink_plan;
+	});
 	pi.on("session_tree", async (_event, ctx) => {
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 	});

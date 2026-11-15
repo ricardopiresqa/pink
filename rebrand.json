@@ -19,7 +19,7 @@
         "rebrand": "rebrand.json in the Thoth repository (pink/)"
       }
     },
-    "dependencies": {"undici": "8.12.3"},
+    "dependencies": {"undici": "8.12.3", "@dietrichgebert/ponytail": "5.3.3"},
     "optionalDependencies": {"node-pty": "1.1.0", "@xterm/headless": "5.5.0"},
     "files_add": [
       "LICENSE-PI.txt",
@@ -56,6 +56,10 @@
     {
       "from": "extensions/pink-ui.ts",
       "to": "extensions/pink-ui.ts"
+    },
+    {
+      "from": "extensions/pink-natives.ts",
+      "to": "extensions/pink-natives.ts"
     },
     {
       "from": "mux/pink.mjs",
@@ -163,6 +167,32 @@
       ],
       "regex": "By default, Radius authentication makes the artifact visible to your Radius organization; otherwise, Pi creates a private GitHub gist through the GitHub CLI\\. The (\\[`sessionShareDestination`\\]\\([^)]*\\)) setting can force either destination\\.",
       "replace": "Pi creates a private GitHub gist through the GitHub CLI (setting: \\1).",
+      "min_count": 1
+    },
+    {
+      "id": "docs-no-agents-skills",
+      "files": [
+        "docs/skills.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "Pi also supports the Agent Skills locations `~/\\.agents/skills/` and `\\.agents/skills/`\\. Project `\\.agents/skills/` directories are discovered from the working directory through its ancestors, stopping at the repository root when one exists\\.",
+      "replace": "Pi does not read the shared Agent Skills locations `~/.agents/skills/` and `.agents/skills/` (other agents use them); only its own skill directories, package skills and the skills an MCP server offers.",
+      "min_count": 1
+    },
+    {
+      "id": "docs-no-agents-trust",
+      "files": [
+        "docs/security.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "- project `\\.agents/skills` in the current directory or an ancestor directory\\n",
+      "replace": "",
       "min_count": 1
     },
     {
@@ -904,7 +934,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
@@ -1325,6 +1355,27 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "Comma-separated model patterns for Ctrl+P cycling",
       "replace": "Comma-separated model patterns for F2 cycling",
+      "count": 1
+    },
+    {
+      "id": "no-shared-user-agents-skills",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "addResources(\"skills\",collectAutoSkillEntries(userAgentsSkillsDir,\"agents\"),userAgentsMetadata,userOverrides.skills,userAgentsBaseDir),",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "no-shared-project-agents-skills",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "projectAgentsSkillDirs=projectTrusted?collectAncestorAgentsSkillDirs(this.cwd).filter(dir=>resolve(dir)!==resolve(userAgentsSkillsDir)):[]",
+      "replace": "projectAgentsSkillDirs=[]",
+      "count": 1
+    },
+    {
+      "id": "no-trust-for-shared-agents-skills",
+      "file": "dist/bundle/chunks/chunk-INGZIYBC.js",
+      "find": "for(;;){let agentsSkillsDir=join(currentDir,\".agents\",\"skills\");if(agentsSkillsDir!==userAgentsSkillsDir&&existsSync(agentsSkillsDir))return!0;let parentDir=dirname(currentDir);if(parentDir===currentDir)return!1;currentDir=parentDir}",
+      "replace": "return!1",
       "count": 1
     }
   ],

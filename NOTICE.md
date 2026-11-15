@@ -14,6 +14,9 @@ O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está 
   moldura de tela cheia (topo, colunas de sessões e de contexto, rodapé), fechamento, paleta de comandos, agentes Build e Plano, `/undo` e `/redo` com arquivos, lista de tarefas (`todowrite`), `/sessions`, `/themes`, `/init` e `/details`;
 - temas extras (`theme/extra-themes.json`, gerado por `theme/make_themes.mjs`): os temas do OpenCode (MIT, copyright dos autores do opencode) convertidos para o formato do Pink, cores inspiradas nos temas do Claude Code e as paletas públicas base16, catppuccin e one-half
   dos temas de código do Codex (2026-11-15);
+- ferramentas de fábrica (`extensions/pink-natives.ts`, 2026-11-15): o Ponytail (`@dietrichgebert/ponytail`, MIT, copyright de Dietrich Gebert) vem como
+  dependência npm de versão fixa; RTK, Headroom e graphify **não** vêm junto (o RTK tem partes BUSL-1.1): o Pink só usa os que já estão instalados na máquina;
+- só as próprias pastas de skills (`~/.pink/agent/skills`, `.pink/skills`, pacotes e MCP): as pastas `.agents/skills`, compartilhadas com outros agentes, ficam de fora;
 - alguns padrões: tela cheia, pensamento recolhido, início silencioso e barra de rolagem escondida. A troca de modelo passou de `ctrl+p` para `f2`/`shift+f2`, e o `ctrl+p` agora
   abre a paleta (2026-10-28).
 
