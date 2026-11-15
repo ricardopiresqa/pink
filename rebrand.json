@@ -5,7 +5,7 @@
     "set": {
       "name": "@thoth/pink",
       "version": "1.4.0-pink.6",
-      "description": "Pink: coding agent of the Thoth project, a fork of Pi with the Pi name replaced by Pink and a pink theme",
+      "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "piConfig": {
         "name": "pink",
         "configDir": ".pink"
@@ -71,6 +71,138 @@
   },
   "replacements": [
     {
+      "id": "chatgpt-agent-name",
+      "file": "dist/bundle/chunks/openai-chatgpt.js",
+      "find": "AGENT_NAME_HINT=\"Pi\"",
+      "replace": "AGENT_NAME_HINT=\"Pink\"",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-anthropic",
+      "file": "dist/bundle/chunks/anthropic.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-shared",
+      "file": "dist/bundle/chunks/chunk-EGE5YVUM.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-chatgpt",
+      "file": "dist/bundle/chunks/openai-chatgpt.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-codex",
+      "file": "dist/bundle/chunks/openai-codex.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-openrouter",
+      "file": "dist/bundle/chunks/openrouter.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "oauth-logo-radius",
+      "file": "dist/bundle/chunks/radius.js",
+      "regex": true,
+      "find": "LOGO_SVG='<svg[^']*</svg>'",
+      "replace": "LOGO_SVG='<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\" aria-hidden=\"true\"><rect x=\"120\" y=\"120\" width=\"560\" height=\"560\" rx=\"140\" fill=\"#FF6EB4\"/><path fill=\"#1A0B14\" d=\"M300 230h150a130 130 0 0 1 0 260h-70v80h-80zm80 80v100h70a50 50 0 0 0 0-100z\"/></svg>'",
+      "count": 1
+    },
+    {
+      "id": "radius-provider-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "radiusProvider(),togetherProvider()",
+      "replace": "togetherProvider()",
+      "count": 1
+    },
+    {
+      "id": "bug-command-list-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "{name:\"bug\",description:\"Report a bug to the Pi developers\",argumentHint:\"<description>\"},",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "bug-command-dispatch-off",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "if(text===\"/bug\"||text.startsWith(\"/bug \")){let hint=text.slice(4).trim();this.editor.setText(\"\"),await this.handleBugCommand(hint||void 0);return}",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "radius-login-intro",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Radius is a service crafted for Pi by the builders of Pi, Earendil Works",
+      "replace": "Radius",
+      "count": 1
+    },
+    {
+      "id": "share-description",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Share session via a Radius artifact or a GitHub gist",
+      "replace": "Share session via a GitHub gist",
+      "count": 1
+    },
+    {
+      "id": "share-destination-description",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Where to upload sessions with /share (auto prefers Radius when authenticated, otherwise GitHub Gist)",
+      "replace": "Where to upload sessions with /share (GitHub Gist)",
+      "count": 1
+    },
+    {
+      "id": "hardware-cursor-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "instead of Pi's drawn cursor",
+      "replace": "instead of Pink's drawn cursor",
+      "count": 1
+    },
+    {
+      "id": "prompt-cache-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Pi warms only tiers",
+      "replace": "Pink warms only tiers",
+      "count": 1
+    },
+    {
+      "id": "thinking-format-text",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "When omitted, Pi auto-detects",
+      "replace": "When omitted, Pink auto-detects",
+      "count": 1
+    },
+    {
+      "id": "theme-schema-title",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Pi Coding Agent Theme",
+      "replace": "Pink Theme",
+      "count": 1
+    },
+    {
+      "id": "theme-schema-description",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Theme schema for Pi coding agent",
+      "replace": "Theme schema for Pink",
+      "count": 1
+    },
+    {
       "id": "help-update-source",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "[source|self|pi]",
@@ -118,7 +250,7 @@
       "id": "banner-news",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "\"pi has joined Earendil\"",
-      "replace": "\"pink: a fork of Pi for Thoth\"",
+      "replace": "\"pink: o agente do Thoth\"",
       "count": 1
     },
     {
@@ -182,7 +314,7 @@
       "id": "system-prompt-intro",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "operating inside pi, a coding agent harness",
-      "replace": "operating inside pink, a coding agent harness (a fork of Pi)",
+      "replace": "operating inside pink, a coding agent harness",
       "count": 1
     },
     {

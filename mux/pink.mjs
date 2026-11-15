@@ -3,7 +3,9 @@
 // resto da tela é a sessão ativa. O modo interativo do Pi segura uma sessão por vez, então cada sessão é um Pink filho num
 // terminal virtual (node-pty + @xterm/headless) e este processo só desenha a lateral, a tela do filho ativo e repassa o teclado.
 // Sem terminal interativo, com comando de uma vez (-p, --help, install...) ou sem node-pty, roda o Pink normal, sem lateral.
-import { realpathSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -95,7 +97,8 @@ export function fit(text, width) {
 export function shortTitle(title, index) {
 	// o título vem do processo da sessão: sem caracteres de controle ele não consegue mexer no terminal ao ser desenhado
 	const clean = (title ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, "").replace(/^\s*p(?:i|ink)\s*-\s*/i, "").trim();
-	return clean || `Sessão ${index + 1}`;
+	// só o nome do programa (antes da pasta ser confiável o Pi ainda não pôs a pasta no título) conta como vazio
+	return clean && !/^p(?:i|ink)$/i.test(clean) ? clean : `Sessão ${index + 1}`;
 }
 
 // estado de uma sessão a partir dos sinais do Pink filho: progresso (OSC 9;4) = trabalhando; fim do progresso ou sino numa
@@ -135,7 +138,7 @@ export function sessionLabel(title, index, folder = "") {
 	if (folder && text.endsWith(` - ${folder}`)) return { name: text.slice(0, -folder.length - 3), folder };
 	const parts = text.split(" - ");
 	if (parts.length > 1) return { name: parts.slice(0, -1).join(" - "), folder: parts.at(-1) };
-	return { name: `Sessão ${index + 1}`, folder: text === `Sessão ${index + 1}` ? "" : text };
+	return { name: `Sessão ${index + 1}`, folder: text === `Sessão ${index + 1}` ? folder : text };
 }
 
 function status(session, folder) {
@@ -170,7 +173,7 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 		hit(`select:${index}`, 0, compact ? width : width - 3);
 		if (compact) return lines.push(`${bar}\x1b[${bg}1m${fit(`${index < 9 ? index + 1 : " "} ${mark}`, width - 1)}\x1b[0m`);
 		hit(`close:${index}`, width - 3);
-		const { name, folder: where } = sessionLabel(session.title, index, folder);
+		const { name, folder: where } = sessionLabel(session.title, index, session.cwd ? path.basename(session.cwd) : folder);
 		const tone = session.attention && !on ? "38;2;240;196;135;" : "";
 		lines.push(`${bar}\x1b[${bg}${tone}1m${fit(` ${mark} ${name}`, width - 4)}\x1b[0m\x1b[${bg}2m × \x1b[0m`);
 		if (!tall) return;
@@ -199,6 +202,169 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 		out.push(paint("2", "  sair do Pink"));
 	}
 	return { lines: out.slice(0, rows), hits: kept.filter((item) => item.y < rows) };
+}
+
+// ---- seletor da nova sessão (owner 2026-11-15, card 1dfwh7kffh8): pasta do projeto, sessões salvas de todas as pastas, excluir
+
+const samePath = (a, b) => {
+	const [x, y] = [path.resolve(a ?? ""), path.resolve(b ?? "")];
+	return process.platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
+};
+const oneLine = (text) => String(text ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, " ").replace(/\s+/g, " ").trim();
+const textOf = (content) => (typeof content === "string" ? content : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join(" ") : "");
+
+// onde o Pi grava as sessões (sessions.md): variável da pasta de sessões, senão <pasta do agente>/sessions
+// shortcut: ignora o sessionDir do settings.json; quem usa precisa da variável PINK_CODING_AGENT_SESSION_DIR
+export function sessionsDir(env = process.env, home = homedir()) {
+	if (env.PINK_CODING_AGENT_SESSION_DIR) return env.PINK_CODING_AGENT_SESSION_DIR;
+	return path.join(env.PINK_CODING_AGENT_DIR || path.join(home, ".pink", "agent"), "sessions");
+}
+
+// cabeçalho (cwd), nome (/name) e primeira mensagem de uma sessão
+// shortcut: lê só os primeiros 32 KB (o cabeçalho é a 1ª linha); um /name gravado depois disso não aparece, fica a 1ª mensagem
+const HEAD = Buffer.alloc(32768);
+function readHead(file) {
+	let text = "";
+	try {
+		const fd = openSync(file, "r");
+		try {
+			text = HEAD.toString("utf8", 0, readSync(fd, HEAD, 0, HEAD.length, 0));
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return {};
+	}
+	let cwd;
+	let name = "";
+	let first = "";
+	for (const line of text.split("\n")) {
+		let entry;
+		try {
+			entry = JSON.parse(line);
+		} catch {
+			continue; // a última linha lida pode vir cortada
+		}
+		if (entry?.type === "session" && !cwd && typeof entry.cwd === "string" && entry.cwd) cwd = entry.cwd;
+		else if (entry?.type === "session_info" && entry.name) name = oneLine(entry.name);
+		else if (!first && entry?.type === "message" && entry.message?.role === "user") first = oneLine(textOf(entry.message.content));
+	}
+	return { cwd, name: name || first };
+}
+
+// as sessões salvas de todas as pastas, da mais recente para a mais antiga (no máximo `limit`)
+export function listSessions(dir, limit = 300) {
+	const files = [];
+	let folders = [];
+	try {
+		folders = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+	} catch {
+		return [];
+	}
+	for (const folder of folders) {
+		let names = [];
+		try {
+			names = readdirSync(path.join(dir, folder.name));
+		} catch {
+			continue;
+		}
+		for (const name of names) {
+			if (!name.endsWith(".jsonl")) continue;
+			const file = path.join(dir, folder.name, name);
+			try {
+				files.push({ file, mtime: statSync(file).mtimeMs });
+			} catch { /* sumiu entre a listagem e o stat */ }
+		}
+	}
+	files.sort((a, b) => b.mtime - a.mtime);
+	return files.slice(0, limit).map((item) => ({ ...item, ...readHead(item.file) })).filter((item) => item.cwd);
+}
+
+// a pasta atual e as pastas das sessões salvas que ainda existem, sem repetir
+export function recentFolders(saved, current, exists = existsSync, limit = 8) {
+	const out = [current];
+	for (const item of saved) {
+		if (out.length >= limit) break;
+		if (!out.some((folder) => samePath(folder, item.cwd)) && exists(item.cwd)) out.push(item.cwd);
+	}
+	return out;
+}
+
+const when = (ms) => {
+	const date = new Date(ms);
+	const two = (n) => String(n).padStart(2, "0");
+	return `${two(date.getDate())}/${two(date.getMonth() + 1)} ${two(date.getHours())}:${two(date.getMinutes())}`;
+};
+
+// o seletor na área da sessão: linhas com `width` colunas e onde cada clique cai (base 0): cancel, folder:N, input,
+// resume:N, delete:N. `saved[i].open` = a sessão está aberta agora (não exclui; clicar mostra ela)
+export function pickerView({ folders, saved, input = "", width, rows, scroll = 0, error = "", current = "" }) {
+	const plain = (text) => fit(text, width);
+	const paint = (code, text) => `\x1b[${code}m${plain(text)}\x1b[0m`;
+	const lines = [];
+	const hits = [];
+	const hit = (action, from = 0, to = width) => hits.push({ y: lines.length, from, to, action });
+	const cancel = "[ cancelar ]";
+	hit("cancel", Math.max(0, width - cancel.length - 1), width);
+	lines.push(`\x1b[1;${PINK}m${fit(" Nova sessão", width - cancel.length - 1)}\x1b[0m\x1b[2m${cancel} \x1b[0m`);
+	lines.push(plain(""), paint("1", " Abrir numa pasta"));
+	folders.forEach((folder, index) => {
+		hit(`folder:${index}`);
+		const tag = samePath(folder, current) ? "(atual)" : "";
+		// o cwd vem do arquivo da sessão: sem códigos de controle na tela
+		lines.push(plain(`   ▸ ${fit(oneLine(path.basename(folder) || folder), 20)} ${fit(tag, 8)}${oneLine(folder)}`));
+	});
+	const label = "   Outra pasta: ";
+	hit("input");
+	const caret = { y: lines.length, x: Math.min(width - 1, charsWidth(label) + charsWidth(input)) };
+	const field = Math.max(1, width - charsWidth(label) - 1);
+	lines.push(`${label}\x1b[48;2;60;60;70m${fit(input.length > field ? input.slice(-field) : input, field)}\x1b[0m `);
+	lines.push(error ? paint("38;2;255;120;120", `   ${error}`) : paint("2", "   digite o caminho e Enter · Esc fecha"));
+	lines.push(plain(""), paint("1", ` Sessões anteriores, de todas as pastas (${saved.length})`));
+	const top = lines.length;
+	const room = Math.max(0, rows - top - 1);
+	const start = Math.max(0, Math.min(scroll, saved.length - Math.max(1, room)));
+	const del = " excluir ";
+	saved.slice(start, start + room).forEach((item, offset) => {
+		const index = start + offset;
+		const tail = item.open ? "  aberta " : del;
+		hit(`resume:${index}`, 0, width - del.length);
+		if (!item.open) hit(`delete:${index}`, width - del.length);
+		const text = `   ${when(item.mtime)}  ${fit(oneLine(path.basename(item.cwd) || item.cwd), 18)} ${item.name || "(sem mensagens)"}`;
+		lines.push(`${fit(text, width - del.length)}\x1b[${item.open ? "2" : "38;2;255;140;140"}m${tail}\x1b[0m`);
+	});
+	if (!saved.length) lines.push(paint("2", "   nenhuma sessão salva ainda"));
+	while (lines.length < rows - 1) lines.push(plain(""));
+	const more = room && saved.length > room ? `   ${start + 1}-${Math.min(saved.length, start + room)} de ${saved.length} · role com a roda do mouse` : "";
+	lines.push(paint("2", more));
+	return { lines: lines.slice(0, rows), hits: hits.filter((item) => item.y < rows), caret, scroll: start, room };
+}
+
+const charsWidth = (text) => [...text].reduce((sum, ch) => sum + charWidth(ch), 0);
+
+// manda a sessão para a lixeira do sistema (recuperável); nunca apaga direto. Só arquivo .jsonl dentro da pasta de sessões.
+// Assíncrona: a tela e as sessões abertas seguem enquanto o sistema move o arquivo
+export async function trashFile(file, root) {
+	const target = path.resolve(file);
+	const base = path.resolve(root) + path.sep;
+	const inside = process.platform === "win32" ? target.toLowerCase().startsWith(base.toLowerCase()) : target.startsWith(base);
+	if (!inside || !target.endsWith(".jsonl") || !existsSync(target)) return false;
+	const run = (command, args, env = {}) => new Promise((done) => {
+		try {
+			execFile(command, args, { timeout: 10000, windowsHide: true, env: { ...process.env, ...env } }, () => done());
+		} catch {
+			done(); // comando ausente: tenta o próximo
+		}
+	});
+	if (process.platform === "win32") {
+		// o caminho vai por variável de ambiente, nunca dentro do comando (sem injeção)
+		// shortcut: se o arquivo estiver em uso, o Windows pode mostrar uma caixa de erro; o timeout de 10 s libera o Pink
+		await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($env:PINK_TRASH_FILE, 'OnlyErrorDialogs', 'SendToRecycleBin')"], { PINK_TRASH_FILE: target });
+	} else {
+		await run("trash", ["--", target]);
+		if (existsSync(target)) await run("gio", ["trash", "--", target]);
+	}
+	return !existsSync(target);
 }
 
 function wrap(text, width) {
@@ -280,6 +446,11 @@ async function main() {
 	let cache = [];
 	let layout = []; // onde cada clique na lateral cai, do último desenho
 	const folder = path.basename(process.cwd());
+	let picker; // seletor da nova sessão aberto: { folders, saved, input, scroll, error, hits, room }
+	// sessão salva que está aberta agora: retomada por aqui (mesmo arquivo), aberta com -c/-r/--session (qualquer uma da pasta)
+	// ou gravada por uma sessão aberta desta pasta depois que ela começou. Na dúvida conta como aberta (só impede excluir)
+	// shortcut: o /resume feito dentro do Pi não chega até aqui; uma conversa antiga reaberta assim e ainda sem mensagem nova aparece com "excluir"
+	const isOpen = (item) => sessions.some((session) => (session.file && samePath(session.file, item.file)) || (samePath(session.cwd, item.cwd) && (session.resumed || item.mtime >= session.started - 2000)));
 	let modes = {};
 	let pending;
 	let spinner;
@@ -299,9 +470,15 @@ async function main() {
 		layout = hits;
 		const current = sessions[active];
 		const buffer = current?.term.buffer.active;
+		const view = picker ? pickerView({ ...picker, saved: picker.saved.map((item) => ({ ...item, open: isOpen(item) })), width: inner, rows, current: process.cwd() }) : undefined;
+		if (view) {
+			picker.scroll = view.scroll;
+			picker.hits = view.hits;
+			picker.room = view.room;
+		}
 		let text = "\x1b[?2026h";
 		for (let y = 0; y < rows; y++) {
-			const right = buffer ? serializeLine(buffer.getLine(buffer.viewportY + y), inner, current.scratch) : " ".repeat(inner);
+			const right = view ? view.lines[y] ?? " ".repeat(inner) : buffer ? serializeLine(buffer.getLine(buffer.viewportY + y), inner, current.scratch) : " ".repeat(inner);
 			const full = `${lines[y] ?? " ".repeat(side)}\x1b[2;${PINK}m│\x1b[0m${right}`;
 			// lateral estreita não cabe a pergunta: ela ocupa a última linha da tela inteira
 			const shown = confirm && side < SIDEBAR && y === rows - 1 ? `\x1b[1;${PINK}m${fit(` ${confirm.text}  s = sim · n = não`, side + 1 + inner)}\x1b[0m` : full;
@@ -314,7 +491,8 @@ async function main() {
 		if (want.paste !== modes.paste) text += want.paste ? "\x1b[?2004h" : "\x1b[?2004l";
 		modes = want;
 		const hidden = current?.term._core?.coreService?.isCursorHidden ?? false;
-		if (current && !hidden && !confirm) text += `\x1b[${buffer.cursorY + 1};${side + 2 + buffer.cursorX}H\x1b[?25h`;
+		if (view && !confirm) text += `\x1b[${view.caret.y + 1};${side + 2 + view.caret.x}H\x1b[?25h`;
+		else if (current && !view && !hidden && !confirm) text += `\x1b[${buffer.cursorY + 1};${side + 2 + buffer.cursorX}H\x1b[?25h`;
 		else text += "\x1b[?25l";
 		out.write(`${text}\x1b[?2026l`);
 	};
@@ -337,11 +515,12 @@ async function main() {
 		schedule();
 	};
 
-	const open = (args) => {
+	const open = (args, cwd = process.cwd(), file = undefined) => {
 		const { rows, inner } = size();
 		const term = new Terminal({ cols: inner, rows, allowProposedApi: true, scrollback: 0 });
-		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd: process.cwd(), env: { ...process.env, PINK_MUX_CHILD: "1" } });
-		const session = { term, child, title: "", working: false, attention: false, exited: false, scratch: undefined };
+		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1" } });
+		const resumed = args.some((arg) => FIRST_ONLY.has(arg) || FIRST_ONLY_VALUE.has(arg.split("=")[0]));
+		const session = { term, child, cwd, file, resumed, started: Date.now(), title: "", working: false, attention: false, exited: false, scratch: undefined };
 		session.scratch = term.buffer.active.getNullCell?.();
 		const isActive = () => sessions[active] === session;
 		term.onTitleChange((title) => { session.title = title; schedule(); });
@@ -398,14 +577,11 @@ async function main() {
 	const act = (action) => {
 		const current = sessions[active];
 		const index = Number(action.split(":")[1]);
-		if (action === "new") {
-			try {
-				return open(laterArgs(argv));
-			} catch {
-				return undefined; // a sessão nova não abriu: as abertas seguem
-			}
+		if (action === "new") return openPicker();
+		if (action.startsWith("select:")) {
+			picker = undefined;
+			return select(index);
 		}
-		if (action.startsWith("select:")) return select(index);
 		if (action.startsWith("close:") && sessions[index]) {
 			const target = sessions[index];
 			const close = () => {
@@ -418,6 +594,91 @@ async function main() {
 			if (sessions.length > 1) return ask(`Sair do Pink com ${sessions.length} sessões abertas?`, () => finish(0));
 			return current?.working ? ask("Sair do Pink? A sessão está trabalhando.", () => finish(0)) : finish(0);
 		}
+	};
+
+	const openPicker = () => {
+		const saved = listSessions(sessionsDir());
+		picker = { folders: recentFolders(saved, process.cwd()), saved, input: "", scroll: 0, error: "" };
+		cache = [];
+		schedule();
+	};
+	const closePicker = () => {
+		picker = undefined;
+		cache = [];
+		schedule();
+	};
+	const startIn = (cwd, extra = [], file = undefined) => {
+		const back = picker;
+		picker = undefined;
+		cache = [];
+		try {
+			open([...laterArgs(argv), ...extra], cwd, file);
+		} catch {
+			picker = { ...back, error: "A sessão não abriu nesta pasta." }; // as abertas seguem
+		}
+		schedule();
+	};
+	const pickerAct = (action) => {
+		const index = Number(action.split(":")[1]);
+		const item = picker.saved[index];
+		if (action === "cancel") return closePicker();
+		if (action.startsWith("folder:")) return startIn(picker.folders[index]);
+		if (action.startsWith("resume:") && item) {
+			if (isOpen(item)) {
+				// shortcut: com duas sessões abertas na mesma pasta, mostra a primeira delas
+				const shown = sessions.findIndex((session) => (session.file && samePath(session.file, item.file)) || samePath(session.cwd, item.cwd));
+				picker = undefined;
+				return select(shown);
+			}
+			if (!existsSync(item.cwd)) {
+				picker.error = `A pasta desta sessão não existe mais: ${oneLine(item.cwd)}`;
+				return schedule();
+			}
+			return startIn(item.cwd, ["--session", item.file], item.file);
+		}
+		if (action.startsWith("delete:") && item && !isOpen(item)) {
+			const name = item.name.length > 40 ? `${item.name.slice(0, 39)}…` : item.name || "sem mensagens";
+			return ask(`Excluir a sessão "${name}"? Ela vai para a lixeira.`, () => {
+				if (!picker) return;
+				const shown = picker;
+				shown.saved = shown.saved.filter((other) => other !== item); // some da lista já; volta se a lixeira falhar
+				shown.hits = []; // os cliques antigos apontariam para o item seguinte até o próximo desenho
+				trashFile(item.file, sessionsDir()).then((ok) => {
+					if (ok) return;
+					shown.saved = [item, ...shown.saved].sort((a, b) => b.mtime - a.mtime);
+					shown.error = "Não deu para mandar a sessão para a lixeira.";
+					cache = [];
+					schedule();
+				});
+			});
+		}
+	};
+	const submitPicker = () => {
+		// pasta arrastada para o terminal: aspas duplas (Windows), simples (Linux) ou espaços com \ (Mac)
+		let raw = picker.input.trim().replace(/^(["'])(.*)\1$/, "$2");
+		if (process.platform !== "win32") raw = raw.replace(/\\ /g, " ");
+		if (!raw) return schedule();
+		const target = path.resolve(process.cwd(), raw.replace(/^~(?=$|[\\/])/, homedir()));
+		let folderOk = false;
+		try {
+			folderOk = statSync(target).isDirectory();
+		} catch { /* não existe */ }
+		if (!folderOk) {
+			picker.error = `Pasta não encontrada: ${oneLine(target)}`;
+			return schedule();
+		}
+		return startIn(target);
+	};
+	const typeIntoPicker = (text) => {
+		if (text === "\x1b") return closePicker();
+		const clean = text.replace(/\x1b\[20[01]~/g, "").replace(/\x1b(?:\[[0-9;?]*[A-Za-z~]|O.)/g, "");
+		picker.error = "";
+		for (const ch of clean) {
+			if (ch === "\r" || ch === "\n") return submitPicker();
+			if (ch === "\x7f" || ch === "\b") picker.input = [...picker.input].slice(0, -1).join("");
+			else if (!/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/u.test(ch)) picker.input += ch; // sem códigos de controle (C1 incluso) no campo
+		}
+		schedule();
 	};
 
 	// a primeira sessão abre antes da tela alternativa: se o terminal virtual falhar aqui (binário sem permissão, sistema sem
@@ -444,7 +705,7 @@ async function main() {
 		if (partial) {
 			carry = partial[0];
 			data = data.slice(0, partial.index);
-			carryTimer = setTimeout(() => { const rest = carry; carry = ""; sessions[active]?.child.write(rest); }, 30);
+			carryTimer = setTimeout(() => { const rest = carry; carry = ""; if (!picker) sessions[active]?.child.write(rest); }, 30);
 			if (!data) return;
 		}
 		handle(data);
@@ -467,8 +728,18 @@ async function main() {
 		const { side } = size();
 		for (const part of parts) {
 			const current = sessions[active];
-			if (part.forward) current?.child.write(part.forward);
-			else if (part.mouse.x <= side) {
+			if (picker && part.forward) typeIntoPicker(part.forward);
+			else if (part.forward) current?.child.write(part.forward);
+			else if (picker && part.mouse.x > side + 1) {
+				// seletor aberto: clique escolhe, roda rola a lista; nada vai para a sessão
+				if (part.mouse.button === 64 || part.mouse.button === 65) {
+					picker.scroll += part.mouse.button === 64 ? -3 : 3;
+					schedule();
+				} else if (leftPress(part.mouse)) {
+					const action = hitAt(picker.hits ?? [], part.mouse.x - side - 2, part.mouse.y - 1);
+					if (action) pickerAct(action);
+				}
+			} else if (part.mouse.x <= side) {
 				const action = leftPress(part.mouse) && hitAt(layout, part.mouse.x - 1, part.mouse.y - 1);
 				if (action) act(action);
 			} else if (part.mouse.x > side + 1 && current && (ALWAYS_FORWARD_MOUSE || current.term.modes.mouseTrackingMode !== "none")) {
