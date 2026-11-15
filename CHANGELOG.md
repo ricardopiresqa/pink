@@ -3,6 +3,10 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.8] - 2026-11-15
+
+- O Google Antigravity (1.4.0-pink.7) saiu do Pink: o Google desativou o serviço na conta de teste por violação dos Termos (HTTP 403 TOS_VIOLATION). O provedor `google` volta a ser o embutido (chave do AI Studio).
+
 ## [1.4.0-pink.6] - 2026-11-15
 
 - Ferramentas opcionais pelo `/ferramentas`, todas desligadas por padrão: Ponytail (vem junto), RTK, Headroom e
