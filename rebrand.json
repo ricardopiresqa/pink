@@ -166,6 +166,19 @@
       "min_count": 1
     },
     {
+      "id": "docs-changelog-command-row",
+      "files": [
+        "docs/slash-commands.md"
+      ],
+      "exclude": [
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\| `/changelog` \\|[^\\n]*\\n",
+      "replace": "",
+      "min_count": 1
+    },
+    {
       "id": "docs-bug-command-row",
       "files": [
         "docs/slash-commands.md"
@@ -1123,6 +1136,195 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "\"app.model.cycleBackward\":{defaultKeys:windowsKeybindings?\"alt+p\":\"shift+ctrl+p\",",
       "replace": "\"app.model.cycleBackward\":{defaultKeys:\"shift+f2\",",
+      "count": 1
+    },
+    {
+      "id": "commands-pt",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Open settings menu\"",
+      "replace": "description:\"Abre as configurações\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-2",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Select model (opens selector UI)\"",
+      "replace": "description:\"Escolhe o modelo\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-3",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Navigate session tree (switch branches)\"",
+      "replace": "description:\"Navega pela árvore da sessão (troca de ramo)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-4",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Set thinking level\"",
+      "replace": "description:\"Define o nível de pensamento\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-5",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Enable/disable models for Ctrl+P cycling\"",
+      "replace": "description:\"Escolhe os modelos do ciclo do F2\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-6",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Export session (HTML default, or specify path: .html/.jsonl)\"",
+      "replace": "description:\"Exporta a sessão (HTML, ou informe o caminho .html/.jsonl)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-7",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Import and resume a session from a JSONL file\"",
+      "replace": "description:\"Importa e retoma uma sessão de um arquivo JSONL\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-8",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Share session via a GitHub gist\"",
+      "replace": "description:\"Compartilha a sessão num gist secreto do GitHub (quem tiver o link vê)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-9",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Copy last agent message to clipboard\"",
+      "replace": "description:\"Copia a última resposta do agente\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-10",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Set session display name\"",
+      "replace": "description:\"Dá um nome à sessão\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-11",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Show session info and stats\"",
+      "replace": "description:\"Mostra os dados e números da sessão\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-12",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Show all keyboard shortcuts\"",
+      "replace": "description:\"Mostra todos os atalhos de teclado\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-13",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Create a new fork from a previous user message\"",
+      "replace": "description:\"Cria uma sessão nova a partir de uma mensagem anterior\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-14",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Duplicate the current session at the current position\"",
+      "replace": "description:\"Duplica a sessão até aqui numa sessão nova\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-15",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Save project trust decision for future sessions\"",
+      "replace": "description:\"Decide se confia neste projeto (vale nas próximas sessões)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-16",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Configure provider authentication\"",
+      "replace": "description:\"Entra num provedor (login)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-17",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Remove provider authentication\"",
+      "replace": "description:\"Sai de um provedor (logout)\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-18",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "{name:\"new\",description:\"Start a new session\"",
+      "replace": "{name:\"new\",description:\"Começa uma sessão nova\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-19",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Manually compact the session context\"",
+      "replace": "description:\"Compacta o contexto da sessão agora\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-20",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Resume a different session\"",
+      "replace": "description:\"Retoma outra sessão\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-21",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Reload keybindings, extensions, skills, prompts, themes, and context files\"",
+      "replace": "description:\"Recarrega atalhos, extensões, skills, prompts, temas e arquivos de contexto\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-quit",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:`Quit ${APP_NAME}`",
+      "replace": "description:`Sai do ${APP_NAME}`",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-mcp",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\"",
+      "replace": "description:\"Servidores MCP: entrar, reconectar, ligar ou desligar e mudar a exposição\"",
+      "count": 1
+    },
+    {
+      "id": "commands-pt-llama",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "description:\"Manage llama.cpp router models\"",
+      "replace": "description:\"Modelos do roteador llama.cpp\"",
+      "count": 1
+    },
+    {
+      "id": "no-changelog-command",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "{name:\"changelog\",description:\"Show changelog entries\"},",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "no-changelog-dispatch",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "if(text===\"/changelog\"){this.handleChangelogCommand(),this.editor.setText(\"\");return}",
+      "replace": "",
+      "count": 1
+    },
+    {
+      "id": "models-help-f2",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "Comma-separated model patterns for Ctrl+P cycling",
+      "replace": "Comma-separated model patterns for F2 cycling",
       "count": 1
     }
   ],

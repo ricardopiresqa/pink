@@ -784,7 +784,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	globalThis.__pinkAssistantFooter = live((message, streaming, width, outputPad = 1) => {
 		if (streaming) return [];
 		const timing = PINK.timing.get(message?.timestamp) ?? {};
-		const line = assistantFooter({ theme: ctx.ui.theme, model: message?.model, agent: PINK.agentOf.get(message?.timestamp), ms: timing.ms, output: message?.usage?.output });
+		const line = assistantFooter({ theme: ctx.ui.theme, model: message?.model, agent: PINK.agentOf.get(message?.timestamp), ms: timing.ms, output: message?.usage?.output, run: PINK.runOf.get(message?.timestamp) });
 		return [fit(" ".repeat(outputPad) + line, width)];
 	}, []);
 	// barra rosa cheia à esquerda da mensagem do usuário (patch user-bar), a mesma da caixa de envio
@@ -1028,10 +1028,61 @@ export function shortModel(id) {
 	return String(id ?? "").split("/").at(-1).replace(/-\d{8}$/, "");
 }
 
-export function assistantFooter({ theme, model, agent, ms, output }) {
+// tempo e tokens do pedido inteiro (todos os passos), como o Claude Code: "6m 44s · ↓ 6.4k tokens" (card 1dfwh7kffjy)
+export function elapsedLabel(ms) {
+	const s = Math.max(0, Math.floor((ms || 0) / 1000));
+	const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+	return h ? `${h}h ${m}m ${r}s` : m ? `${m}m ${r}s` : `${r}s`;
+}
+
+export function tokenLabel(n) {
+	const v = Math.max(0, Math.round(n || 0));
+	const short = (x) => x.toFixed(1).replace(/\.0$/, "");
+	return v < 1000 ? String(v) : v < 999950 ? `${short(v / 1000)}k` : `${short(v / 1e6)}M`;
+}
+
+export const runLabel = ({ ms, output }) => `${elapsedLabel(ms)} · ↓ ${tokenLabel(output)} tokens`;
+
+// os provedores só mandam usage.output no fim de cada passo: durante o passo, estima pelo texto que já chegou (~4 caracteres/token)
+export function streamedTokens(message) {
+	let chars = 0;
+	for (const part of Array.isArray(message?.content) ? message.content : []) {
+		chars += String(part?.text ?? part?.thinking ?? "").length + (part?.arguments ? JSON.stringify(part.arguments).length : 0);
+	}
+	return Math.round(chars / 4);
+}
+
+// um pedido: soma a saída de cada resposta terminada; a resposta em andamento conta à parte (estimada) até terminar
+// shortcut: tokens gastos dentro de ferramentas (usage no toolResult) ficam de fora; somar se alguma ferramenta chamar modelo
+export function createRun(now = Date.now) {
+	const start = now();
+	let done = 0, live = 0, last, stop;
+	return {
+		live(message) { if (message?.role === "assistant") live = Math.max(message.usage?.output || 0, streamedTokens(message)); },
+		add(message) {
+			if (message?.role !== "assistant") return;
+			done += message.usage?.output || streamedTokens(message);
+			live = 0;
+			last = message.timestamp;
+			stop = message.stopReason;
+		},
+		get last() { return last; },
+		get failed() { return stop === "error"; },
+		summary: () => ({ ms: now() - start, output: done + live }),
+	};
+}
+
+// a nova tentativa automática do Pi (erro do provedor, contexto estourado) é agent_end + agent_start: continua o mesmo pedido
+export const RETRY_WINDOW_MS = 120000;
+export function continueRun(previous, endedAt, now = Date.now()) {
+	return previous?.failed && now - endedAt < RETRY_WINDOW_MS ? previous : undefined;
+}
+
+export function assistantFooter({ theme, model, agent, ms, output, run }) {
 	const parts = [bold(theme, theme.fg("accent", "Pink"))];
 	if (agent === "plan") parts.push(theme.fg("accent", AGENTS.plan.label));
 	if (model) parts.push(theme.fg("text", shortModel(model)));
+	if (run) return [...parts, theme.fg("muted", runLabel(run))].join(theme.fg("dim", " · "));  // última resposta do pedido
 	if (ms > 0) parts.push(theme.fg("muted", `${(ms / 1000).toFixed(1)}s`));
 	if (ms >= 250 && output > 0) parts.push(theme.fg("muted", `${(output / (ms / 1000)).toFixed(1)} tok/s`)); // janela curta demais não mede velocidade
 	return parts.join(theme.fg("dim", " · "));
@@ -1040,7 +1091,7 @@ export function assistantFooter({ theme, model, agent, ms, output }) {
 
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
-export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
+export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), runOf: new Map(), run: undefined, runTimer: undefined, lastRun: undefined, lastRunEnd: 0, thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
 
 // "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
 export function labelUserMarkdown(markdown, context) {
@@ -1138,6 +1189,29 @@ function registerOpenCodeFunctions(pi) {
 		ctx.ui.setEditorText?.("");
 		ctx.ui.notify?.(restored ? `Refeito: conversa e ${restored.changed} arquivo(s)` : "Refeito: conversa", "info");
 	});
+	// "Trabalhando · 1m 12s · ↓ 3.1k tokens" ao vivo; no fim, o rodapé da última resposta guarda o total do pedido
+	// (registrado antes do ponto de restauração: o Pi espera cada gancho, e o git não pode atrasar o relógio)
+	pi.on("agent_start", async (_event, ctx) => {
+		clearInterval(PINK.runTimer);
+		const run = (PINK.run = continueRun(PINK.lastRun, PINK.lastRunEnd) ?? createRun());
+		const show = () => {
+			try {
+				ctx.ui.setWorkingMessage?.(`Trabalhando · ${runLabel(run.summary())}`);
+			} catch {
+				clearInterval(PINK.runTimer);  // ctx velho (sessão trocada): para o relógio
+			}
+		};
+		show();
+		PINK.runShow = show;  // o message_update também atualiza (tokens), o relógio só o tempo
+		PINK.runTimer = setInterval(show, 1000);
+		PINK.runTimer.unref?.();
+	});
+	pi.on("agent_end", async (_event, ctx) => {
+		clearInterval(PINK.runTimer);
+		ctx.ui.setWorkingMessage?.();
+		if (PINK.run?.last !== undefined) PINK.runOf.set(PINK.run.last, PINK.run.summary());
+		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
+	});
 	// ponto de restauração dos arquivos antes de cada mensagem (só na TUI, só num repositório Git)
 	pi.on("agent_start", async (_event, ctx) => {
 		const leaf = ctx.sessionManager?.getLeafEntry?.();
@@ -1153,6 +1227,10 @@ function registerOpenCodeFunctions(pi) {
 		PINK.timing.set(event.message.timestamp, { start: PINK.turnStart ?? Date.now() });  // do pedido ao fim, como o OpenCode
 	});
 	pi.on("message_update", async (event) => {
+		if (PINK.run) {
+			PINK.run.live(event?.message);
+			PINK.runShow?.();
+		}
 		const kind = event?.assistantMessageEvent?.type;
 		if (kind !== "thinking_start" && kind !== "thinking_end") return;
 		const key = event.message?.timestamp;
@@ -1165,6 +1243,7 @@ function registerOpenCodeFunctions(pi) {
 		PINK.turnStart = Date.now();
 	});
 	pi.on("message_end", async (event) => {
+		PINK.run?.add(event?.message);
 		const timing = event?.message?.role === "assistant" ? PINK.timing.get(event.message.timestamp) : undefined;
 		if (timing?.start) timing.ms = Date.now() - timing.start;
 	});
@@ -1215,6 +1294,7 @@ export default function (pi) {
 	// session_shutdown (contexto ainda ativo) e só recebe o comando de continuar depois
 	pi.on("session_shutdown", async (event, ctx) => {
 		for (const name of PINK_GLOBALS) globalThis[name] = undefined;  // a sessão seguinte reinstala; até lá, nada lê o ctx antigo
+		clearInterval(PINK.runTimer);
 		if (event?.reason !== "quit" || ctx?.mode !== "tui") return;
 		try {
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
