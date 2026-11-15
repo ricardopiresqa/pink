@@ -116,20 +116,12 @@ export async function antigravityQuota({ core, getKey, readAuth }) {
 // /antigravity (só do modo cofre, que o Pink não usa) não entra, e um gancho dela que falhe não chega à tela (o provedor
 // fica recusando no próprio pedido e o Pink avisa ao abrir: state.unavailable). O resto passa direto para o pi do Pink.
 export const ANTIGRAVITY_NAME = "Google Antigravity";
-export const ANTIGRAVITY_LOGIN_HELP = "Entre com a conta do Google. No fim o navegador mostra um erro em localhost: é esperado. Copie o endereço inteiro dessa página e cole no Pink.";
-export const ANTIGRAVITY_PASTE = "Cole o endereço inteiro da página de erro (http://localhost:51121/...):";
 export function antigravityHost(pi, state = {}) {
 	const rename = (config) => {
 		const unavailable = /unavailable/i.test(String(config?.name ?? ""));
 		state.unavailable = unavailable;
 		const name = unavailable ? `${ANTIGRAVITY_NAME} (indisponível)` : ANTIGRAVITY_NAME;
-		// o login não tem servidor na porta 51121: o navegador cai numa página de erro em localhost e a pessoa cola o endereço
-		const login = config?.oauth?.login && ((callbacks) => config.oauth.login({
-			...callbacks,
-			onAuth: (info) => callbacks.onAuth({ ...info, instructions: ANTIGRAVITY_LOGIN_HELP }),
-			onPrompt: (prompt) => callbacks.onPrompt({ ...prompt, message: ANTIGRAVITY_PASTE }),
-		}));
-		return { ...config, name, ...(config?.oauth ? { oauth: { ...config.oauth, name: ANTIGRAVITY_NAME, ...(login ? { login } : {}) } } : {}) };
+		return { ...config, name, ...(config?.oauth ? { oauth: { ...config.oauth, name: ANTIGRAVITY_NAME } } : {}) };
 	};
 	return new Proxy(pi, {
 		get(target, key) {
