@@ -669,6 +669,22 @@ def test_pink_reads_only_its_own_skills_and_ships_the_natives(package_dir: Path)
     assert "~/.agents/skills/` and `.agents/skills/` (other agents use them)" in (package_dir / "docs" / "skills.md").read_text(encoding="utf-8")
 
 
+def test_subagents_are_native_the_pi_example_loaded_always(package_dir: Path) -> None:
+    """Owner 2026-11-16 (card 1dfwh7kfm3u): subagente nativo, como Claude Code/OpenCode/Codex, sem copiar o código do Pi."""
+    chunk = (package_dir / "dist" / "bundle" / "chunks" / "chunk-MM3LKT73.js").read_text(encoding="utf-8")
+    loader = 'path5.join(getPackageDir(),"examples","extensions","subagent","index.ts")'
+    assert chunk.count(loader) == 1 and '"pink-natives.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface
+    example = package_dir / "examples" / "extensions" / "subagent"
+    index, agents = (example / "index.ts").read_text(encoding="utf-8"), (example / "agents.ts").read_text(encoding="utf-8")
+    assert 'new Map<string, AgentConfig>([["general", { name: "general"' in agents  # o general existe sem nenhum .md
+    assert "if (process.env.PINK_SUBAGENT) return;" in index and 'env: { ...process.env, PINK_SUBAGENT: "1" },' in index  # sem aninhar
+    assert 'params.agentScope ?? (trusted ? "both" : "user")' in index and 'args.agentScope ?? "auto"' in index
+    gate = index[index.index('(agentScope === "project" || agentScope === "both") &&'):index.index("const requestedAgentNames")]
+    assert not re.search(r"confirmProjectAgents\s*(&&|\|\|)", gate) and "!trusted" in gate  # Argus: fora de pasta confiável o modelo não pula a confirmação
+    assert "const ok = ctx.hasUI && await ctx.ui.confirm(" in index  # sem tela, agente do projeto em pasta não confiável é recusado
+    assert 'return { command: "pink", args };' in index  # o filho é o Pink, não o Pi
+
+
 # atribuição MIT (NOTICE, licença, linha de fork do README, repository do package.json) e o nosso mapa de nomes
 PI_ATTRIBUTION = {"NOTICE.md", "LICENSE-PI.txt", "README.md", "package.json", "npm-shrinkwrap.json", "CHANGELOG.md", "docs/PINK.md"}
 THIRD_PARTY_LIB = "dist/bundle/chunks/lib-4AVRLBHM.js"  # realce de código: a constante matemática PI, não o produto

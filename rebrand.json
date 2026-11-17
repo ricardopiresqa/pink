@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.8",
+      "version": "1.4.0-pink.9",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "piConfig": {
         "name": "pink",
@@ -1971,8 +1971,57 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
+    },
+    {
+      "id": "subagent-general-agent",
+      "file": "examples/extensions/subagent/agents.ts",
+      "count": 1,
+      "find": "const agentMap = new Map<string, AgentConfig>();",
+      "replace": "const agentMap = new Map<string, AgentConfig>([[\"general\", { name: \"general\", description: \"General-purpose agent with the session's model and tools: research, multi-step tasks, code changes. Put any role or instructions in the task.\", systemPrompt: \"\", source: \"builtin\", filePath: \"(builtin)\" } as unknown as AgentConfig]]); // Pink: agente embutido (como o general-purpose do Claude Code); um agents/general.md o substitui"
+    },
+    {
+      "id": "subagent-no-nesting",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "export default function (pi: ExtensionAPI) {",
+      "replace": "export default function (pi: ExtensionAPI) {\n\tif (process.env.PINK_SUBAGENT) return; // Pink: subagente não abre outro subagente"
+    },
+    {
+      "id": "subagent-child-env",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\t\t\t\tshell: false,",
+      "replace": "\t\t\t\tenv: { ...process.env, PINK_SUBAGENT: \"1\" },\n\t\t\t\tshell: false,"
+    },
+    {
+      "id": "subagent-scope-by-trust",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "const agentScope: AgentScope = params.agentScope ?? \"user\";",
+      "replace": "const trusted = ctx.isProjectTrusted();\n\t\t\tconst agentScope: AgentScope = params.agentScope ?? (trusted ? \"both\" : \"user\"); // Pink: agentes do projeto por padrão só em pasta confiável"
+    },
+    {
+      "id": "subagent-untrusted-headless",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\t\t\t\tconfirmProjectAgents &&\n\t\t\t\tctx.hasUI &&\n\t\t\t\t!ctx.isProjectTrusted()",
+      "replace": "\t\t\t\t!trusted // Pink: fora de pasta confiável sempre confirma (o modelo não desliga com confirmProjectAgents:false)"
+    },
+    {
+      "id": "subagent-headless-refuses",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "const ok = await ctx.ui.confirm(",
+      "replace": "const ok = ctx.hasUI && await ctx.ui.confirm( // Pink: sem tela não há quem confirme: recusa"
+    },
+    {
+      "id": "subagent-scope-label",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "const scope: AgentScope = args.agentScope ?? \"user\";",
+      "replace": "const scope = args.agentScope ?? \"auto\";"
     },
     {
       "id": "no-upstream-changelog",

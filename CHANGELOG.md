@@ -3,6 +3,15 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.9] - 2026-11-16
+
+- Subagentes nativos, como no Claude Code, no OpenCode e no Codex: a ferramenta `subagent` vem ligada. Cada subagente
+  roda num processo `pink` à parte, com contexto próprio e as ferramentas dele (inclusive MCP), sozinho, em paralelo
+  (até 8, 4 de cada vez) ou em cadeia (`{previous}` passa a saída adiante). O agente `general` (modelo e ferramentas da
+  sessão) existe sempre; outros agentes ficam em `~/.pink/agent/agents/*.md` (`name`, `description`, `tools`, `model`)
+  e, em pasta confiável, em `.pink/agents/`. Fora de pasta confiável os do projeto só rodam com confirmação na tela.
+  Subagente não abre outro subagente. É o exemplo `examples/extensions/subagent` do Pi, carregado por padrão.
+
 ## [1.4.0-pink.8] - 2026-11-15
 
 - O Google Antigravity (1.4.0-pink.7) saiu do Pink: o Google desativou o serviço na conta de teste por violação dos Termos (HTTP 403 TOS_VIOLATION). O provedor `google` volta a ser o embutido (chave do AI Studio).
