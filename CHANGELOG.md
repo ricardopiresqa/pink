@@ -3,6 +3,20 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.10] - 2026-11-17
+
+- Pergunta com opções nativa (como AskUserQuestion, request_user_input e question): a ferramenta `questionnaire` vem
+  ligada, com uma ou várias perguntas, opções numeradas e "Escrever outra resposta", tela em português. Sem tela (`-p`,
+  json) devolve erro na hora, não trava. É o exemplo `examples/extensions/questionnaire.ts` do Pi, carregado por padrão.
+- Permissões nativas: antes de comando destrutivo (rm -r, Remove-Item -Recurse, rd /s, push forçado, reset --hard,
+  sudo, baixar e executar script…) o Pink pergunta "Permitir uma vez / nesta sessão / Negar"; sem tela, recusa e diz o
+  motivo ao modelo. Não edita `.env`, `.git`, chaves nem as próprias regras e hooks. Regras próprias `allow`/`ask`/`deny`
+  em `~/.pink/agent/permissions.json` e, em pasta confiável, `.pink/permissions.json` (ex.: `"deny": ["bash(curl*)"]`);
+  `/permissoes` mostra o que vale. É uma rede de segurança, não um sandbox: gravar pelo bash e comando ofuscado escapam.
+- Hooks configuráveis no formato do Claude Code: `~/.pink/agent/hooks.json` e, em pasta confiável, `.pink/hooks.json`,
+  com `PreToolUse` (saída 2 ou `{"decision":"block"}` bloqueia), `PostToolUse` (saída 2 manda o stderr ao modelo),
+  `SessionStart` (stdout vira contexto) e `Stop`. Timeout por hook; `/hooks` lista o que está ligado.
+
 ## [1.4.0-pink.9] - 2026-11-16
 
 - Subagentes nativos, como no Claude Code, no OpenCode e no Codex: a ferramenta `subagent` vem ligada. Cada subagente

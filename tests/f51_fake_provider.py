@@ -98,8 +98,21 @@ class Handler(BaseHTTPRequestHandler):
         if model == "early-error-stream":
             return event({"error": {"message": "Free usage exceeded, subscribe to Go"}})
         chunk = lambda text: {"id": "chatcmpl-f51", "object": "chat.completion.chunk", "model": model, "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}  # noqa: E731
-        event(chunk("po"))
-        event(chunk("ng"))
+        messages = payload.get("messages") or [{}]
+        if model == "ask" and messages[-1].get("role") != "tool":
+            # card 1dfwh7kfmqn: pede a pergunta com opções; depois do resultado da ferramenta, devolve o que a pessoa escolheu
+            question = {"questions": [{"id": "deploy", "prompt": "Publicar agora?", "options": [{"value": "sim", "label": "Sim, publicar"}, {"value": "nao", "label": "Não, depois"}]}]}
+            call = {"index": 0, "id": "call_q", "type": "function", "function": {"name": "questionnaire", "arguments": json.dumps(question, ensure_ascii=False)}}
+            event({"id": "chatcmpl-f51", "object": "chat.completion.chunk", "model": model, "choices": [{"index": 0, "delta": {"tool_calls": [call]}, "finish_reason": None}]})
+            event({"id": "chatcmpl-f51", "object": "chat.completion.chunk", "model": model, "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]})
+            return event("[DONE]")
+        if model == "ask":
+            result = messages[-1].get("content")
+            text = result if isinstance(result, str) else " ".join(part.get("text", "") for part in result or [] if isinstance(part, dict))
+            event(chunk(f"eco: {text}"))
+        else:
+            event(chunk("po"))
+            event(chunk("ng"))
         if model == "cut-stream":
             self.wfile.flush()
             return  # closes the connection with no [DONE] and no more data

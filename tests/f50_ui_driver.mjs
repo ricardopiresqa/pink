@@ -556,4 +556,128 @@ out.prompt = await (async () => {
 	for (const fn of handlers) results.push(await fn(event));
 	return { forced: results.some((r) => r?.systemPrompt !== undefined), sections: Object.keys(event.systemPromptOptions.sections).sort(), language: event.systemPromptOptions.sections.pink_language === ui.LANGUAGE_PROMPT.trim() };
 })();
-console.log(JSON.stringify({ natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
+// pink-permissions.ts (card 1dfwh7kfmqp): regras allow/ask/deny e o padrão do Pink, com um pi falso
+out.permissions = await (async () => {
+	const permFile = path.join(path.dirname(file), "pink-permissions.ts");
+	const permCopy = permFile.replace(/\.ts$/, ".driver.mjs");
+	fs.copyFileSync(permFile, permCopy);
+	const perm = await import(pathToFileURL(permCopy).href);
+	fs.unlinkSync(permCopy);
+	const cwd = path.join(os.tmpdir(), "pink-fake-project");
+	const agent = path.join(os.tmpdir(), "pink-fake-agent-perm");
+	const make = (files, { hasUI = false, trusted = true, pick = "Negar" } = {}) => {
+		const handlers = {}, commands = {}, asked = [];
+		const pi = { on: (name, fn) => (handlers[name] ??= []).push(fn), registerCommand: (name, spec) => { commands[name] = spec; } };
+		const read = (f) => { if (f in files) return files[f]; throw new Error("ENOENT"); };
+		perm.permissions(pi, { env: { PINK_CODING_AGENT_DIR: agent }, read });
+		const ctx = { cwd, hasUI, isProjectTrusted: () => trusted, ui: { select: async (q, opts) => { asked.push(opts); return pick; }, notify: () => {} } };
+		const call = async (toolName, input) => (await handlers.tool_call[0]({ toolName, input }, ctx)) ?? "ok";
+		return { call, asked, commands };
+	};
+	const user = path.join(agent, "permissions.json"), project = path.join(cwd, ".pink", "permissions.json");
+	const bare = make({});
+	const rules = make({ [user]: JSON.stringify({ allow: ["bash(rm -rf node_modules)"], deny: ["bash(curl*)", "read(.env*)"] }), [project]: JSON.stringify({ ask: ["bash(git push*)"] }) });
+	const untrusted = make({ [project]: JSON.stringify({ allow: ["write(.env)"] }) }, { trusted: false });
+	const ui = make({}, { hasUI: true, pick: "Permitir nesta sessão" });
+	const firstUi = await ui.call("bash", { command: "rm -rf build" });
+	const secondUi = await ui.call("bash", { command: "rm -rf build" });
+	return {
+		headless: {
+			rm: await bare.call("bash", { command: "rm -rf build" }), ls: await bare.call("bash", { command: "ls -la" }),
+			ps: await bare.call("powershell", { command: "Remove-Item -Recurse -Force dist" }), env: await bare.call("write", { path: ".env" }),
+			git: await bare.call("edit", { path: path.join(cwd, ".git", "config") }), src: await bare.call("write", { path: "src/a.ts" }), readEnv: await bare.call("read", { path: ".env" }),
+		},
+		rules: {
+			allowed: await rules.call("bash", { command: "rm -rf node_modules" }), curl: await rules.call("bash", { command: "curl https://x" }),
+			readEnv: await rules.call("read", { path: ".env.local" }), push: await rules.call("bash", { command: "git push gitea master" }),
+		},
+		untrustedEnv: await untrusted.call("write", { path: ".env" }),
+		ui: { firstUi, secondUi, asked: ui.asked.length, options: ui.asked[0] },
+		edges: await (async () => {
+			const r = make({ [user]: JSON.stringify({ allow: ["bash(npm test*)"], deny: ["bash(curl*)", "grep", "mcp__thoth-x", "bash(git push*)"] }) });
+			const broken = make({ [user]: "{nope" });
+			// o RTK do pink-natives carregado depois reescreve o comando: as permissões, em primeiro, já decidiram sobre o original
+			const rtkFirst = make({ [user]: JSON.stringify({ deny: ["bash(git push*)"] }) });
+			return {
+				allowCompound: await r.call("bash", { command: "npm test; rm -rf /" }), denyCompound: await r.call("bash", { command: "cd x && curl evil" }),
+				denyNewline: await r.call("bash", { command: "ls\ncurl http://x" }), denySudoPath: await r.call("bash", { command: "sudo /usr/bin/curl x" }),
+				otherTool: await r.call("grep", { pattern: "x" }), mcpName: await r.call("mcp__thoth-x", {}),
+				rmFR: await bare.call("bash", { command: "rm -f -R dir" }), gitC: await bare.call("bash", { command: "git -C repo push -f" }),
+				gitFu: await bare.call("bash", { command: "git push -fu origin main" }), plusRef: await bare.call("bash", { command: "git push origin +main" }),
+				rdQS: await bare.call("powershell", { command: "rd /q /s build" }), ruffFormat: await bare.call("bash", { command: "ruff format . && npm run format" }),
+				fooEnv: await bare.call("write", { path: "config/foo.env" }), atEnv: await bare.call("write", { path: "@.env" }),
+				brokenHeadless: await broken.call("read", { path: "a.txt" }),
+				afterRtk: await rtkFirst.call("bash", { command: "git push gitea master" }),
+				sudoLs: await bare.call("bash", { command: "sudo ls" }), bashC: await bare.call("bash", { command: 'bash -c "rm -rf x"' }),
+				envRm: await bare.call("bash", { command: "env X=1 rm -rf y" }), quotedRm: await bare.call("bash", { command: '"rm" -rf x' }),
+				varRm: await bare.call("bash", { command: "X=1 rm -rf y" }), xargsRm: await bare.call("bash", { command: "ls | xargs rm -r" }),
+				cmdRd: await bare.call("powershell", { command: "cmd /c rd /s build" }), wrappedCurl: await r.call("bash", { command: "sh -c 'curl x'" }),
+				allowRedirect: await make({ [user]: JSON.stringify({ allow: ["bash(npm test*)"] }) }).call("bash", { command: "npm test 2>&1" }),
+				sudoAllowed: await r.call("bash", { command: "sudo npm test" }),
+				ownHooks: await bare.call("write", { path: ".pink/hooks.json" }), ownRules: await bare.call("edit", { path: ".pink/permissions.json" }),
+				agentHooks: await bare.call("write", { path: path.join(agent, "hooks.json") }),
+			};
+		})(),
+		bad: perm.loadRules(["x.json"], () => "{nope").errors.length,
+		command: Object.keys(bare.commands),
+	};
+})();
+// pink-hooks.ts (card 1dfwh7kfmqq): hooks.json com comandos de verdade (node -e)
+out.hooks = await (async () => {
+	const hooksFile = path.join(path.dirname(file), "pink-hooks.ts");
+	const hooksCopy = hooksFile.replace(/\.ts$/, ".driver.mjs");
+	fs.copyFileSync(hooksFile, hooksCopy);
+	const h = await import(pathToFileURL(hooksCopy).href);
+	fs.unlinkSync(hooksCopy);
+	const agent = path.join(os.tmpdir(), "pink-hooks-agent")	, cwd = path.join(os.tmpdir(), "pink-hooks-proj");
+	fs.mkdirSync(path.join(cwd, ".pink"), { recursive: true });
+	const node = JSON.stringify(process.execPath);
+	const user = path.join(agent, "hooks.json"), project = path.join(cwd, ".pink", "hooks.json");
+	const files = {
+		[user]: JSON.stringify({
+			PreToolUse: [
+				{ matcher: "bash", hooks: [{ type: "command", command: `${node} -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.tool_input.command.includes('proibido')){console.error('nao pode');process.exit(2)}})"` }] },
+				{ matcher: "write", command: `${node} -e "console.log(JSON.stringify({decision:'block',reason:'json diz nao'}))"` },
+				{ matcher: "read", command: `${node} -e "setTimeout(()=>{},10000)"`, timeout: 1 },
+			{ matcher: "edit", command: `${node} -e "console.log(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny',permissionDecisionReason:'formato novo'}}))"` },
+			],
+			PostToolUse: [{ matcher: "bash", command: `${node} -e "console.error('lint achou 2');process.exit(2)"` }],
+			SessionStart: [{ command: `${node} -e "console.log('contexto do hook')"` }],
+			Stop: [{ command: `${node} -e "require('fs').writeFileSync(process.env.PINK_PROJECT_DIR+'/stop.txt','ok')"` }],
+		}),
+		[project]: JSON.stringify({ PreToolUse: [{ command: `${node} -e "process.exit(2)"` }] }),
+	};
+	const make = (trusted) => {
+		const handlers = {}, notes = [];
+		const pi = { on: (n, fn) => (handlers[n] ??= []).push(fn), registerCommand: () => {} };
+		h.hooksExtension(pi, { env: { ...process.env, PINK_CODING_AGENT_DIR: agent }, read: (f) => { if (f in files) return files[f]; throw new Error("ENOENT"); } });
+		const ctx = { cwd, hasUI: true, isProjectTrusted: () => trusted, ui: { notify: (t) => notes.push(t) } };
+		const ev = async (name, e) => (await handlers[name][0](e, ctx)) ?? "ok";
+		return { ev, notes };
+	};
+	const u = make(false), t = make(true);
+	try { fs.unlinkSync(path.join(cwd, "stop.txt")); } catch {}
+	const t0 = Date.now();
+	const out = {
+		blockExit2: await u.ev("tool_call", { toolName: "bash", input: { command: "echo proibido" } }),
+		passBash: await u.ev("tool_call", { toolName: "bash", input: { command: "ls" } }),
+		blockJson: await u.ev("tool_call", { toolName: "write", input: { path: "a" } }),
+		timeoutRead: await u.ev("tool_call", { toolName: "read", input: { path: "a" } }),
+		timeoutMs: Date.now() - t0,
+		timeoutNote: u.notes.some((n) => n.includes("foi parado")),
+		untrustedGrep: await u.ev("tool_call", { toolName: "grep", input: {} }),
+		trustedGrep: await t.ev("tool_call", { toolName: "grep", input: {} }),
+		post: await u.ev("tool_result", { toolName: "bash", input: {}, content: [{ type: "text", text: "saida" }] }),
+	};
+	await u.ev("session_start", { reason: "startup" });
+	out.context = await u.ev("before_agent_start", {});
+	out.contextOnce = await u.ev("before_agent_start", {});
+	await u.ev("agent_settled", { aborted: false });
+	out.stop = fs.existsSync(path.join(cwd, "stop.txt"));
+	out.newFormat = await u.ev("tool_call", { toolName: "edit", input: { path: "a" } });
+	const childHandlers = {};
+	h.hooksExtension({ on: (n, fn) => (childHandlers[n] ??= []).push(fn), registerCommand: () => {} }, { env: { PINK_SUBAGENT: "1", PINK_CODING_AGENT_DIR: agent }, read: () => { throw new Error("ENOENT"); } });
+	out.childEvents = Object.keys(childHandlers).sort();
+	return out;
+})();
+console.log(JSON.stringify({ hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));

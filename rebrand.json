@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.9",
+      "version": "1.4.0-pink.10",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "piConfig": {
         "name": "pink",
@@ -60,6 +60,14 @@
     {
       "from": "extensions/pink-natives.ts",
       "to": "extensions/pink-natives.ts"
+    },
+    {
+      "from": "extensions/pink-permissions.ts",
+      "to": "extensions/pink-permissions.ts"
+    },
+    {
+      "from": "extensions/pink-hooks.ts",
+      "to": "extensions/pink-hooks.ts"
     },
     {
       "from": "mux/pink.mjs",
@@ -1971,7 +1979,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
@@ -2022,6 +2030,90 @@
       "count": 1,
       "find": "const scope: AgentScope = args.agentScope ?? \"user\";",
       "replace": "const scope = args.agentScope ?? \"auto\";"
+    },
+    {
+      "id": "questionnaire-pt-other",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "label: \"Type something.\"",
+      "replace": "label: \"Escrever outra resposta.\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-submit-tab",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "const submitText = \" ✓ Submit \";",
+      "replace": "const submitText = \" ✓ Enviar \";",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-your-answer",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"Your answer:\"",
+      "replace": "\"Sua resposta:\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-editor-help",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"Enter to submit • Esc to cancel\"",
+      "replace": "\"Enter envia • Esc volta\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-ready",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"Ready to submit\"",
+      "replace": "\"Pronto para enviar\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-wrote",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"(wrote) \"",
+      "replace": "\"(escreveu) \"",
+      "count": 2
+    },
+    {
+      "id": "questionnaire-pt-press-enter",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"Press Enter to submit\"",
+      "replace": "\"Enter para enviar\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-unanswered",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "`Unanswered: ${missing}`",
+      "replace": "`Sem resposta: ${missing}`",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-help-multi",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel\"",
+      "replace": "\"Tab/←→ navegar • ↑↓ escolher • Enter confirmar • Esc cancelar\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-help-single",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "\"↑↓ navigate • Enter select • Esc cancel\"",
+      "replace": "\"↑↓ navegar • Enter escolher • Esc cancelar\"",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-cancelled-label",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "theme.fg(\"warning\", \"Cancelled\")",
+      "replace": "theme.fg(\"warning\", \"Cancelado\")",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-pt-count",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "`${count} question${count !== 1 ? \"s\" : \"\"}`",
+      "replace": "`${count} pergunta${count !== 1 ? \"s\" : \"\"}`",
+      "count": 1
     },
     {
       "id": "no-upstream-changelog",

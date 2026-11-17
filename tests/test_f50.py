@@ -113,7 +113,7 @@ def test_the_pi_licence_and_the_notice_travel_with_the_fork() -> None:
 def test_the_fork_is_the_patch_and_the_pi_code_is_not_in_the_repository() -> None:
     tracked_or_present = [path for path in PINK.rglob("*") if path.is_file() and not {".cache", "out", "tests", ".git", "node_modules"} & set(path.relative_to(PINK).parts)]
     own_code = [path for path in tracked_or_present if path.suffix in {".js", ".mjs", ".ts"}]
-    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-natives.ts", "extensions/pink-ui.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
+    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-hooks.ts", "extensions/pink-natives.ts", "extensions/pink-permissions.ts", "extensions/pink-ui.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
     assert "earendil" not in (PINK / "extensions" / "pink-ui.ts").read_text(encoding="utf-8").replace("@earendil-works/pi-coding-agent", "").replace("@earendil-works/pi-tui", "")  # it imports the engine, it does not copy it
     assert (PINK / "build_pink.py").is_file() and (PINK / "rebrand.json").is_file()
 
@@ -531,6 +531,61 @@ def test_in_a_real_terminal_the_frame_shows_three_two_or_one_column_by_width(cli
     assert "SESSÕES" in low and "pong" in low and len(low.splitlines()) <= 16  # altura pequena: a moldura encolhe, não quebra
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_in_a_real_terminal_the_model_asks_with_options_and_gets_the_choice(cli: Path, fake_provider: int, tmp_path: Path) -> None:
+    """Owner 2026-11-17 (card 1dfwh7kfmqn): pergunta com opções nativa, como AskUserQuestion/request_user_input/question."""
+    sys.path[:0] = [str(TUI_PROBE.parent)]
+    from f50_tui_probe import run_tui
+
+    target = tmp_path / ".pink" / "agent"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "models.json").write_text(json.dumps({"providers": {"fake": {"baseUrl": f"http://127.0.0.1:{fake_provider}/v1", "api": "openai-completions", "apiKey": "fake-key-0123456789", "models": [{"id": "ask"}]}}}), encoding="utf-8")
+    (target / "settings.json").write_text(json.dumps({"defaultProvider": "fake", "defaultModel": "ask"}), encoding="utf-8")
+    screens = run_tui(cli, tmp_path, [(None, 6.0), ("\r", 6.0), ("pergunte", 1.0), ("\r", 10.0), ("\x1b[B", 2.0), ("\r", 10.0)], columns=120, rows=40)
+    asking, answered = "\n".join(screens[3]), "\n".join(screens[5])
+    assert "Publicar agora?" in asking and "1. Sim, publicar" in asking and "2. Não, depois" in asking and "3. Escrever outra resposta." in asking
+    assert "↑↓ navegar • Enter escolher • Esc cancelar" in asking  # a tela em português
+    assert "eco:" in answered and "user selected: 2. Não, depois" in answered  # a escolha (seta para baixo + Enter) volta ao modelo
+
+
+def test_permissions_confirm_destructive_commands_protect_secrets_and_follow_the_rules(ui_facts: dict, package_dir: Path) -> None:
+    """Owner 2026-11-17 (card 1dfwh7kfmqp): allow/ask/deny como o Claude Code; sem tela, o que pede confirmação é recusado."""
+    p = ui_facts["permissions"]
+    h = p["headless"]
+    assert "não há tela" in h["rm"]["reason"] and "não há tela" in h["ps"]["reason"] and h["ls"] == "ok" and h["src"] == "ok" and h["readEnv"] == "ok"
+    assert "protegido" in h["env"]["reason"] and "protegido" in h["git"]["reason"]
+    r = p["rules"]
+    assert r["allowed"] == "ok" and "deny bash(curl*)" in r["curl"]["reason"] and "deny read(.env*)" in r["readEnv"]["reason"] and "ask bash(git push*)" in r["push"]["reason"]
+    assert p["untrustedEnv"]["block"] is True  # regra do projeto só vale em pasta confiável
+    assert p["ui"] == {"firstUi": "ok", "secondUi": "ok", "asked": 1, "options": ["Permitir uma vez", "Permitir nesta sessão", "Negar"]}
+    assert p["bad"] == 1 and p["command"] == ["permissoes"]
+    chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
+    assert 'resolvedExtensionPaths=[path5.join(getPackageDir(),"extensions","pink-permissions.ts"),path5.join(getPackageDir(),"extensions","pink-hooks.ts"),...process.env.PINK_NO_BUILTIN_UI' in chunk  # primeiro: vê o comando antes do RTK reescrever
+    assert (package_dir / "extensions" / "pink-permissions.ts").is_file()
+    e = p["edges"]  # achados do Argus
+    assert e["allowCompound"] != "ok" and e["denyCompound"]["block"] and e["denyNewline"]["block"] and e["denySudoPath"]["block"]
+    assert e["otherTool"]["block"] and e["mcpName"]["block"] and e["rmFR"]["block"] and e["gitC"]["block"] and e["gitFu"]["block"] and e["plusRef"]["block"]
+    assert e["rdQS"]["block"] and e["ruffFormat"] == "ok" and e["fooEnv"] == "ok" and e["atEnv"]["block"] and e["brokenHeadless"]["block"]
+    assert e["afterRtk"]["block"] and "deny bash(git push*)" in e["afterRtk"]["reason"]
+    assert all(e[k]["block"] for k in ("sudoLs", "bashC", "envRm", "quotedRm", "varRm", "xargsRm", "cmdRd", "wrappedCurl", "sudoAllowed"))  # 2ª revisão do Argus
+    assert e["allowRedirect"] == "ok"
+    assert e["ownHooks"]["block"] and e["ownRules"]["block"] and "próprias regras" in e["agentHooks"]["reason"]  # 3ª revisão do Argus (H1)
+
+
+def test_hooks_run_commands_like_claude_code_block_feed_back_and_respect_trust(ui_facts: dict, package_dir: Path) -> None:
+    """Owner 2026-11-17 (card 1dfwh7kfmqq): PreToolUse/PostToolUse/SessionStart/Stop num hooks.json; o do projeto só em pasta confiável."""
+    k = ui_facts["hooks"]
+    assert k["blockExit2"] == {"block": True, "reason": "Bloqueado por hook: nao pode"} and k["passBash"] == "ok"
+    assert k["blockJson"]["reason"] == "Bloqueado por hook: json diz nao"
+    assert k["timeoutRead"] == "ok" and k["timeoutNote"] and k["timeoutMs"] < 8000  # timeout por hook mata e não bloqueia
+    assert k["untrustedGrep"] == "ok" and k["trustedGrep"]["block"]
+    assert k["post"]["content"][-1]["text"] == "[hook PostToolUse] lint achou 2"
+    assert k["context"]["message"]["content"] == "contexto do hook" and k["contextOnce"] == "ok" and k["stop"]
+    assert k["newFormat"]["reason"] == "Bloqueado por hook: formato novo" and k["childEvents"] == ["tool_call", "tool_result"]  # Argus: formato novo do Claude Code; subagente só hooks de ferramenta
+    chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
+    assert '"pink-permissions.ts"),path5.join(getPackageDir(),"extensions","pink-hooks.ts"),' in chunk and (package_dir / "extensions" / "pink-hooks.ts").is_file()
+
+
 def test_tools_and_thinking_collapse_to_one_grey_line_and_expand_to_the_pi_view(ui_facts: dict) -> None:
     """Owner 2026-10-29 (pink.3): uma linha por bloco, como o OpenCode; ctrl+o / ctrl+t expandem para a visão do Pi (com o diff)."""
     c = ui_facts["pink3"]["compact"]
@@ -673,6 +728,9 @@ def test_subagents_are_native_the_pi_example_loaded_always(package_dir: Path) ->
     """Owner 2026-11-16 (card 1dfwh7kfm3u): subagente nativo, como Claude Code/OpenCode/Codex, sem copiar o código do Pi."""
     chunk = (package_dir / "dist" / "bundle" / "chunks" / "chunk-MM3LKT73.js").read_text(encoding="utf-8")
     loader = 'path5.join(getPackageDir(),"examples","extensions","subagent","index.ts")'
+    assert loader + ',path5.join(getPackageDir(),"examples","extensions","questionnaire.ts"),' in chunk  # card 1dfwh7kfmqn: pergunta com opções
+    questionnaire = (package_dir / "examples" / "extensions" / "questionnaire.ts").read_text(encoding="utf-8")
+    assert 'if (ctx.mode !== "tui")' in questionnaire and 'label: "Escrever outra resposta."' in questionnaire  # sem tela não trava; tela em português
     assert chunk.count(loader) == 1 and '"pink-natives.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface
     example = package_dir / "examples" / "extensions" / "subagent"
     index, agents = (example / "index.ts").read_text(encoding="utf-8"), (example / "agents.ts").read_text(encoding="utf-8")
