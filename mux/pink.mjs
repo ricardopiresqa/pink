@@ -4,8 +4,8 @@
 // terminal virtual (node-pty + @xterm/headless) e este processo só desenha a lateral, a tela do filho ativo e repassa o teclado.
 // Sem terminal interativo, com comando de uma vez (-p, --help, install...) ou sem node-pty, roda o Pink normal, sem lateral.
 import { execFile } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync, unlinkSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -493,6 +493,15 @@ async function main() {
 	const out = process.stdout;
 	const sessions = [];
 	let active = 0;
+	let opened = 0; // nome único do arquivo de fechamento de cada sessão
+	// fechamentos de um mux que morreu sem passar pelo finish (janela fechada, processo morto)
+	try {
+		for (const name of readdirSync(tmpdir())) {
+			const pid = Number(/^pink-exit-(\d+)-\d+\.txt$/.exec(name)?.[1]);
+			if (!pid) continue;
+			try { process.kill(pid, 0); } catch (error) { if (error.code === "ESRCH") try { unlinkSync(path.join(tmpdir(), name)); } catch { /* outro mux limpou */ } }
+		}
+	} catch { /* sem acesso ao temporário: só sobra lixo */ }
 	let frame = 0;
 	let confirm; // { text, yes }
 	let cache = [];
@@ -570,9 +579,10 @@ async function main() {
 	const open = (args, cwd = process.cwd(), file = undefined) => {
 		const { rows, inner } = size();
 		const term = new Terminal({ cols: inner, rows, allowProposedApi: true, scrollback: 0 });
-		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1" } });
+		const banner = path.join(tmpdir(), `pink-exit-${process.pid}-${++opened}.txt`); // o fechamento (logo e resumo) que a sessão escreve ao sair
+		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1", PINK_MUX_BANNER: banner } });
 		const resumed = args.some((arg) => FIRST_ONLY.has(arg) || FIRST_ONLY_VALUE.has(arg.split("=")[0]));
-		const session = { term, child, cwd, file, resumed, started: Date.now(), title: "", working: false, attention: false, exited: false, scratch: undefined };
+		const session = { term, child, cwd, file, resumed, banner, started: Date.now(), title: "", working: false, attention: false, exited: false, scratch: undefined };
 		session.scratch = term.buffer.active.getNullCell?.();
 		const isActive = () => sessions[active] === session;
 		term.onTitleChange((title) => { session.title = title; schedule(); });
@@ -593,6 +603,7 @@ async function main() {
 			sessions.splice(index, 1);
 			// fechada no × ou em "sair do Pink": sai sem erro; saiu sozinha: espera o terminal virtual ler o resto da saída (a mensagem de erro)
 			if (!sessions.length) return session.closing ? finish(0) : term.write("", () => finish(exitCode ?? 0, session));
+			try { unlinkSync(session.banner); } catch { /* não saiu pelo /quit */ }
 			term.dispose();
 			if (active >= index && active > 0) active--;
 			select(active);
@@ -618,6 +629,9 @@ async function main() {
 			for (let y = 0; y < last.term.rows; y++) lines.push(buffer.getLine(y)?.translateToString(true) ?? "");
 			out.write(`${lines.join("\n").trim()}\n`);
 		}
+		// saiu sem erro: o logo do Pink e o resumo da sessão ficam no terminal, como no Pink sem lateral
+		if (!code && last) try { out.write(readFileSync(last.banner, "utf8")); } catch { /* fechou sem passar pelo /quit */ }
+		for (const session of [...sessions, last]) try { if (session) unlinkSync(session.banner); } catch { /* não existe */ }
 		process.exit(code);
 	};
 
@@ -625,6 +639,19 @@ async function main() {
 		confirm = { text, yes };
 		cache = [];
 		schedule();
+	};
+	// sair pela lateral pede /quit à sessão (o Pink grava o fechamento e a última sessão o mostra ao sair); se ela não sair
+	// em 4 s, encerra à força como antes, sem o fechamento
+	const quitGently = (target) => {
+		try {
+			target.child.write("\x03"); // limpa o que estiver digitado (e interrompe se estiver trabalhando)
+			setTimeout(() => { try { target.child.write("/quit\r"); } catch { /* já saiu */ } }, 150);
+		} catch { /* já saiu */ }
+		setTimeout(() => {
+			if (target.exited) return;
+			target.closing = true;
+			try { target.child.kill(); } catch { /* já saiu */ }
+		}, 4000);
 	};
 	const act = (action) => {
 		const current = sessions[active];
@@ -636,15 +663,13 @@ async function main() {
 		}
 		if (action.startsWith("close:") && sessions[index]) {
 			const target = sessions[index];
-			const close = () => {
-				target.closing = true;
-				try { target.child.kill(); } catch { /* já saiu */ }
-			};
+			const close = () => quitGently(target);
 			return target.working ? ask(`Encerrar "${sessionLabel(target.title, index, folder).name}"? Ela está trabalhando.`, close) : close();
 		}
 		if (action === "quit") {
-			if (sessions.length > 1) return ask(`Sair do Pink com ${sessions.length} sessões abertas?`, () => finish(0));
-			return current?.working ? ask("Sair do Pink? A sessão está trabalhando.", () => finish(0)) : finish(0);
+			const all = () => [...sessions].forEach(quitGently);
+			if (sessions.length > 1) return ask(`Sair do Pink com ${sessions.length} sessões abertas?`, all);
+			return current?.working ? ask("Sair do Pink? A sessão está trabalhando.", all) : all();
 		}
 	};
 

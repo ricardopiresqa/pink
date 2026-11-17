@@ -1328,7 +1328,12 @@ export default function (pi) {
 		try {
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const banner = exitBanner({ theme: ctx.ui.theme, title: stats.title, stats, resume: "\u0000" });
-			globalThis.__pinkExitBanner = (resume) => banner.replace("\u0000", resume);
+			globalThis.__pinkExitBanner = (resume) => {
+				const text = banner.replace("\u0000", resume);
+				// dentro da lateral de sessões (mux) a saída cai num terminal virtual que some: o mux lê o fechamento deste arquivo
+				if (process.env.PINK_MUX_BANNER) try { node("node:fs").writeFileSync(process.env.PINK_MUX_BANNER, text); } catch { /* sem arquivo, só o terminal virtual */ }
+				return text;
+			};
 		} catch {
 			globalThis.__pinkExitBanner = undefined;  // sem fechamento, o Pink imprime a linha dele
 		}

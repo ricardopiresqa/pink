@@ -3,6 +3,15 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.13] - 2026-11-17
+
+- O logo e o resumo da sessão voltaram a aparecer ao sair (`/quit`, Ctrl+C duas vezes). Desde a lateral de sessões, a
+  sessão roda num terminal virtual e o fechamento sumia junto com ele; agora a lateral o imprime no terminal real.
+  Sair pelo menu da lateral ou pelo × também mostra: a lateral pede `/quit` à sessão e só encerra à força se ela não
+  sair em 4 segundos.
+- `tools/importar_claude.py`: converte uma sessão do Claude Code numa sessão do Pink (a conversa principal, com as
+  compactações viradas em resumo do Pink; o raciocínio do Claude e os subagentes ficam fora).
+
 ## [1.4.0-pink.12] - 2026-11-17
 
 - Web nativa, sem MCP: com modelo da OpenAI o Pink liga a busca do próprio provedor, como o Codex e o Claude Code
