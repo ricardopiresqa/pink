@@ -113,7 +113,7 @@ def test_the_pi_licence_and_the_notice_travel_with_the_fork() -> None:
 def test_the_fork_is_the_patch_and_the_pi_code_is_not_in_the_repository() -> None:
     tracked_or_present = [path for path in PINK.rglob("*") if path.is_file() and not {".cache", "out", "tests", ".git", "node_modules"} & set(path.relative_to(PINK).parts)]
     own_code = [path for path in tracked_or_present if path.suffix in {".js", ".mjs", ".ts"}]
-    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-hooks.ts", "extensions/pink-natives.ts", "extensions/pink-permissions.ts", "extensions/pink-ui.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
+    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-hooks.ts", "extensions/pink-natives.ts", "extensions/pink-notify.ts", "extensions/pink-permissions.ts", "extensions/pink-ui.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
     assert "earendil" not in (PINK / "extensions" / "pink-ui.ts").read_text(encoding="utf-8").replace("@earendil-works/pi-coding-agent", "").replace("@earendil-works/pi-tui", "")  # it imports the engine, it does not copy it
     assert (PINK / "build_pink.py").is_file() and (PINK / "rebrand.json").is_file()
 
@@ -580,10 +580,25 @@ def test_hooks_run_commands_like_claude_code_block_feed_back_and_respect_trust(u
     assert k["timeoutRead"] == "ok" and k["timeoutNote"] and k["timeoutMs"] < 8000  # timeout por hook mata e não bloqueia
     assert k["untrustedGrep"] == "ok" and k["trustedGrep"]["block"]
     assert k["post"]["content"][-1]["text"] == "[hook PostToolUse] lint achou 2"
-    assert k["context"]["message"]["content"] == "contexto do hook" and k["contextOnce"] == "ok" and k["stop"]
+    assert k["context"] == "# Contexto do hook SessionStart (hooks.json)\ncontexto do hook" and k["contextAgain"] and k["stop"]  # no prompt de sistema da sessão (QA da Tifa)
     assert k["newFormat"]["reason"] == "Bloqueado por hook: formato novo" and k["childEvents"] == ["tool_call", "tool_result"]  # Argus: formato novo do Claude Code; subagente só hooks de ferramenta
     chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
     assert '"pink-permissions.ts"),path5.join(getPackageDir(),"extensions","pink-hooks.ts"),' in chunk and (package_dir / "extensions" / "pink-hooks.ts").is_file()
+
+
+def test_notification_when_done_out_of_focus_and_undo_survives_reopening_the_session(ui_facts: dict, package_dir: Path) -> None:
+    """Owner 2026-11-17 (card 1dfwh7kfmqr): aviso do sistema como o Claude Code/Codex; o ponto do /undo fica na sessão."""
+    n = ui_facts["notify"]
+    assert n["modes"] == ["\x1b[?1004h", "\x1b[?1004l"]  # pede os avisos de foco e devolve o terminal como estava
+    assert n["unknownShort"] == 0 and n["unknownLong"] == 1  # terminal que não avisa foco: só pedido longo
+    assert n["consumed"] == {"consume": True} and n["mixed"] == {"data": "abc"}  # o aviso de foco não vira texto no editor
+    assert n["focusedRun"] == 1 and n["blurredRun"] == 2 and n["abortedRun"] == 2 and n["toast"] == ["powershell.exe", True]
+    assert n["saved"] == '{\n  "on": false\n}\n' and n["offRun"] == 2 and n["offFile"] == 0 and n["envOff"] == 0
+    assert n["child"] == 0 and not n["print"]  # subagente e modo -p: nada
+    assert n["mac"] == "osascript" and n["linux"] == "notify-send" and n["osc"] == "\x1b]777;notify;Pink;a b\x07" and n["injection"] and n["oscControls"] == "\x1b]777;notify;Pink;a b  c\x07"  # Argus N1
+    assert ui_facts["saved"] == {"found": True, "storeFromHere": True, "otherId": True, "gone": True, "otherRepo": True, "badTree": True}  # Argus S1
+    chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
+    assert '"pink-ui.ts"),path5.join(getPackageDir(),"extensions","pink-notify.ts"),path5.join(getPackageDir(),"extensions","pink-natives.ts")]' in chunk
 
 
 def test_tools_and_thinking_collapse_to_one_grey_line_and_expand_to_the_pi_view(ui_facts: dict) -> None:

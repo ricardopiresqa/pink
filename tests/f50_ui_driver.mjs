@@ -263,6 +263,16 @@ out.undo = {
 await ui.gitRestore(undone.now);
 out.redo = { a: read("a.txt"), b: read("b.txt"), c: read("c.txt") };
 out.outsideGit = (await ui.gitSnapshot(os.tmpdir())) === undefined;
+// card 1dfwh7kfmqr: o ponto salvo na sessão vale depois de reabrir; árvore que sumiu dos objetos não vale
+const undoEntries = [{ type: "message", id: "u1" }, { type: "custom", customType: ui.UNDO_ENTRY, data: { entryId: "u1", top: before.top, tree: before.tree, store: { PATH: "forjado" } } }];
+out.saved = {
+	found: (await ui.savedSnapshot(undoEntries, "u1", repo))?.tree === before.tree,
+	storeFromHere: (await ui.savedSnapshot(undoEntries, "u1", repo))?.store?.PATH === undefined,
+	otherId: (await ui.savedSnapshot(undoEntries, "u2", repo)) === undefined,
+	gone: (await ui.savedSnapshot([{ type: "custom", customType: ui.UNDO_ENTRY, data: { entryId: "u1", top: before.top, tree: "0".repeat(40) } }], "u1", repo)) === undefined,
+	otherRepo: (await ui.savedSnapshot([{ type: "custom", customType: ui.UNDO_ENTRY, data: { entryId: "u1", top: "C:/outro/repo", tree: before.tree } }], "u1", repo)) === undefined,
+	badTree: (await ui.savedSnapshot([{ type: "custom", customType: ui.UNDO_ENTRY, data: { entryId: "u1", top: before.top, tree: "HEAD; rm" } }], "u1", repo)) === undefined,
+};
 fs.rmSync(repo, { recursive: true, force: true });
 console.log(JSON.stringify(out));
 
@@ -670,8 +680,11 @@ out.hooks = await (async () => {
 		post: await u.ev("tool_result", { toolName: "bash", input: {}, content: [{ type: "text", text: "saida" }] }),
 	};
 	await u.ev("session_start", { reason: "startup" });
-	out.context = await u.ev("before_agent_start", {});
-	out.contextOnce = await u.ev("before_agent_start", {});
+	const first = { systemPromptOptions: { sections: {} } }, second = { systemPromptOptions: { sections: {} } };
+	await u.ev("before_agent_start", first);
+	await u.ev("before_agent_start", second);
+	out.context = first.systemPromptOptions.sections.pink_hooks_session;
+	out.contextAgain = second.systemPromptOptions.sections.pink_hooks_session === out.context;
 	await u.ev("agent_settled", { aborted: false });
 	out.stop = fs.existsSync(path.join(cwd, "stop.txt"));
 	out.newFormat = await u.ev("tool_call", { toolName: "edit", input: { path: "a" } });
@@ -680,4 +693,54 @@ out.hooks = await (async () => {
 	out.childEvents = Object.keys(childHandlers).sort();
 	return out;
 })();
-console.log(JSON.stringify({ hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
+// pink-notify.ts (card 1dfwh7kfmqr): foco pelo terminal, comando por sistema, liga/desliga
+out.notify = await (async () => {
+	const nFile = path.join(path.dirname(file), "pink-notify.ts");
+	const nCopy = nFile.replace(/\.ts$/, ".driver.mjs");
+	fs.copyFileSync(nFile, nCopy);
+	const n = await import(pathToFileURL(nCopy).href);
+	fs.unlinkSync(nCopy);
+	const make = (env = {}, saved) => {
+		const handlers = {}, commands = {}, writes = [], runs = [], written = [];
+		let input, clock = 0;
+		const pi = { on: (name, fn) => (handlers[name] ??= []).push(fn), registerCommand: (name, spec) => { commands[name] = spec; } };
+		n.notifyExtension(pi, { env: { PINK_CODING_AGENT_DIR: path.join(os.tmpdir(), "pink-notify-agent"), ...env }, platform: "win32", now: () => clock,
+			read: () => { if (saved === undefined) throw new Error("ENOENT"); return saved; }, write: (f, t) => written.push(t), mkdir: () => {},
+			out: { write: (s) => writes.push(s) }, run: (bin, args) => runs.push([bin, args.at(-1).includes("ToastNotificationManager")]) });
+		const ctx = { mode: "tui", cwd: path.join(os.tmpdir(), "meu-projeto"), ui: { onTerminalInput: (fn) => { input = fn; return () => { input = undefined; }; }, notify: () => {} } };
+		const ev = (name, e = {}) => handlers[name]?.[0]?.(e, ctx);
+		return { ev, writes, runs, written, commands, ctx, type: (s) => input?.(s), tick: (ms) => { clock += ms; }, hasInput: () => Boolean(input) };
+	};
+	const run = async (x, { blur, ms = 1000, aborted = false } = {}) => {
+		await x.ev("agent_start");
+		if (blur !== undefined) x.type(blur ? "\x1b[O" : "\x1b[I");
+		x.tick(ms);
+		await x.ev("agent_settled", { aborted });
+		return x.runs.length;
+	};
+	const a = make();
+	await a.ev("session_start");
+	const unknownShort = await run(a, { ms: 1000 }), unknownLong = await run(a, { ms: 25_000 });
+	const consumed = a.type("\x1b[O"), mixed = a.type("ab\x1b[Ic");
+	const focusedRun = await run(a, { blur: false, ms: 60_000 }), blurredRun = await run(a, { blur: true }), abortedRun = await run(a, { blur: true, aborted: true });
+	await a.commands.notificacoes.handler("", a.ctx);
+	const offRun = await run(a, { blur: true });
+	await a.ev("session_shutdown");
+	const offFile = make({}, JSON.stringify({ on: false }));
+	await offFile.ev("session_start");
+	const envOff = make({ PINK_NOTIFY: "0" });
+	await envOff.ev("session_start");
+	const child = make({ PINK_SUBAGENT: "1" });
+	const print = make();
+	print.ctx.mode = "print";
+	await print.ev("session_start");
+	return {
+		modes: [a.writes[0], a.writes.at(-1)], unknownShort, unknownLong, consumed, mixed, focusedRun, blurredRun, abortedRun, toast: a.runs[0],
+		saved: a.written[0], offRun, offFile: await run(offFile, { blur: true }), envOff: await run(envOff, { blur: true }),
+		child: Object.keys(child.commands).length, print: print.hasInput() || print.writes.length,
+		mac: n.notifyCommand("Pink", "ok", { platform: "darwin", env: {} })[0], linux: n.notifyCommand("Pink", "ok", { platform: "linux", env: {}, has: (b) => b === "notify-send" })[0],
+		osc: n.notifyCommand("Pink", "a;b", { platform: "linux", env: {} }).osc, injection: (() => { const [, args, env] = n.notifyCommand("Pink", "x\u2019;calc;\u2019 $(y) <b>", { platform: "win32", env: {} }); return !args.join(" ").includes("calc") && env.PINK_TOAST_BODY === "x\u2019 calc \u2019 $(y) <b>"; })(),
+		oscControls: n.notifyCommand("Pink", "a;b\x9c\rc", { platform: "linux", env: {} }).osc,
+	};
+})();
+console.log(JSON.stringify({ notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));

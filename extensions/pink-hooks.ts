@@ -6,7 +6,7 @@
 // O comando recebe no stdin um JSON { hook_event_name, tool_name, tool_input, tool_response, cwd } e PINK_PROJECT_DIR.
 // - PreToolUse: saída 2 (motivo no stderr) ou stdout {"decision":"block","reason":"..."} bloqueia a ferramenta.
 // - PostToolUse: saída 2 manda o stderr ao modelo junto com o resultado.
-// - SessionStart: o stdout entra como contexto no primeiro pedido. Stop: roda quando o agente termina.
+// - SessionStart: o stdout entra no prompt de sistema da sessão. Stop: roda quando o agente termina.
 // Timeout por hook (padrão 60 s) mata o processo; erro, timeout e outra saída não bloqueiam (avisam na tela).
 // matcher: expressão regular sobre o nome da ferramenta, inteira, sem diferença de maiúsculas; vazio ou "*" = todas.
 // Diferença do Claude Code: tool_name chega como no Pink (bash, write, edit), sem session_id/transcript_path.
@@ -119,11 +119,12 @@ export function hooksExtension(pi, deps = {}) {
 		const results = await fire("SessionStart", ctx, { source: event?.reason });
 		sessionContext = results.filter((r) => r.code === 0 && r.stdout).map((r) => r.stdout).join("\n");
 	});
-	pi.on("before_agent_start", async () => {
-		if (!sessionContext) return undefined;
-		const content = sessionContext;
-		sessionContext = "";
-		return { message: { customType: "pink-hooks", content, display: false } };
+	// seção do prompt de sistema da sessão inteira, como o Claude Code: uma mensagem solta depois do pedido o modelo
+	// ignorava (QA da Tifa, cenário 7)
+	pi.on("before_agent_start", async (event) => {
+		const sections = event?.systemPromptOptions?.sections;
+		if (sessionContext && sections) sections.pink_hooks_session = `# Contexto do hook SessionStart (hooks.json)\n${sessionContext}`;
+		return undefined;
 	});
 	pi.on("agent_settled", async (event, ctx) => {
 		await fire("Stop", ctx, { aborted: Boolean(event?.aborted) });

@@ -3,6 +3,17 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.11] - 2026-11-17
+
+- Notificação do sistema quando o Pink termina e a janela está sem foco, como o Claude Code e o Codex: toast no Windows,
+  aviso no macOS e no Linux (notify-send ou OSC 777). O foco vem do próprio terminal (Windows Terminal, iTerm2, kitty,
+  WezTerm, Ghostty); terminal que não informa foco só avisa pedido de 20 s ou mais. `/notificacoes` liga e desliga
+  (fica salvo) e `PINK_NOTIFY=0` desliga.
+- `/undo` volta os arquivos também depois de reabrir a sessão: o ponto de restauração de cada mensagem fica salvo na
+  sessão (o índice, o stash e os commits do projeto continuam intocados). Só vale no mesmo repositório da pasta atual.
+- Hooks: a saída do `SessionStart` agora entra no prompt de sistema da sessão (antes ia como mensagem solta depois do
+  pedido, e o modelo podia ignorar).
+
 ## [1.4.0-pink.10] - 2026-11-17
 
 - Pergunta com opções nativa (como AskUserQuestion, request_user_input e question): a ferramenta `questionnaire` vem

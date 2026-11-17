@@ -206,15 +206,21 @@ export function runGit(args, { cwd, env } = {}) {
 // o arquivo volta byte a byte: sem converter fim de linha (core.autocrlf=true no Windows trocava LF por CRLF)
 const RAW = ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false"];
 
-export async function gitSnapshot(cwd, run = runGit) {
+// índice próprio, guardado entre execuções (a segunda foto só relê o que mudou); nunca o índice do usuário
+// e objetos próprios (o repositório entra só como leitura, por alternates): a foto não suja o .git do projeto
+export async function undoStore(cwd, run = runGit) {
 	const top = (await run(["rev-parse", "--show-toplevel"], { cwd })).stdout.trim();
-	if (!top) return undefined;  // fora de um repositório Git não há como desfazer arquivos (no OpenCode também é assim)
+	if (!top) return undefined;
 	const path = node("node:path");
-	// índice próprio, guardado entre execuções (a segunda foto só relê o que mudou); nunca o índice do usuário
-	// e objetos próprios (o repositório entra só como leitura, por alternates): a foto não suja o .git do projeto
 	const base = path.join(node("node:os").tmpdir(), `pink-undo-${node("node:crypto").createHash("sha1").update(top.toLowerCase()).digest("hex").slice(0, 12)}`);
 	const objects = path.resolve(top, (await run(["rev-parse", "--git-path", "objects"], { cwd: top })).stdout.trim() || ".git/objects");
-	const store = { GIT_OBJECT_DIRECTORY: `${base}.objects`, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects };
+	return { top, base, store: { GIT_OBJECT_DIRECTORY: `${base}.objects`, GIT_ALTERNATE_OBJECT_DIRECTORIES: objects } };
+}
+
+export async function gitSnapshot(cwd, run = runGit) {
+	const where = await undoStore(cwd, run);
+	if (!where) return undefined;  // fora de um repositório Git não há como desfazer arquivos (no OpenCode também é assim)
+	const { top, store, base } = where;
 	node("node:fs").mkdirSync(store.GIT_OBJECT_DIRECTORY, { recursive: true });
 	const env = { ...store, GIT_INDEX_FILE: `${base}.idx` };
 	if ((await run([...RAW, "add", "-A", "--", "."], { cwd: top, env })).code !== 0) return undefined;
@@ -244,6 +250,20 @@ export async function gitRestore(snapshot, run = runGit) {
 		if (full) fs.rmSync(full, { force: true });  // só o que nasceu depois do ponto restaurado, e só dentro do repositório
 	}
 	return { now, changed: back.length + created.length };
+}
+
+// ponto salvo na sessão por uma execução anterior; só vale se a árvore ainda existe nos objetos do Pink (a pasta temporária
+// pode ter sido limpa: aí o /undo volta só a conversa, como antes)
+export const UNDO_ENTRY = "pink-undo-point";
+// A sessão é dado de fora (pode ser de outra máquina ou forjada): dela só vale o tree (hash), e só se o repositório salvo
+// é o da pasta atual; repositório, objetos e env vêm daqui (Argus S1)
+export async function savedSnapshot(entries, entryId, cwd, run = runGit) {
+	const saved = [...(entries ?? [])].reverse().find((e) => e?.type === "custom" && e.customType === UNDO_ENTRY && e.data?.entryId === entryId)?.data;
+	if (typeof saved?.tree !== "string" || !/^[0-9a-f]{40,64}$/.test(saved.tree) || typeof saved.top !== "string") return undefined;
+	const here = await undoStore(cwd, run);
+	if (!here || here.top.toLowerCase() !== saved.top.toLowerCase()) return undefined;
+	const ok = (await run(["cat-file", "-e", `${saved.tree}^{tree}`], { cwd: here.top, env: here.store })).code === 0;
+	return ok ? { top: here.top, tree: saved.tree, store: here.store } : undefined;
 }
 
 // -- moldura de tela cheia (owner 2026-10-29, card 86e3x0ckk): topo, SESSÕES à esquerda, conversa no centro, CONTEXTO/PLANO/
@@ -1173,7 +1193,7 @@ function registerOpenCodeFunctions(pi) {
 		const user = lastUserEntry(ctx.sessionManager.getBranch());
 		if (!user) return void ctx.ui.notify?.("Nada para desfazer", "info");
 		const leaf = ctx.sessionManager.getLeafId();
-		const snapshot = PINK.snapshots.get(user.id);
+		const snapshot = PINK.snapshots.get(user.id) ?? (await savedSnapshot(ctx.sessionManager.getEntries?.(), user.id, ctx.cwd));
 		if ((await ctx.navigateTree(user.id))?.cancelled) return;
 		const restored = snapshot ? await gitRestore(snapshot) : undefined;
 		PINK.redo.push({ leaf, files: restored?.now });
@@ -1217,9 +1237,11 @@ function registerOpenCodeFunctions(pi) {
 		const leaf = ctx.sessionManager?.getLeafEntry?.();
 		if (ctx.mode !== "tui" || leaf?.type !== "message" || leaf.message?.role !== "user") return;
 		PINK.redo.length = 0;
-		// shortcut: os pontos ficam na memória do processo; depois de reabrir a sessão, o /undo volta só a conversa
 		const snapshot = await gitSnapshot(ctx.cwd).catch(() => undefined);
-		if (snapshot) PINK.snapshots.set(leaf.id, snapshot);
+		if (!snapshot) return;
+		PINK.snapshots.set(leaf.id, snapshot);
+		// card 1dfwh7kfmqr: o ponto também vai para a sessão (fora do contexto do modelo); o /undo funciona depois de reabrir
+		try { pi.appendEntry?.(UNDO_ENTRY, { entryId: leaf.id, top: snapshot.top, tree: snapshot.tree }); } catch { /* sem gravar: o /undo desta execução ainda vale */ }
 	});
 	pi.on("message_start", async (event) => {
 		if (event?.message?.role !== "assistant") return;
