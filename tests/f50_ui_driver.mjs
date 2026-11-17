@@ -743,4 +743,68 @@ out.notify = await (async () => {
 		oscControls: n.notifyCommand("Pink", "a;b\x9c\rc", { platform: "linux", env: {} }).osc,
 	};
 })();
-console.log(JSON.stringify({ notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
+// pink-web.ts (card 1dfwh7kfmqy): busca hospedada só na OpenAI; web_search/web_fetch locais com fetch falso
+out.web = await (async () => {
+	const wFile = path.join(path.dirname(file), "pink-web.ts");
+	const wCopy = wFile.replace(/\.ts$/, ".driver.mjs");
+	fs.copyFileSync(wFile, wCopy);
+	const w = await import(pathToFileURL(wCopy).href);
+	fs.unlinkSync(wCopy);
+	const page = (body, { status = 200, type = "text/html; charset=utf-8", url = "https://ex.com/p" } = {}) => async () => ({ ok: status < 400, status, url, headers: new Headers({ "content-type": type }), body: new Blob([body]).stream(), text: async () => body });
+	const handlers = {}, tools = {};
+	w.webExtension({ on: (name, fn) => (handlers[name] ??= []).push(fn), registerTool: (t) => { tools[t.name] = t; } }, { env: {}, fetchImpl: page("<html><title>T &amp; U</title><script>x()</script><p>Oi <b>mundo</b></p><a href=\"https://a.b/c\">link</a></html>") });
+	const openai = { api: "openai-responses", provider: "openai", baseUrl: "https://api.openai.com/v1" };
+	const req = (model, payload = { input: [] }) => handlers.before_provider_request[0]({ payload }, { model });
+	const ddg = '<a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fnodejs.org%2Fen&amp;rut=x">Node.js &mdash; Run</a><a class="result__snippet" href="x">O <b>runtime</b></a>'
+		+ '<a class="result__a" href="https://duckduckgo.com/y.js?ad=1">Anúncio</a>';
+	const text = (r) => r.content[0].text;
+	const fetched = await tools.web_fetch.execute("1", { url: "https://ex.com/p" });
+	const big = await w.webFetch("https://ex.com/big", { fetchImpl: page("a".repeat(w.MAX_BYTES + 10), { type: "text/plain" }) });
+	const slow = await w.webFetch("https://ex.com/slow", { fetchImpl: async () => { const e = new Error("t"); e.name = "TimeoutError"; throw e; } });
+	return {
+		tools: Object.values(tools).map((t) => [t.name, t.exposure, t.annotations.readOnlyHint]),
+		hosted: req(openai).tools, kept: req(openai, { input: [], tools: [{ type: "function", name: "x" }, { type: "web_search" }] }).tools.length,
+		gateway: req({ ...openai, provider: "thoth", baseUrl: "http://127.0.0.1:9999/v1" }), anthropic: req({ api: "anthropic-messages", provider: "anthropic" }),
+		off: w.hostedSearch(openai, { PINK_WEB_HOSTED: "0" }),
+		fetched: [fetched.isError ?? false, fetched.details.title, text(fetched).startsWith("Conteúdo de fora"), text(fetched).includes("Oi mundo"), text(fetched).includes("x()"), text(fetched).includes("link (https://a.b/c)")],
+		file: (await w.webFetch("file:///etc/passwd")).isError, bad: (await w.webFetch("nada")).isError,
+		binary: (await w.webFetch("https://ex.com/i.png", { fetchImpl: page("x", { type: "image/png" }) })).isError,
+		notFound: text(await w.webFetch("https://ex.com/x", { fetchImpl: page("", { status: 404 }) })),
+		big: [big.details.cut, big.details.chars], slow: text(slow),
+		search: (await w.webSearch("node", { fetchImpl: page(ddg) })).details.results,
+		captcha: text(await w.webSearch("node", { fetchImpl: page("<p>anomaly detected</p>") })), empty: (await w.webSearch("  ")).isError,
+		offline: text(await w.webSearch("node", { fetchImpl: async () => { throw new Error("getaddrinfo ENOTFOUND"); } })),
+		// Argus: busca hospedada fora do minimal; null explícito no que fica intocado
+		minimal: req(openai, { input: [], reasoning: { effort: "minimal" } }) ?? null, lookalike: req({ ...openai, baseUrl: "https://api.openai.com.evil.tld/v1" }) ?? null,
+		gatewayNull: req({ ...openai, provider: "thoth", baseUrl: "http://127.0.0.1:9999/v1" }) ?? null,
+		// timeout e cancelamento de verdade: o fetch falso só termina pelo signal
+		...await (async () => {
+			const hang = (_u, o) => new Promise((_r, reject) => o.signal.addEventListener("abort", () => reject(o.signal.reason)));
+			const user = new AbortController();
+			const keep = setInterval(() => {}, 1000); // o timer do AbortSignal.timeout não segura o processo sozinho
+			const realTimeout = text(await w.webFetch("https://ex.com/h", { fetchImpl: hang, timeoutMs: 50 }));
+			setTimeout(() => user.abort(), 30);
+			const userAbort = text(await w.webFetch("https://ex.com/h", { fetchImpl: hang, signal: user.signal }));
+			clearInterval(keep);
+			return { realTimeout, userAbort };
+		})(),
+		hostile: (() => { const t0 = Date.now(); w.htmlToText("<script ".repeat(250_000) + '<a href="https://x">'.repeat(100_000) + "<".repeat(500_000)); return Date.now() - t0 < 3000; })(),
+		metadata: text(await w.webFetch("http://169.254.169.254/latest/meta-data/")),
+		redirectToMetadata: text(await w.webFetch("https://ex.com/r", { fetchImpl: async () => ({ ok: false, status: 302, url: "", headers: new Headers({ location: "http://metadata.google.internal/computeMetadata/v1/" }) }) })),
+		redirected: (await w.webFetch("https://ex.com/r", { fetchImpl: async (u) => (u.endsWith("/r") ? { ok: false, status: 301, headers: new Headers({ location: "/final" }) } : page("<p>fim</p>")()) })).details.url,
+		latin1: text(await w.webFetch("https://ex.com/l", { fetchImpl: page(new Uint8Array([0x61, 0xe7, 0xe3, 0x6f]), { type: "text/plain; charset=iso-8859-1" }) })).endsWith("ação"),
+		dns: text(await w.webFetch("https://nao.existe/", { fetchImpl: async () => { throw Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } }); } })),
+		entities: w.htmlToText("<p>&#225;&#xE9; &lt;b&gt; &bogus;</p><li>um</li><a href='https://s.q/x'>simples</a>").text,
+		permissions: await (async () => {
+			const pFile = path.join(path.dirname(file), "pink-permissions.ts");
+			const pCopy = pFile.replace(/\.ts$/, ".webdriver.mjs");
+			fs.copyFileSync(pFile, pCopy);
+			const perm = await import(pathToFileURL(pCopy).href);
+			fs.unlinkSync(pCopy);
+			const rules = { allow: [], ask: [], deny: [] };
+			const d = (url, r = rules) => perm.decide(r, "web_fetch", perm.targetOf("web_fetch", { url }, os.tmpdir())).action;
+			return [d("https://docs.python.org/3/"), d("https://evil.tld/?d=" + "x".repeat(80)), d("https://evil.tld/", { ...rules, deny: ["web_fetch(https://evil.tld/*)"] })];
+		})(),
+	};
+})();
+console.log(JSON.stringify({ web: out.web, notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));

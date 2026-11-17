@@ -113,7 +113,7 @@ def test_the_pi_licence_and_the_notice_travel_with_the_fork() -> None:
 def test_the_fork_is_the_patch_and_the_pi_code_is_not_in_the_repository() -> None:
     tracked_or_present = [path for path in PINK.rglob("*") if path.is_file() and not {".cache", "out", "tests", ".git", "node_modules"} & set(path.relative_to(PINK).parts)]
     own_code = [path for path in tracked_or_present if path.suffix in {".js", ".mjs", ".ts"}]
-    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-hooks.ts", "extensions/pink-natives.ts", "extensions/pink-notify.ts", "extensions/pink-permissions.ts", "extensions/pink-ui.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
+    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-hooks.ts", "extensions/pink-natives.ts", "extensions/pink-notify.ts", "extensions/pink-permissions.ts", "extensions/pink-ui.ts", "extensions/pink-web.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu) and the theme converter; nothing of Pi's
     assert "earendil" not in (PINK / "extensions" / "pink-ui.ts").read_text(encoding="utf-8").replace("@earendil-works/pi-coding-agent", "").replace("@earendil-works/pi-tui", "")  # it imports the engine, it does not copy it
     assert (PINK / "build_pink.py").is_file() and (PINK / "rebrand.json").is_file()
 
@@ -598,7 +598,28 @@ def test_notification_when_done_out_of_focus_and_undo_survives_reopening_the_ses
     assert n["mac"] == "osascript" and n["linux"] == "notify-send" and n["osc"] == "\x1b]777;notify;Pink;a b\x07" and n["injection"] and n["oscControls"] == "\x1b]777;notify;Pink;a b  c\x07"  # Argus N1
     assert ui_facts["saved"] == {"found": True, "storeFromHere": True, "otherId": True, "gone": True, "otherRepo": True, "badTree": True}  # Argus S1
     chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
-    assert '"pink-ui.ts"),path5.join(getPackageDir(),"extensions","pink-notify.ts"),path5.join(getPackageDir(),"extensions","pink-natives.ts")]' in chunk
+    assert '"pink-ui.ts"),path5.join(getPackageDir(),"extensions","pink-notify.ts"),path5.join(getPackageDir(),"extensions","pink-natives.ts"),path5.join(getPackageDir(),"extensions","pink-web.ts")]' in chunk
+
+
+def test_web_search_and_page_reading_are_native_hosted_on_openai_local_elsewhere(ui_facts: dict, package_dir: Path) -> None:
+    """Owner 2026-11-17 (card 1dfwh7kfmqy): como o Codex/Claude Code, a busca do provedor; sem ela, DuckDuckGo e leitura locais."""
+    w = ui_facts["web"]
+    assert w["tools"] == [["web_search", "codemode", True], ["web_fetch", "codemode", True]]  # sem MCP, pelo codemode, só leitura
+    assert w["hosted"] == [{"type": "web_search"}] and w["kept"] == 2  # OpenAI: liga a busca hospedada uma vez só
+    assert "gateway" not in w and "anthropic" not in w and w["off"] is False  # gateway compatível e outros provedores: pedido intocado
+    assert w["gatewayNull"] is None and w["lookalike"] is None and w["minimal"] is None  # Argus: host exato; a OpenAI recusa web_search no minimal
+    assert w["realTimeout"].endswith("tempo esgotado (0.05 s)") and w["userAbort"].endswith("cancelado")  # o signal de verdade, não erro falso
+    assert w["hostile"]  # Argus: HTML hostil de ~3 MB em menos de 3 s (antes as regex travavam o processo)
+    assert "bloqueado" in w["metadata"] and "metadata.google.internal" in w["redirectToMetadata"] and w["redirected"] == "https://ex.com/final"  # cada salto conferido
+    assert w["dns"].endswith("nome não resolvido (sem rede ou domínio inexistente) (ENOTFOUND)")  # Tifa: "fetch failed" não diz nada
+    assert w["latin1"] and w["entities"] == "áé <b> &bogus;\n- um\nsimples (https://s.q/x)"
+    assert w["permissions"] == ["allow", "ask", "deny"]  # web_fetch: regra por URL; query longa (vazamento por injeção) pede confirmação
+    assert w["fetched"] == [False, "T & U", True, True, False, True]  # título, texto sem script, links mantidos, marcado como dado de fora
+    assert w["file"] and w["bad"] and w["binary"] and w["notFound"] == "https://ex.com/x respondeu 404"
+    assert w["big"] == [True, 40000] and "tempo esgotado (20 s)" in w["slow"]  # teto de tamanho e de tempo
+    assert w["search"] == [{"title": "Node.js — Run", "url": "https://nodejs.org/en", "snippet": "O runtime"}]  # anúncio fora
+    assert "verificação de robô" in w["captcha"] and w["empty"] and "ENOTFOUND" in w["offline"]  # falha clara, sem travar
+    assert (package_dir / "extensions" / "pink-web.ts").is_file()
 
 
 def test_tools_and_thinking_collapse_to_one_grey_line_and_expand_to_the_pi_view(ui_facts: dict) -> None:
@@ -746,7 +767,7 @@ def test_subagents_are_native_the_pi_example_loaded_always(package_dir: Path) ->
     assert loader + ',path5.join(getPackageDir(),"examples","extensions","questionnaire.ts"),' in chunk  # card 1dfwh7kfmqn: pergunta com opções
     questionnaire = (package_dir / "examples" / "extensions" / "questionnaire.ts").read_text(encoding="utf-8")
     assert 'if (ctx.mode !== "tui")' in questionnaire and 'label: "Escrever outra resposta."' in questionnaire  # sem tela não trava; tela em português
-    assert chunk.count(loader) == 1 and '"pink-natives.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface
+    assert chunk.count(loader) == 1 and '"pink-web.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface
     example = package_dir / "examples" / "extensions" / "subagent"
     index, agents = (example / "index.ts").read_text(encoding="utf-8"), (example / "agents.ts").read_text(encoding="utf-8")
     assert 'new Map<string, AgentConfig>([["general", { name: "general"' in agents  # o general existe sem nenhum .md

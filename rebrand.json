@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thoth/pink",
-      "version": "1.4.0-pink.11",
+      "version": "1.4.0-pink.12",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "piConfig": {
         "name": "pink",
@@ -72,6 +72,10 @@
     {
       "from": "extensions/pink-notify.ts",
       "to": "extensions/pink-notify.ts"
+    },
+    {
+      "from": "extensions/pink-web.ts",
+      "to": "extensions/pink-web.ts"
     },
     {
       "from": "mux/pink.mjs",
@@ -1983,7 +1987,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {

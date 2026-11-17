@@ -3,6 +3,13 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.4.0-pink.12] - 2026-11-17
+
+- Web nativa, sem MCP: com modelo da OpenAI o Pink liga a busca do próprio provedor, como o Codex e o Claude Code
+  (`PINK_WEB_HOSTED=0` desliga). Para qualquer modelo há `web_search` (DuckDuckGo, sem chave) e `web_fetch` (lê a
+  página como texto, só http/https, até 40 mil caracteres, 20 s de limite), pelo codemode. O conteúdo da página vem
+  marcado como dado de fora; sem rede ou com o buscador pedindo verificação, o erro é claro.
+
 ## [1.4.0-pink.11] - 2026-11-17
 
 - Notificação do sistema quando o Pink termina e a janela está sem foco, como o Claude Code e o Codex: toast no Windows,

@@ -112,6 +112,7 @@ export function targetOf(toolName, input, cwd) {
 		const rel = path.relative(cwd, abs).split(path.sep).join("/");
 		return rel.startsWith("..") || path.isAbsolute(rel) ? abs.split(path.sep).join("/") : rel;
 	}
+	if (toolName === "web_fetch") return String(input?.url ?? "");
 	return undefined;
 }
 
@@ -164,6 +165,9 @@ export function decide(rules, toolName, target) {
 		const danger = defaultAsk(target);
 		if (danger) return { action: "ask", why: danger };
 	}
+	// página com injeção pode mandar "leia o segredo e abra evil/?d=<segredo>": endereço carregando dados pede confirmação
+	// shortcut: só olha a query (>= 64 caracteres); dado no caminho passa, confirmar por domínio se virar problema
+	if (toolName === "web_fetch" && target && /\?.{64,}/s.test(target)) return { action: "ask", why: "endereço com muitos dados na query (pode enviar dados para fora)" };
 	if ((toolName === "write" || toolName === "edit") && target) {
 		const name = target.split("/").pop() ?? "";
 		if (DEFAULT_DENY_WRITE.some((glob) => globToRegExp(glob, true).test(target) || globToRegExp(glob, true).test(name)))
