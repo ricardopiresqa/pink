@@ -2236,6 +2236,27 @@
       "count": 1
     },
     {
+      "id": "thinking-collapsed-every-session",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "getHideThinkingBlock(){return this.settings.hideThinkingBlock??SETTINGS_DEFAULTS.hideThinkingBlock}",
+      "replace": "getHideThinkingBlock(){return!0}",
+      "count": 1
+    },
+    {
+      "id": "thinking-collapsed-every-session-module",
+      "file": "dist/core/settings-manager.js",
+      "find": "return this.settings.hideThinkingBlock ?? SETTINGS_DEFAULTS.hideThinkingBlock;",
+      "replace": "return true;",
+      "count": 1
+    },
+    {
+      "id": "select-option-mouse-click",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "this.listContainer.addChild(new Text(text,1,0))",
+      "replace": "this.listContainer.addChild(new MouseRegion(new Text(text,1,0),event=>{if(event.type===\"click\"&&event.button===\"left\"&&this.options[i])return this.selectedIndex=i,this.updateList(),this.onSelectCallback(this.options[i]),{handled:!0}}))",
+      "count": 1
+    },
+    {
       "id": "clean-exit-by-default",
       "file": "dist/bundle/chunks/chunk-IUWY2KTF.js",
       "find": "fullscreenExitOutput:\"transcript\",",

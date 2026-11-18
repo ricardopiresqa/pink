@@ -443,7 +443,73 @@ def test_the_thinking_click_and_the_clean_exit_are_in_the_spec() -> None:
     # Pi 1.x toggles each thinking block on click by itself: Pink only adds the "▾ Pensamento" title over an open block
     assert {"thinking-collapsed-by-default", "thinking-header-when-shown",
             "clean-exit-by-default", "clean-exit-by-default-module", "scrollbar-hidden-by-default",
-            "scrollbar-hidden-by-default-module", "frame-layout", "assistant-footer", "user-bar", "thinking-label", "home-does-not-scroll", "exit-banner"} <= ids
+            "scrollbar-hidden-by-default-module", "frame-layout", "assistant-footer", "user-bar", "thinking-label", "home-does-not-scroll", "exit-banner",
+            "select-option-mouse-click", "thinking-collapsed-every-session", "thinking-collapsed-every-session-module"} <= ids
+
+
+SELECTOR_PROBE = ROOT / "tests" / "f50_selector_probe.mjs"
+
+
+def probe(*args: str, env: dict[str, str] | None = None) -> dict:
+    node = shutil.which("node")
+    assert node, "node not found"
+    done = subprocess.run([node, str(SELECTOR_PROBE), *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120, check=False, stdin=subprocess.DEVNULL, env=env)
+    assert done.returncode == 0, done.stderr[:500] + " ... " + done.stderr[-300:]
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def selector_chunk(cli: Path) -> Path:
+    """O chunk do pacote instalado (prefixo temporario) ja exporta o ExtensionSelectorComponent com o patch do clique."""
+    return cli.parents[2] / PATCHED["select-option-mouse-click"]
+
+
+def test_the_select_click_and_the_collapse_every_session_patches_are_in_the_spec() -> None:
+    ids = {item["id"] for item in REBRAND["replacements"]}
+    assert {"select-option-mouse-click", "thinking-collapsed-every-session", "thinking-collapsed-every-session-module"} <= ids
+    assert PATCHED["select-option-mouse-click"] == PATCHED["thinking-collapsed-every-session"] == "dist/bundle/chunks/chunk-MM3LKT73.js"
+    assert PATCHED["thinking-collapsed-every-session-module"] == "dist/core/settings-manager.js"
+
+
+def test_the_built_package_carries_the_click_select_and_the_collapse_patches(package_dir: Path) -> None:
+    chunk = (package_dir / PATCHED["select-option-mouse-click"]).read_text(encoding="utf-8")
+    assert r'this.listContainer.addChild(new MouseRegion(new Text(text,1,0),event=>{if(event.type==="click"&&event.button==="left"&&this.options[i])return this.selectedIndex=i,this.updateList(),this.onSelectCallback(this.options[i]),{handled:!0}}))' in chunk
+    assert "this.listContainer.addChild(new Text(text,1,0))" not in chunk  # a linha original saiu
+    assert chunk.count("getHideThinkingBlock(){return!0}") == 1 and "getShowCacheMissNotices(){" in chunk
+    module = (package_dir / PATCHED["thinking-collapsed-every-session-module"]).read_text(encoding="utf-8")
+    assert re.search(r"getHideThinkingBlock\(\) \{\s*return true;", module)
+    assert r'event.button==="left"&&this.options[i])return this.selectedIndex=i' in chunk  # guarda: opcao vazia nao seleciona
+
+
+def test_a_left_click_selects_that_option_only_and_enter_and_arrows_keep_working(cli: Path) -> None:
+    """Criterio (a): clique esquerdo numa opcao seleciona so ela; direito, meio e 'press' nao; Enter e setas seguem."""
+    facts = probe("selector", str(selector_chunk(cli)))
+    assert facts["rows"]["alfa"] < facts["rows"]["bravo"] < facts["rows"]["charlie"] and facts["rows"]["bravo"] >= 0
+    assert facts["leftBravo"] == {"calls": ["Bravo"], "handled": True}
+    assert facts["leftAlfa"]["calls"] == ["Alfa"]
+    assert facts["rightBravo"]["calls"] == [] and facts["middleBravo"]["calls"] == [] and facts["pressLeftBravo"]["calls"] == []
+    assert facts["enter"]["calls"] == ["Alfa"] and facts["arrowEnter"]["calls"] == ["Bravo"]
+    assert facts["selectedAfterClick"] == 1 and facts["clickEnter"]["calls"] == ["Bravo"]
+
+
+def test_the_thinking_block_starts_collapsed_even_when_the_settings_file_says_show(cli: Path, tmp_path: Path) -> None:
+    """Criterio (b): hideThinkingBlock:false salvo no arquivo continua valendo recolhido (o arquivo e lido de verdade)."""
+    cwd, agent = tmp_path / "projeto", tmp_path / "agente"
+    cwd.mkdir()
+    agent.mkdir()
+    (agent / "settings.json").write_text(json.dumps({"hideThinkingBlock": False}), encoding="utf-8")
+    facts = probe("settings", str(cli.parents[2] / PATCHED["thinking-collapsed-every-session-module"]), str(cwd), str(agent))
+    assert facts == {"rawFile": False, "fromFile": True, "inMemory": True, "empty": True}
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_ctrl_t_still_toggles_the_thinking_blocks_in_the_session(cli: Path, tmp_path: Path) -> None:
+    """Criterio (c): ctrl+t abre e recolhe o pensamento na sessao, mesmo com o padrao recolhido."""
+    sys.path[:0] = [str(TUI_PROBE.parent)]
+    from f50_tui_probe import run_tui
+
+    screens = run_tui(cli, tmp_path, [(None, 6.0), ("\x14", 2.0), ("\x14", 2.0)], columns=120, rows=40)
+    first, second = "\n".join(screens[1]), "\n".join(screens[2])
+    assert "Thinking blocks: visible" in first and "Thinking blocks: hidden" in second
 
 
 def test_the_footer_shows_the_folder_the_context_and_the_pink_version(ui_facts: dict) -> None:
