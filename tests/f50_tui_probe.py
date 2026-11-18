@@ -31,7 +31,7 @@ class TolerantScreen(pyte.Screen):
         return None
 
 
-def run_tui(cli: Path, home: Path, steps: list[tuple[str | None, float]], *, extra_env: dict[str, str] | None = None, columns: int = COLUMNS, rows: int = 50) -> list[list[str]]:
+def run_tui(cli: Path, home: Path, steps: list[tuple[str | None, float]], *, extra_env: dict[str, str] | None = None, columns: int = COLUMNS, rows: int = 50, args: list[str] | None = None) -> list[list[str]]:
     node = shutil.which("node")
     assert node, "node not found"
     keep = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA"}
@@ -39,7 +39,7 @@ def run_tui(cli: Path, home: Path, steps: list[tuple[str | None, float]], *, ext
     env.update({"HOME": str(home), "USERPROFILE": str(home), "TERM": "xterm-256color", "COLORTERM": "truecolor", **(extra_env or {})})
     project = home / "work"  # a plain project folder: no .pink inside, so there is no trust prompt
     project.mkdir(exist_ok=True)
-    process = winpty.PtyProcess.spawn([node, str(cli)], cwd=str(project), env=env, dimensions=(rows, columns))
+    process = winpty.PtyProcess.spawn([node, str(cli), *(args or [])], cwd=str(project), env=env, dimensions=(rows, columns))
     screen = TolerantScreen(columns, rows)
     stream = pyte.Stream(screen)
     captured: list[list[str]] = []

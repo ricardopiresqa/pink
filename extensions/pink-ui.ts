@@ -712,6 +712,9 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	PINK.refreshSessions = loadSessions;  // o "Apagar sessão" relê a coluna depois de mover o arquivo
 	pi.on("agent_end", () => {
 		signal("\x1b]9;4;0\x07\x07");
+		// o multiplexador guarda o arquivo de cada sessão aberta para reabri-la no próximo Pink (card 1dfwh7kfyty)
+		const file = ctx.sessionManager?.getSessionFile?.();
+		if (file) signal(`\x1b]9;pink-session=${file}\x07`);
 		// título automático (owner 2026-10-29): só quando a sessão ainda não tem nome
 		if (!pi.getSessionName?.()) {
 			const title = autoTitle(ctx.sessionManager?.getBranch?.());
@@ -795,7 +798,8 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	const shownSessions = (height) => state.sessions.slice(0, Math.max(0, height - 2 - (height >= 8 ? 2 : 0) - 1));
 
 	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pink abre e recolhe cada bloco com um clique,
-	// ctrl+t abre e recolhe todos (e salva); o título do bloco aberto vem do patch thinking-header-when-shown
+	// ctrl+t abre e recolhe todos; toda sessão começa recolhida, como o Claude Code (patch thinking-collapsed-every-session);
+	// o título do bloco aberto vem do patch thinking-header-when-shown
 	ctx.ui.setHiddenThinkingLabel?.("+ Pensou");
 	globalThis.__pinkThinkingHeader = "− Pensou · clique ou ctrl+t recolhe";
 	globalThis.__pinkThinkingLabel = (message, runIndex) => thinkingLabel(PINK.thinking.get(message?.timestamp)?.[runIndex]?.ms);

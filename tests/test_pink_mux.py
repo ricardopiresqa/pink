@@ -323,3 +323,218 @@ def test_in_a_real_terminal_two_sessions_run_side_by_side_with_status_and_a_ques
     assert "Sair do Pink com 3 sessões abertas?" in " ".join(line[:28].strip() for line in asking) and "[ sim ]" in joined(asking)
     assert "Sair do Pink com" not in joined(after) and after[8][2] != " "  # clique em [ não ]: as três seguem abertas
     assert all(len(line) <= 110 for line in resized) and resized[0].startswith(" SESSÕES") and "pong" in joined(resized)
+
+
+# ================================================================================================ sessoes abertas (card 1dfwh7kfyty)
+OPEN_LIST_DRIVER = r"""
+const m = await import(process.argv[1]);
+const p = JSON.parse(process.argv[2]);
+const facts = {};
+facts.signal = {
+  file: m.sessionFileSignal(`pink-session=${p.file1}`),
+  relative: m.sessionFileSignal("pink-session=relativo.jsonl"),
+  notJsonl: m.sessionFileSignal(`pink-session=${p.txt}`),
+  empty: m.sessionFileSignal("pink-session="),
+  progress: m.sessionFileSignal("4;1"),
+  outside: m.sessionFileSignal(`pink-session=${p.outside}`),
+};
+const existing = new Set([p.file1, p.file2, p.folder]);
+const exists = (x) => existing.has(x);
+facts.list = m.readOpenList(p.list, exists);
+facts.missingFile = m.readOpenList(p.absent, exists);
+facts.badJson = m.readOpenList(p.bad, exists);
+facts.busy = m.readOpenList(p.list, exists, () => true);  // dono (outro pid) vivo: nao reabre e nao grava
+facts.dead = m.readOpenList(p.list, exists, () => false);  // dono morto: a lista volta
+const fs = await import("node:fs");
+fs.writeFileSync(p.ownFile, JSON.stringify({ pid: process.pid, sessions: [{ file: p.file1, cwd: p.folder }] }));
+facts.own = m.readOpenList(p.ownFile, exists, () => true);  // o proprio pid nao conta como dono vivo: reabre
+facts.pidAlive = { self: m.pidAlive(process.pid), gone: m.pidAlive(p.gonePid) };
+facts.where = {
+  env: m.openListFile({ PINK_CODING_AGENT_SESSION_DIR: p.sessions }, p.home),
+  home: m.openListFile({}, p.home),
+};
+facts.restore = {
+  plain: m.laterArgs([]).length === 0,
+  provider: m.laterArgs(["--provider", "thoth"]).length === 2,
+  continue: m.laterArgs(["-c"]).length === 0,  // -c vira "sem reabrir" (a regra e argv igual a laterArgs)
+  message: m.laterArgs(["faça X"]).length === 0,
+  session: m.laterArgs(["--session", "x"]).length === 0,
+};
+console.log(JSON.stringify(facts));
+"""
+
+
+def open_list_facts(tmp_path: Path) -> dict:
+    node = shutil.which("node")
+    assert node, "node not found"
+    folder, sessions = tmp_path / "pasta", tmp_path / "sessoes"
+    folder.mkdir()
+    sessions.mkdir()
+    file1, file2, txt = sessions / "um.jsonl", sessions / "dois.jsonl", sessions / "nota.txt"
+    for path in (file1, file2, txt):
+        path.write_text("", encoding="utf-8")
+    entries = [
+        {"file": str(file1), "cwd": str(folder)},
+        {"file": str(file2), "cwd": str(folder)},
+        {"file": str(file1), "cwd": str(folder)},  # repetida
+        {"file": str(sessions / "apagada.jsonl"), "cwd": str(folder)},  # arquivo apagado
+        {"file": str(file2), "cwd": str(tmp_path / "pasta-removida")},  # pasta removida
+        {"file": str(txt), "cwd": str(folder)},  # não é sessão
+        {"file": "relativo.jsonl", "cwd": str(folder)},
+        {"cwd": str(folder)},
+        "lixo",
+        None,
+    ]
+    outside_dir = tmp_path / "fora"
+    outside_dir.mkdir()
+    outside = outside_dir / "fora.jsonl"
+    outside.write_text("", encoding="utf-8")
+    list_file = sessions / "abertas.json"
+    list_file.write_text(json.dumps({"pid": 4194301, "sessions": entries}), encoding="utf-8")  # dono que nao existe mais
+    (sessions / "ruim.json").write_text("{ isto não é json", encoding="utf-8")
+    paths = {"file1": str(file1), "file2": str(file2), "folder": str(folder), "txt": str(txt), "outside": str(outside), "list": str(list_file), "absent": str(sessions / "nao-existe.json"), "bad": str(sessions / "ruim.json"), "ownFile": str(sessions / "meu.json"), "gonePid": 4194301, "sessions": str(sessions), "home": str(tmp_path)}
+    env = {**os.environ, "PINK_CODING_AGENT_SESSION_DIR": str(sessions)}  # nunca o ~/.pink real
+    done = subprocess.run([node, "--input-type=module", "-e", OPEN_LIST_DRIVER, MUX.as_uri(), json.dumps(paths)], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False, stdin=subprocess.DEVNULL, env=env)
+    assert done.returncode == 0, done.stderr[-600:]
+    facts = json.loads(done.stdout)
+    facts["paths"] = paths
+    return facts
+
+
+def test_the_child_tells_the_mux_its_session_file_only_for_real_session_files(tmp_path: Path) -> None:
+    facts = open_list_facts(tmp_path)
+    signal, p = facts["signal"], facts["paths"]
+    assert signal["file"] == p["file1"]  # arquivo .jsonl absoluto dentro de sessionsDir()
+    # undefined nao vai no JSON: ausente = nao e arquivo de sessao (relativo, nao .jsonl, fora da pasta de sessoes, vazio, progresso OSC 9;4)
+    assert {key: signal.get(key) for key in ("relative", "notJsonl", "outside", "empty", "progress")} == {"relative": None, "notJsonl": None, "outside": None, "empty": None, "progress": None}
+
+
+def test_the_open_list_keeps_each_existing_session_once_and_drops_the_rest(tmp_path: Path) -> None:
+    facts = open_list_facts(tmp_path)
+    p = facts["paths"]
+    # so as duas sessoes existentes, uma vez cada, com a pasta delas; repetida, apagada, pasta removida, nao-.jsonl e lixo caem
+    assert facts["list"] == {"busy": False, "sessions": [{"file": p["file1"], "cwd": p["folder"]}, {"file": p["file2"], "cwd": p["folder"]}]}
+    assert facts["missingFile"] == {"busy": False, "sessions": []}  # arquivo ausente: nada a reabrir, sem erro
+    assert facts["badJson"] == {"busy": False, "sessions": []}  # JSON quebrado: idem
+    assert facts["busy"] == {"busy": True, "sessions": []}  # dono (outro pid) vivo: este Pink nao reabre nem grava a lista
+    assert facts["dead"]["busy"] is False and len(facts["dead"]["sessions"]) == 2  # dono morto: a lista volta
+    assert facts["own"]["busy"] is False and len(facts["own"]["sessions"]) == 1  # a propria lista (mesmo pid) nao trava
+    assert facts["pidAlive"] == {"self": True, "gone": False}
+
+
+def test_the_open_list_lives_in_the_sessions_folder_of_the_agent(tmp_path: Path) -> None:
+    facts = open_list_facts(tmp_path)
+    p = facts["paths"]
+    assert facts["where"]["env"] == str(Path(p["sessions"]) / "abertas.json")  # PINK_CODING_AGENT_SESSION_DIR
+    assert facts["where"]["home"] == str(Path(p["home"]) / ".pink" / "agent" / "sessions" / "abertas.json")  # padrao: dentro do HOME dado
+
+
+def test_only_a_plain_start_reopens_the_list(tmp_path: Path) -> None:
+    """Criterio (3): pink -c, --session e a mensagem inicial nao restauram nada."""
+    restore = open_list_facts(tmp_path)["restore"]
+    assert restore == {"plain": True, "provider": True, "continue": True, "message": True, "session": True}  # -c, mensagem e --session: laterArgs zera (nada reabre)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_closed_sessions_leave_the_list_and_the_next_plain_start_reopens_only_the_rest(cli: Path, tmp_path: Path) -> None:
+    """Card 1dfwh7kfyty, criterios 1-2 de ponta a ponta: o filho e falso (PINK_MUX_CLI), a lista fica num diretorio temporario."""
+    from f50_tui_probe import run_tui
+
+    mux = cli.parent.parent / "mux" / "pink.mjs"
+    fake = ROOT / "tests" / "pink_mux_fake_child.mjs"
+    sessions, log = tmp_path / "sessoes", tmp_path / "filho.log"
+    sessions.mkdir()
+    folders = {name: tmp_path / name for name in ("pasta-a", "pasta-b", "pasta-c")}
+    for folder in folders.values():
+        folder.mkdir()
+    files = {name: sessions / f"{name}.jsonl" for name in ("a", "b", "fechar")}
+    for path in files.values():
+        path.write_text("", encoding="utf-8")
+    entries = [
+        {"file": str(files["a"]), "cwd": str(folders["pasta-a"])},
+        {"file": str(files["b"]), "cwd": str(folders["pasta-b"])},
+        {"file": str(files["fechar"]), "cwd": str(folders["pasta-c"])},  # o filho sai sozinho, como uma sessao fechada no x
+        {"file": str(sessions / "apagada.jsonl"), "cwd": str(folders["pasta-c"])},  # apagada: nao reabre
+        {"file": str(files["b"]), "cwd": str(tmp_path / "pasta-removida")},  # pasta removida: nao reabre
+    ]
+    (sessions / "abertas.json").write_text(json.dumps({"pid": 4194301, "sessions": entries}), encoding="utf-8")  # dono que nao existe mais
+    extra = {"PINK_CODING_AGENT_SESSION_DIR": str(sessions), "PINK_MUX_CLI": str(fake), "PINK_FAKE_LOG": str(log)}
+
+    def reopened() -> list[str]:  # so as sessoes reabertas (as pastas de teste); a sessao nova da pasta atual nao entra
+        rows = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return [Path(row["cwd"]).name for row in rows if Path(row["cwd"]).name.startswith("pasta-")]
+
+    run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=120, rows=30)
+    assert reopened() == ["pasta-a", "pasta-b", "pasta-c"]  # cada uma na sua pasta
+    saved = json.loads((sessions / "abertas.json").read_text(encoding="utf-8"))["sessions"]
+    assert [Path(item["file"]).name for item in saved] == ["a.jsonl", "b.jsonl"]  # a que fechou saiu da lista
+
+    log.unlink(missing_ok=True)
+    run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=120, rows=30)
+    assert reopened() == ["pasta-a", "pasta-b"]  # o proximo Pink reabre so as duas
+
+
+def run_mux_with_list(tmp_path: Path, cli: Path, entries: list[dict], args: list[str]) -> tuple[list[dict], bytes, bytes]:
+    """Roda o mux instalado com um abertas.json valido (dono morto), o filho falso e os argumentos dados.
+    Devolve (o que o filho recebeu, o abertas.json antes, o abertas.json depois). O projeto e tmp_path/work."""
+    from f50_tui_probe import run_tui
+
+    mux = cli.parent.parent / "mux" / "pink.mjs"
+    fake = ROOT / "tests" / "pink_mux_fake_child.mjs"
+    sessions, log = tmp_path / "sessoes", tmp_path / "filho.log"
+    sessions.mkdir(exist_ok=True)
+    list_file = sessions / "abertas.json"
+    list_file.write_text(json.dumps({"pid": 4194301, "sessions": entries}), encoding="utf-8")
+    before = list_file.read_bytes()
+    extra = {"PINK_CODING_AGENT_SESSION_DIR": str(sessions), "PINK_MUX_CLI": str(fake), "PINK_FAKE_LOG": str(log)}
+    run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=120, rows=30, args=args)
+    rows = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+    return rows, before, list_file.read_bytes()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_continue_and_a_typed_message_do_not_reopen_the_list_nor_rewrite_it(cli: Path, tmp_path: Path) -> None:
+    """Card 1dfwh7kfyty, criterio (3) de ponta a ponta: pink -c e pink "mensagem" nao reabrem as da lista e nao regravam o arquivo."""
+    for name, args in (("continua", ["-c"]), ("mensagem", ["oi pink"])):
+        home = tmp_path / name  # cada caso tem a sua casa, com as suas pastas e o seu abertas.json
+        sessions = home / "sessoes"
+        sessions.mkdir(parents=True)
+        files = {n: sessions / f"{n}.jsonl" for n in ("a", "b")}
+        for path in files.values():
+            path.write_text("", encoding="utf-8")
+        folders = {n: home / f"pasta-{n}" for n in ("a", "b")}
+        for folder in folders.values():
+            folder.mkdir()
+        entries = [{"file": str(files[n]), "cwd": str(folders[n])} for n in ("a", "b")]
+        rows, before, after = run_mux_with_list(home, cli, entries, args)
+        assert [row["args"] for row in rows] == [args]  # so a sessao pedida; nenhuma das da lista
+        assert all("--session" not in row["args"] for row in rows)
+        assert after == before  # a lista nao foi regravada
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_a_session_in_the_current_folder_opens_only_when_no_reopened_one_is_there(cli: Path, tmp_path: Path) -> None:
+    """Card 1dfwh7kfyty, criterio (iii) de ponta a ponta: o projeto e tmp_path/work (pasta atual do Pink)."""
+    # nenhuma reaberta e da pasta atual (home/work): abre tambem uma sessao nova nela, sem --session
+    home = tmp_path / "sem-aqui"
+    sessions = home / "sessoes"
+    sessions.mkdir(parents=True)
+    session = sessions / "a.jsonl"
+    session.write_text("", encoding="utf-8")
+    folder = home / "pasta-a"
+    folder.mkdir()
+    rows, _, _ = run_mux_with_list(home, cli, [{"file": str(session), "cwd": str(folder)}], [])
+    assert [Path(row["cwd"]).name for row in rows] == ["pasta-a", "work"]  # a reaberta, e depois a sessao nova na pasta atual
+    assert rows[1]["args"] == []  # a da pasta atual nao recebe --session: e uma sessao nova
+
+    # uma reaberta ja e da pasta atual: fica nela e nao abre outra
+    home = tmp_path / "com-aqui"
+    sessions = home / "sessoes"
+    sessions.mkdir(parents=True)
+    here_session = sessions / "aqui.jsonl"
+    here_session.write_text("", encoding="utf-8")
+    folder = home / "pasta-a"
+    folder.mkdir()
+    rows, _, _ = run_mux_with_list(home, cli, [{"file": str(here_session), "cwd": str(home / "work")}, {"file": str(sessions / "a.jsonl"), "cwd": str(folder)}], [])
+    assert [Path(row["cwd"]).name for row in rows] == ["work"]  # so a reaberta da pasta atual; a pasta-a (sem arquivo) nao abre
+    assert rows[0]["args"] == ["--session", str(here_session)]

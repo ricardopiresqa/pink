@@ -4,7 +4,7 @@
 // terminal virtual (node-pty + @xterm/headless) e este processo só desenha a lateral, a tela do filho ativo e repassa o teclado.
 // Sem terminal interativo, com comando de uma vez (-p, --help, install...) ou sem node-pty, roda o Pink normal, sem lateral.
 import { execFile } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -121,6 +121,49 @@ export function onSignal(session, signal, isActive) {
 	}
 	if (signal === "bell" && !isActive) session.attention = true;
 	return session;
+}
+
+// o Pink filho avisa o arquivo da sessão dele (OSC 9;pink-session=<arquivo>) ao fim de cada execução: é o que reabre depois
+export function sessionFileSignal(data) {
+	const text = String(data);
+	if (!text.startsWith("pink-session=")) return undefined;
+	const file = text.slice("pink-session=".length);
+	const inside = path.relative(sessionsDir(), file); // só arquivo da pasta de sessões: texto impresso por ferramenta não registra outro
+	return path.isAbsolute(file) && file.endsWith(".jsonl") && inside && !inside.startsWith("..") && !path.isAbsolute(inside) ? file : undefined;
+}
+
+export const pidAlive = (pid) => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return error.code !== "ESRCH";
+	}
+};
+
+// sessões abertas ao sair (owner 2026-11-18, card 1dfwh7kfyty): fechar no × tira da lista, "sair do Pink" mantém; o Pink
+// seguinte reabre só estas, cada uma na pasta dela
+export const openListFile = (env = process.env, home = homedir()) => path.join(sessionsDir(env, home), "abertas.json");
+
+// a lista tem dono (o pid do mux que a grava): com o dono vivo, outro Pink não reabre as mesmas sessões (o mesmo arquivo em
+// dois processos estraga a sessão) nem sobrescreve a lista dele. shortcut: pid reaproveitado pelo sistema conta como vivo
+export function readOpenList(file, exists = existsSync, alive = pidAlive) {
+	let saved;
+	try {
+		saved = JSON.parse(readFileSync(file, "utf8"));
+	} catch {
+		return { sessions: [], busy: false };
+	}
+	if (Number.isInteger(saved?.pid) && saved.pid !== process.pid && alive(saved.pid)) return { sessions: [], busy: true };
+	const seen = new Set();
+	const sessions = (Array.isArray(saved?.sessions) ? saved.sessions : []).filter((item) => {
+		if (typeof item?.file !== "string" || typeof item?.cwd !== "string" || !item.file.endsWith(".jsonl")) return false;
+		const key = process.platform === "win32" ? path.resolve(item.file).toLowerCase() : path.resolve(item.file);
+		if (seen.has(key) || !exists(item.file) || !exists(item.cwd)) return false; // apagada ou pasta removida: não reabre
+		seen.add(key);
+		return true;
+	});
+	return { sessions, busy: false };
 }
 
 export function progressSignal(data) {
@@ -515,6 +558,19 @@ async function main() {
 	let modes = {};
 	let pending;
 	let spinner;
+	let quittingAll = false; // "sair do Pink": as sessões saem, mas a lista de abertas fica para a próxima vez
+	const restore = readOpenList(openListFile());
+	// "pink" sem sessão nem mensagem reabre e mantém a lista; pink -c / --session / "mensagem" não mexe nela (não apaga as salvas)
+	const plainStart = laterArgs(argv).length === argv.length;
+	const saveOpen = () => {
+		if (quittingAll || restore.busy || !plainStart) return; // outro Pink aberto é o dono da lista
+		const list = sessions.filter((session) => session.file).map(({ file, cwd }) => ({ file, cwd }));
+		const target = openListFile();
+		try {
+			writeFileSync(`${target}.tmp`, JSON.stringify({ pid: process.pid, sessions: list }));
+			renameSync(`${target}.tmp`, target); // morrer no meio da escrita não deixa a lista cortada
+		} catch { /* sem a lista, o próximo Pink abre só uma sessão */ }
+	};
 
 	const size = () => {
 		const columns = out.columns || 100;
@@ -581,13 +637,20 @@ async function main() {
 		const term = new Terminal({ cols: inner, rows, allowProposedApi: true, scrollback: 0 });
 		const banner = path.join(tmpdir(), `pink-exit-${process.pid}-${++opened}.txt`); // o fechamento (logo e resumo) que a sessão escreve ao sair
 		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1", PINK_MUX_BANNER: banner } });
-		const resumed = args.some((arg) => FIRST_ONLY.has(arg) || FIRST_ONLY_VALUE.has(arg.split("=")[0]));
+		// com o arquivo conhecido, a identidade é o arquivo, não a pasta inteira
+		const resumed = !file && args.some((arg) => FIRST_ONLY.has(arg) || FIRST_ONLY_VALUE.has(arg.split("=")[0]));
 		const session = { term, child, cwd, file, resumed, banner, started: Date.now(), title: "", working: false, attention: false, exited: false, scratch: undefined };
 		session.scratch = term.buffer.active.getNullCell?.();
 		const isActive = () => sessions[active] === session;
 		term.onTitleChange((title) => { session.title = title; schedule(); });
 		term.onBell(() => { onSignal(session, "bell", isActive()); schedule(); });
 		term.parser.registerOscHandler(9, (data) => {
+			const file = sessionFileSignal(data);
+			if (file) {
+				session.file = file;
+				saveOpen();
+				return true;
+			}
 			const signal = progressSignal(data);
 			if (signal) onSignal(session, signal, isActive());
 			tick();
@@ -601,6 +664,8 @@ async function main() {
 			const index = sessions.indexOf(session);
 			if (index < 0) return;
 			sessions.splice(index, 1);
+			// só fechar de propósito (×, /quit: código 0) tira da lista; erro ou morte (rede, janela fechada) mantém
+			if (session.closing || exitCode === 0) saveOpen();
 			// fechada no × ou em "sair do Pink": sai sem erro; saiu sozinha: espera o terminal virtual ler o resto da saída (a mensagem de erro)
 			if (!sessions.length) return session.closing ? finish(0) : term.write("", () => finish(exitCode ?? 0, session));
 			try { unlinkSync(session.banner); } catch { /* não saiu pelo /quit */ }
@@ -611,6 +676,7 @@ async function main() {
 		});
 		sessions.push(session);
 		select(sessions.length - 1);
+		if (file) saveOpen();
 	};
 
 	let finished = false;
@@ -667,7 +733,10 @@ async function main() {
 			return target.working ? ask(`Encerrar "${sessionLabel(target.title, index, folder).name}"? Ela está trabalhando.`, close) : close();
 		}
 		if (action === "quit") {
-			const all = () => [...sessions].forEach(quitGently);
+			const all = () => {
+				quittingAll = true;
+				[...sessions].forEach(quitGently);
+			};
 			if (sessions.length > 1) return ask(`Sair do Pink com ${sessions.length} sessões abertas?`, all);
 			return current?.working ? ask("Sair do Pink? A sessão está trabalhando.", all) : all();
 		}
@@ -760,14 +829,24 @@ async function main() {
 
 	// a primeira sessão abre antes da tela alternativa: se o terminal virtual falhar aqui (binário sem permissão, sistema sem
 	// suporte), a pessoa recebe o Pink de sempre em vez de uma tela que fecha muda
-	try {
-		open(argv);
-	} catch {
-		return runPlain();
+	// "pink" sem sessão nem mensagem: reabre as sessões que ficaram abertas da última vez, cada uma na pasta dela
+	for (const item of plainStart ? restore.sessions : []) {
+		try { open([...argv, "--session", item.file], item.cwd, item.file); } catch { /* esta não abriu: segue com as outras */ }
+	}
+	// a pasta atual sempre tem uma sessão (pink numa pasta nova começa ali); se uma reaberta já é dela, fica nessa
+	const here = sessions.findIndex((session) => samePath(session.cwd, process.cwd()));
+	if (here >= 0) select(here);
+	else {
+		try {
+			open(argv);
+		} catch {
+			if (!sessions.length) return runPlain();
+		}
 	}
 	out.write(`\x1b[?1049h\x1b[2J\x1b[?25l${MOUSE_ON}`);
 	process.on("exit", () => finished || out.write(`${MOUSE_OFF}\x1b[?2004l\x1b[?1l\x1b[?25h\x1b[?1049l`)); // finish já restaurou e pode ter escrito o erro
-	process.on("SIGTERM", () => finish(143));
+	process.on("SIGTERM", () => { quittingAll = true; finish(143); });
+	process.on("SIGHUP", () => { quittingAll = true; finish(129); }); // janela do terminal fechada: guarda as abertas como "sair do Pink"
 	process.stdin.setRawMode(true);
 	process.stdin.setEncoding("utf8");
 	const leftPress = (mouse) => mouse.press && mouse.button === 0;
