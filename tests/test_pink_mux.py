@@ -538,3 +538,130 @@ def test_a_session_in_the_current_folder_opens_only_when_no_reopened_one_is_ther
     rows, _, _ = run_mux_with_list(home, cli, [{"file": str(here_session), "cwd": str(home / "work")}, {"file": str(sessions / "a.jsonl"), "cwd": str(folder)}], [])
     assert [Path(row["cwd"]).name for row in rows] == ["work"]  # so a reaberta da pasta atual; a pasta-a (sem arquivo) nao abre
     assert rows[0]["args"] == ["--session", str(here_session)]
+
+
+# ================================================================================================ estado do programa (card 1dfwh7kfyyg)
+STATUS_DRIVER = r"""
+const m = await import(process.argv[1]);
+const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
+const strip = (s) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+const facts = {};
+facts.parse = {
+  question: m.parseProgramStatus(`state=blocked:app=pink:kind=question:msg=${b64("Publicar agora?")}`),
+  permission: m.parseProgramStatus(`state=blocked:app=pink:kind=permission:msg=${b64("Executar rm?")}`),
+  working: m.parseProgramStatus("state=working:app=pink"),
+  error: m.parseProgramStatus(`state=error:app=pink:msg=${b64("falhou\nao ler")}`),
+  unknown: m.parseProgramStatus("state=talvez:app=pink"),
+  query: m.parseProgramStatus("?"),
+  noState: m.parseProgramStatus("app=pink:kind=question"),
+  badMsg: m.parseProgramStatus("state=done:app=pink:msg=%%%"),
+  clear: m.parseProgramStatus("state=clear"),
+};
+const session = (extra) => ({ title: "pink - demo", working: false, attention: false, exited: false, ...extra });
+facts.icon = {
+  blocked: m.icon(session({ working: true, program: { state: "blocked" } }), 1),  // bloqueada nao gira, mesmo com progresso aberto
+  working: m.icon(session({ working: true }), 1),
+  attention: m.icon(session({ attention: true }), 0),
+  error: m.icon(session({ program: { state: "error" } }), 0),
+  exited: m.icon(session({ exited: true, program: { state: "blocked" } }), 0),
+  idle: m.icon(session({}), 0),
+};
+const lines = (extra, active = 0, sessions = [session(extra)]) => m.sidebar({ sessions, active, width: 36, rows: 14 }).lines.map(strip);
+const row = (screen, text) => screen.find((line) => line.includes(text)) ?? "";
+facts.sidebar = {
+  question: row(lines({ program: { state: "blocked", kind: "question" } }), "pergunta"),
+  permission: row(lines({ program: { state: "blocked", kind: "permission" } }), "pede permissão"),
+  error: row(lines({ program: { state: "error" } }), "parou com erro"),
+  done: row(lines({ attention: true }, 1, [session({ attention: true }), session({})]), "terminou"),
+  working: row(lines({ working: true }), "trabalhando"),
+  blockedMark: row(lines({ program: { state: "blocked", kind: "question" } }), " ? "),
+};
+facts.priority = {  // blocked e error vencem o "terminou" (attention) no icone e no texto
+  blockedOverAttention: m.icon(session({ attention: true, program: { state: "blocked" } }), 0),
+  errorOverAttention: m.icon(session({ attention: true, program: { state: "error" } }), 0),
+  blockedStatusOverAttention: row(lines({ attention: true, program: { state: "blocked", kind: "question" } }), "pergunta"),
+  errorStatusOverAttention: row(lines({ attention: true, program: { state: "error" } }), "parou com erro"),
+};
+console.log(JSON.stringify(facts));
+"""
+
+
+@pytest.fixture(scope="module")
+def status_facts() -> dict:
+    node = shutil.which("node")
+    assert node, "node not found"
+    done = subprocess.run([node, "--input-type=module", "-e", STATUS_DRIVER, MUX.as_uri()], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False, stdin=subprocess.DEVNULL)
+    assert done.returncode == 0, done.stderr[-600:]
+    return json.loads(done.stdout)
+
+
+def test_the_program_status_reads_each_state_and_ignores_the_rest(status_facts: dict) -> None:
+    parse = status_facts["parse"]
+    assert parse["question"] == {"state": "blocked", "kind": "question", "message": "Publicar agora?"}
+    assert parse["permission"] == {"state": "blocked", "kind": "permission", "message": "Executar rm?"}
+    assert parse["working"] == {"state": "working", "message": ""}  # sem kind (undefined some no JSON)
+    assert parse["error"]["state"] == "error" and parse["error"]["message"] == "falhou ao ler"  # a quebra de linha da msg vira espaco
+    assert parse.get("unknown") is None and parse.get("query") is None and parse.get("noState") is None  # "?" e estado desconhecido: undefined (some no JSON)
+    assert parse["badMsg"] == {"state": "done", "message": ""}  # msg invalida: o estado fica, o texto vazio
+    assert parse["clear"] == {"state": "clear"}  # state=clear devolve o estado; o handler zera session.program
+
+
+def test_the_priorities_blocked_and_error_win_over_attention(status_facts: dict) -> None:
+    pr = status_facts["priority"]
+    assert pr["blockedOverAttention"] == "?" and pr["errorOverAttention"] == "!"  # o icone: a pergunta vence o "terminou"
+    assert "pergunta · espera você" in pr["blockedStatusOverAttention"] and "terminou" not in pr["blockedStatusOverAttention"]
+    assert "parou com erro" in pr["errorStatusOverAttention"] and "terminou" not in pr["errorStatusOverAttention"]
+
+
+def test_a_blocked_session_shows_a_question_mark_and_never_spins(status_facts: dict) -> None:
+    icon = status_facts["icon"]
+    assert icon["blocked"] == "?"  # criterio (a): nao gira mesmo com o progresso aberto
+    assert icon["attention"] == "!" and icon["error"] == "!" and icon["exited"] == "×" and icon["idle"] == "·"
+    assert icon["working"] in "◐◓◑◒"  # criterio (b): trabalhando gira
+
+
+def test_the_sidebar_says_what_each_state_waits_for_without_colors(status_facts: dict) -> None:
+    side = status_facts["sidebar"]
+    assert "pergunta · espera você" in side["question"]  # criterio (a)
+    assert "pede permissão · espera você" in side["permission"]  # criterio (a)
+    assert "parou com erro" in side["error"]  # criterio (c)
+    assert "terminou · espera você" in side["done"]  # criterio (b): terminou fora da tela
+    assert "trabalhando…" in side["working"]  # criterio (b)
+    assert " ? " in side["blockedMark"]  # a marca da bloqueada e "?"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+@pytest.mark.parametrize(
+    ("payload", "expected", "mark"),
+    [
+        ("state=blocked:app=pink:kind=question:msg=UHVibGljYXIgYWdvcmE/", "pergunta · espera você", "? Sessão 1"),
+        ("state=blocked:app=pink:kind=permission:msg=RXhlY3V0YXIgcm0/", "pede permissão · espera você", "? Sessão 1"),
+        ("state=error:app=pink", "parou com erro", "! Sessão 1"),
+    ],
+)
+def test_the_program_status_reaches_the_sidebar_of_the_installed_mux(cli: Path, tmp_path: Path, payload: str, expected: str, mark: str) -> None:
+    """Card 1dfwh7kfyyg, criterios (a) e (c) de ponta a ponta: o filho falso emite OSC 7501 e a lateral do mux mostra o estado."""
+    from f50_tui_probe import run_tui
+
+    mux = cli.parent.parent / "mux" / "pink.mjs"
+    fake = ROOT / "tests" / "pink_mux_fake_child.mjs"
+    extra = {"PINK_CODING_AGENT_SESSION_DIR": str(tmp_path / "sessoes"), "PINK_MUX_CLI": str(fake), "PINK_FAKE_LOG": str(tmp_path / "filho.log"), "PINK_FAKE_OSC": json.dumps([payload])}
+    screens = run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=160, rows=30)
+    side = [line[:32] for line in screens[0]]  # a lateral tem 32 colunas neste terminal
+    text = "\n".join(side)
+    assert expected in text
+    assert any(mark in line for line in side)  # a marca da sessao: ? (bloqueada) ou ! (erro), sem giro
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the terminal test uses ConPTY (pywinpty)")
+def test_a_working_child_shows_the_spinner_and_trabalhando(cli: Path, tmp_path: Path) -> None:
+    """Card 1dfwh7kfyyg, criterio (b) de ponta a ponta: OSC 7501 working deve girar e mostrar 'trabalhando…'."""
+    from f50_tui_probe import run_tui
+
+    mux = cli.parent.parent / "mux" / "pink.mjs"
+    fake = ROOT / "tests" / "pink_mux_fake_child.mjs"
+    extra = {"PINK_CODING_AGENT_SESSION_DIR": str(tmp_path / "sessoes"), "PINK_MUX_CLI": str(fake), "PINK_FAKE_LOG": str(tmp_path / "filho.log"), "PINK_FAKE_OSC": json.dumps(["state=working:app=pink"])}
+    screens = run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=160, rows=30)
+    text = "\n".join(line[:32] for line in screens[0])
+    assert "trabalhando…" in text
+    assert any(ch in text for ch in "◐◓◑◒")

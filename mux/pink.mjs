@@ -172,10 +172,30 @@ export function progressSignal(data) {
 	return state === "0" || state === undefined ? "idle" : "work";
 }
 
+// estado que o Pink filho informa ao terminal (OSC 7501, program-status do pi-tui): working, blocked (pergunta ou permissão
+// aberta, kind=question|permission), done, error, idle; msg em base64 (card 1dfwh7kfyyg)
+const PROGRAM_STATES = new Set(["idle", "working", "blocked", "done", "error"]);
+export function parseProgramStatus(data) {
+	const pairs = {};
+	for (const part of String(data).split(":")) {
+		const at = part.indexOf("=");
+		if (at > 0) pairs[part.slice(0, at)] = part.slice(at + 1);
+	}
+	if (pairs.state === "clear") return { state: "clear" }; // o filho parou de informar (stop/suspensão): a lateral esquece o estado
+	if (!PROGRAM_STATES.has(pairs.state)) return undefined; // inclui a pergunta "?" de suporte
+	let message = "";
+	try { message = pairs.msg ? oneLine(Buffer.from(pairs.msg, "base64").toString("utf8")) : ""; } catch { /* msg inválida: sem texto */ }
+	return { state: pairs.state, kind: pairs.kind === "permission" ? "permission" : pairs.kind ? "question" : undefined, message };
+}
+
+// trabalhando pelo progresso (OSC 9;4) ou pelo estado do programa (OSC 7501): qualquer um dos dois basta
+export const isWorking = (session) => Boolean(session.working || session.program?.state === "working");
+
 export function icon(session, frame) {
 	if (session.exited) return "×";
-	if (session.attention) return "!";
-	if (session.working) return SPIN[frame % SPIN.length];
+	if (session.program?.state === "blocked") return "?";
+	if (session.attention || session.program?.state === "error") return "!";
+	if (isWorking(session)) return SPIN[frame % SPIN.length];
 	return "·";
 }
 
@@ -196,8 +216,10 @@ export function sessionLabel(title, index, folder = "") {
 
 function status(session, folder) {
 	if (session.exited) return "encerrada";
+	if (session.program?.state === "blocked") return session.program.kind === "permission" ? "pede permissão · espera você" : "pergunta · espera você";
+	if (session.program?.state === "error") return "parou com erro";
 	if (session.attention) return "terminou · espera você";
-	if (session.working) return "trabalhando…";
+	if (isWorking(session)) return "trabalhando…";
 	return folder || "pronta";
 }
 
@@ -227,7 +249,7 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 		if (compact) return lines.push(`${bar}\x1b[${bg}1m${fit(`${index < 9 ? index + 1 : " "} ${mark}`, width - 1)}\x1b[0m`);
 		hit(`close:${index}`, width - 3);
 		const { name, folder: where } = sessionLabel(session.title, index, session.cwd ? path.basename(session.cwd) : folder);
-		const tone = session.attention && !on ? "38;2;240;196;135;" : "";
+		const tone = (session.attention || session.program?.state === "blocked") && !on ? "38;2;240;196;135;" : "";
 		lines.push(`${bar}\x1b[${bg}${tone}1m${fit(` ${mark} ${name}`, width - 4)}\x1b[0m\x1b[${bg}2m × \x1b[0m`);
 		if (!tall) return;
 		hit(`select:${index}`);
@@ -617,7 +639,7 @@ async function main() {
 		pending ??= setTimeout(render, 16);
 	};
 	const tick = () => {
-		const busy = sessions.some((session) => session.working);
+		const busy = sessions.some(isWorking);
 		if (busy && !spinner) spinner = setInterval(() => { frame++; schedule(); }, 150);
 		if (!busy && spinner) { clearInterval(spinner); spinner = undefined; }
 	};
@@ -636,7 +658,7 @@ async function main() {
 		const { rows, inner } = size();
 		const term = new Terminal({ cols: inner, rows, allowProposedApi: true, scrollback: 0 });
 		const banner = path.join(tmpdir(), `pink-exit-${process.pid}-${++opened}.txt`); // o fechamento (logo e resumo) que a sessão escreve ao sair
-		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1", PINK_MUX_BANNER: banner } });
+		const child = pty.spawn(process.execPath, [CLI, ...args], { name: "xterm-256color", cols: inner, rows, cwd, env: { ...process.env, PINK_MUX_CHILD: "1", PINK_MUX_BANNER: banner, PINK_PROGRAM_STATUS: "1", PI_PROGRAM_STATUS: "1" } }); // PINK_ no pacote do Pink (rebrand), PI_ no pi-tui original: o filho informa o estado sem perguntar se o terminal suporta
 		// com o arquivo conhecido, a identidade é o arquivo, não a pasta inteira
 		const resumed = !file && args.some((arg) => FIRST_ONLY.has(arg) || FIRST_ONLY_VALUE.has(arg.split("=")[0]));
 		const session = { term, child, cwd, file, resumed, banner, started: Date.now(), title: "", working: false, attention: false, exited: false, scratch: undefined };
@@ -644,6 +666,15 @@ async function main() {
 		const isActive = () => sessions[active] === session;
 		term.onTitleChange((title) => { session.title = title; schedule(); });
 		term.onBell(() => { onSignal(session, "bell", isActive()); schedule(); });
+		term.parser.registerOscHandler(7501, (data) => {
+			const program = parseProgramStatus(data);
+			if (program) {
+				session.program = program.state === "clear" ? undefined : program;
+				tick(); // liga ou desliga o giro
+				schedule();
+			}
+			return true;
+		});
 		term.parser.registerOscHandler(9, (data) => {
 			const file = sessionFileSignal(data);
 			if (file) {
