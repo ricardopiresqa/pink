@@ -262,8 +262,20 @@ export default function (pi: any) {
 		}
 		return cache.get(key);
 	};
-	const bash = (cwd: string, trusted: boolean) => createBashToolDefinition(cwd, settings(cwd, trusted));
-	const powershell = (cwd: string) => createPowerShellToolDefinition(cwd);
+	// sandbox ligado (pink-sandbox): a execução passa pelo helper com token restrito; decidido a cada comando
+	const sandboxed = (kind: "bash" | "powershell", shellPath?: string) => {
+		const sandbox = (globalThis as any).__pinkSandbox;
+		return sandbox?.active?.() ? sandbox.operations(kind, shellPath) : undefined;
+	};
+	const bash = (cwd: string, trusted: boolean) => {
+		const options = settings(cwd, trusted);
+		const operations = sandboxed("bash", options?.shellPath);
+		return createBashToolDefinition(cwd, operations ? { ...options, operations } : options);
+	};
+	const powershell = (cwd: string) => {
+		const operations = sandboxed("powershell");
+		return createPowerShellToolDefinition(cwd, operations ? { operations } : undefined);
+	};
 	pi.registerTool(withBackground(bash(process.cwd(), false), bash, "bash", jobs));
 	pi.registerTool(withBackground(powershell(process.cwd()), powershell, "powershell", jobs));
 }

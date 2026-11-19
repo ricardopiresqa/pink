@@ -113,6 +113,30 @@
     {
       "from": "extensions/pink-context.ts",
       "to": "extensions/pink-context.ts"
+    },
+    {
+      "from": "extensions/pink-lsp.ts",
+      "to": "extensions/pink-lsp.ts"
+    },
+    {
+      "from": "extensions/pink-rules.ts",
+      "to": "extensions/pink-rules.ts"
+    },
+    {
+      "from": "extensions/pink-review.ts",
+      "to": "extensions/pink-review.ts"
+    },
+    {
+      "from": "extensions/pink-skill-propose.ts",
+      "to": "extensions/pink-skill-propose.ts"
+    },
+    {
+      "from": "extensions/pink-sandbox.ts",
+      "to": "extensions/pink-sandbox.ts"
+    },
+    {
+      "from": "extensions/pink-sandbox.cs",
+      "to": "extensions/pink-sandbox.cs"
     }
   ],
   "env_rename": {
@@ -2015,7 +2039,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-lsp.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-rules.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-review.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skill-propose.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sandbox.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
@@ -2024,6 +2048,20 @@
       "count": 1,
       "find": "const agentMap = new Map<string, AgentConfig>();",
       "replace": "const agentMap = new Map<string, AgentConfig>([[\"general\", { name: \"general\", description: \"General-purpose agent with the session's model and tools: research, multi-step tasks, code changes. Put any role or instructions in the task.\", systemPrompt: \"\", source: \"builtin\", filePath: \"(builtin)\" } as unknown as AgentConfig]]); // Pink: agente embutido (como o general-purpose do Claude Code); um agents/general.md o substitui"
+    },
+    {
+      "id": "subagent-revisor-agent",
+      "file": "examples/extensions/subagent/agents.ts",
+      "count": 1,
+      "find": "\treturn { agents: Array.from(agentMap.values()), projectAgentsDir };",
+      "replace": "\t// Pink: revisor só leitura do /review (card 1dfwh7kfzxw); nome reservado, entra depois dos agentes de arquivo para\n\t// que um agents/revisor.md não troque as ferramentas e tire a garantia de só leitura\n\tagentMap.set(\"revisor\", { name: \"revisor\", description: \"Revisor de código só leitura (read, grep, find, ls): revisa um diff e devolve achados por arquivo:linha. Usado pelo /review.\", systemPrompt: \"Você revisa código de forma independente e só lê: não edita, não grava e não roda comandos. A tarefa diz onde está o diff. Leia o diff inteiro e, para entender cada mudança, os arquivos tocados e quem chama o que mudou. Procure bugs de lógica, casos de borda, erros não tratados, segurança (entrada sem validação, segredo, injeção), quebra de quem chama, testes que faltam para lógica nova e código que sobra. Não invente: cada achado precisa de prova no código. Responda em português, só com os achados, do mais grave para o menos grave, cada um numa linha: [alto|médio|baixo] arquivo:linha - o problema e o que acontece; e a correção em uma frase. Sem achados, diga que não achou problema e o que conferiu. No fim, uma linha com o que não deu para conferir.\", tools: [\"read\", \"grep\", \"find\", \"ls\"], source: \"builtin\", filePath: \"(builtin)\" } as unknown as AgentConfig);\n\treturn { agents: Array.from(agentMap.values()), projectAgentsDir };"
+    },
+    {
+      "id": "subagent-allowlist-no-mcp",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\tif (agent.tools && agent.tools.length > 0) args.push(\"--tools\", agent.tools.join(\",\"));",
+      "replace": "\tif (agent.tools && agent.tools.length > 0) args.push(\"--tools\", agent.tools.join(\",\"));\n\t// Pink: lista de ferramentas sem mcp__ deixava passar toda ferramenta MCP (o núcleo só filtra MCP se a lista citar uma)\n\tif (agent.tools && agent.tools.length > 0 && !agent.tools.some((tool) => tool.startsWith(\"mcp__\"))) args.push(\"--no-mcp\");"
     },
     {
       "id": "subagent-no-nesting",
