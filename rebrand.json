@@ -85,6 +85,34 @@
       "from": "CHANGELOG.md",
       "to": "CHANGELOG.md",
       "overwrite": true
+    },
+    {
+      "from": "extensions/pink-subagent-bg.ts",
+      "to": "examples/extensions/subagent/background.ts"
+    },
+    {
+      "from": "extensions/pink-shell-bg.ts",
+      "to": "extensions/pink-shell-bg.ts"
+    },
+    {
+      "from": "extensions/pink-memory.ts",
+      "to": "extensions/pink-memory.ts"
+    },
+    {
+      "from": "extensions/pink-sessions-bus.ts",
+      "to": "extensions/pink-sessions-bus.ts"
+    },
+    {
+      "from": "extensions/pink-loop.ts",
+      "to": "extensions/pink-loop.ts"
+    },
+    {
+      "from": "extensions/pink-skills.ts",
+      "to": "extensions/pink-skills.ts"
+    },
+    {
+      "from": "extensions/pink-context.ts",
+      "to": "extensions/pink-context.ts"
     }
   ],
   "env_rename": {
@@ -1987,7 +2015,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
@@ -2584,6 +2612,34 @@
       "find": "for(;;){let agentsSkillsDir=join(currentDir,\".agents\",\"skills\");if(agentsSkillsDir!==userAgentsSkillsDir&&existsSync(agentsSkillsDir))return!0;let parentDir=dirname(currentDir);if(parentDir===currentDir)return!1;currentDir=parentDir}",
       "replace": "return!1",
       "count": 1
+    },
+    {
+      "id": "subagent-background-import",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "import { type AgentConfig, type AgentScope, discoverAgents } from \"./agents.ts\";",
+      "replace": "import { type AgentConfig, type AgentScope, discoverAgents } from \"./agents.ts\";\nimport { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano"
+    },
+    {
+      "id": "subagent-background-param",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\tcwd: Type.Optional(Type.String({ description: \"Working directory for the agent process (single mode)\" })),\n});",
+      "replace": "\tcwd: Type.Optional(Type.String({ description: \"Working directory for the agent process (single mode)\" })),\n\tbackground: Type.Optional(Type.Boolean({ description: \"Run in the background (single or tasks mode): returns at once with an id and the result arrives later as a message that starts a new turn. Use for long work when you have something else to do meanwhile; do not wait or poll for it. Default false: wait for the result.\" })),\n});"
+    },
+    {
+      "id": "subagent-background-manager",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\tpi.registerTool({\n\t\tname: \"subagent\",",
+      "replace": "\tconst background = createBackground(pi); // Pink: segundo plano, /subagentes e encerramento com a sessão\n\tpi.registerTool({\n\t\tname: \"subagent\","
+    },
+    {
+      "id": "subagent-background-branch",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\t\t\tif (params.chain && params.chain.length > 0) {",
+      "replace": "\t\t\t// Pink: em segundo plano (só com tela; sem ela o processo acaba antes do resultado, então espera como antes)\n\t\t\tif (params.background && ctx.hasUI) {\n\t\t\t\tconst items = hasTasks ? params.tasks! : hasSingle ? [{ agent: params.agent!, task: params.task!, cwd: params.cwd }] : [];\n\t\t\t\tconst started = background.start(items, hasChain, async (item, jobSignal) => {\n\t\t\t\t\tconst result = await runSingleAgent(ctx.cwd, dispatchDefaults, agents, item.agent, item.task, item.cwd, undefined, jobSignal, undefined, makeDetails(\"single\"));\n\t\t\t\t\tconst failed = isFailedResult(result);\n\t\t\t\t\treturn { failed, text: failed ? getResultOutput(result) : getFinalOutput(result.messages) };\n\t\t\t\t}, ctx);\n\t\t\t\treturn { content: [{ type: \"text\", text: started.text }], details: makeDetails(hasTasks ? \"parallel\" : \"single\")([]), isError: started.error };\n\t\t\t}\n\n\t\t\tif (params.chain && params.chain.length > 0) {"
     }
   ],
   "left_as_upstream": [

@@ -176,6 +176,18 @@ export function decide(rules, toolName, target) {
 	return { action: "allow", why: "" };
 }
 
+const READ_TOOLS = new Set(["read", "grep", "find", "ls", "todowrite", "tool_search"]);
+export function readsOnly(pi, toolName) {
+	if (READ_TOOLS.has(toolName)) return true;
+	// readOnlyHint é declarado pela própria ferramenta: de servidor MCP não vale (um servidor hostil se diria "só leitura")
+	if (toolName.startsWith("mcp__")) return false;
+	try {
+		return pi.getAllTools?.().find((tool) => tool.name === toolName)?.annotations?.readOnlyHint === true;
+	} catch {
+		return false;
+	}
+}
+
 export function permissions(pi, deps = {}) {
 	const { env = process.env, read = fs.readFileSync } = deps;
 	const sessionAllowed = new Set();
@@ -199,7 +211,12 @@ export function permissions(pi, deps = {}) {
 			if (AGENT_FILES.some((name) => path.join(agentDir(env), name).toLowerCase() === abs))
 				return { block: true, reason: "Bloqueado pelas permissões do Pink: o agente não edita as próprias regras e hooks (a pessoa edita)" };
 		}
-		const { action, why } = decide(rules, toolName, target);
+		let { action, why } = decide(rules, toolName, target);
+		// modo "pergunta tudo" (alt+m, pink-ui): o que só lê segue livre; o resto confirma, mesmo com allow (deny continua valendo)
+		if (action === "allow" && globalThis.__pinkPermissionMode === "ask" && !readsOnly(pi, toolName)) {
+			action = "ask";
+			why = "modo pergunta tudo (alt+m troca)";
+		}
 		if (action === "allow") return undefined;
 		const shown = target ?? toolName;
 		if (action === "deny") return { block: true, reason: `Bloqueado pelas permissões do Pink: ${why}` };

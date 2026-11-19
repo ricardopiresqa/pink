@@ -214,7 +214,19 @@ export function sessionLabel(title, index, folder = "") {
 	return { name: `Sessão ${index + 1}`, folder: text === `Sessão ${index + 1}` ? folder : text };
 }
 
+// o que roda em segundo plano na sessão: subagentes (OSC 9;pink-subagents=N) e comandos (OSC 9;pink-jobs=N)
+export function backgroundSignal(data) {
+	const match = /^pink-(subagents|jobs)=(\d{1,3})$/.exec(String(data));
+	return match ? { kind: match[1], count: Number(match[2]) } : undefined;
+}
+
 function status(session, folder) {
+	const text = baseStatus(session, folder);
+	const count = (session.subagents ?? 0) + (session.jobs ?? 0);
+	return count && !session.exited ? `${text} · ${count} em 2º plano` : text;
+}
+
+function baseStatus(session, folder) {
 	if (session.exited) return "encerrada";
 	if (session.program?.state === "blocked") return session.program.kind === "permission" ? "pede permissão · espera você" : "pergunta · espera você";
 	if (session.program?.state === "error") return "parou com erro";
@@ -682,6 +694,8 @@ async function main() {
 				saveOpen();
 				return true;
 			}
+			const background = backgroundSignal(data);
+			if (background) session[background.kind] = background.count;
 			const signal = progressSignal(data);
 			if (signal) onSignal(session, signal, isActive());
 			tick();

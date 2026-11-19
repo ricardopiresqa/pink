@@ -115,8 +115,9 @@ const THINKING_PT = { minimal: "mínimo", low: "baixo", medium: "médio", high: 
 // "thoth  thoth  off" dizia modelo, provedor e nível sem explicar nada: agora o nome do modelo, o provedor só quando é
 // outro, e o pensamento só quando está ligado ("pensamento alto")
 // como no OpenCode, o agente (Build/Plano) vem antes do modelo, na cor da marca
-export function modelLabel({ theme, model, thinking, agent }) {
-	const who = AGENTS[agent] ? `${theme.fg("accent", AGENTS[agent].label)}${theme.fg("muted", " · ")}` : "";
+export function modelLabel({ theme, model, thinking, agent, permission = "edits" }) {
+	const mode = agent === "build" && permission === "ask" ? " (pergunta tudo)" : "";
+	const who = AGENTS[agent] ? `${theme.fg("accent", `${AGENTS[agent].label}${mode}`)}${theme.fg("muted", " · ")}` : "";
 	if (!model) return `${who}${theme.fg("muted", "sem modelo")}`;
 	const name = model.name || model.id;
 	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";
@@ -125,7 +126,7 @@ export function modelLabel({ theme, model, thinking, agent }) {
 }
 
 export function hintsLine({ theme, width }) {
-	return center(theme.fg("dim", "ctrl+p comandos   tab agente   @ arquivo   ! bash   ctrl+t pensamento   ctrl+c sair"), width);
+	return center(theme.fg("dim", "ctrl+p comandos   tab agente   alt+m modo   @ arquivo   ! bash   ctrl+t pensamento   ctrl+c sair"), width);
 }
 
 // -- funções do OpenCode (owner 2026-10-28: "gosto muito do opencode, poderia replicar as funções dele")
@@ -767,7 +768,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			const outer = state.home ? Math.min(width, HOME_WIDTH) : width;
 			const margin = state.home ? Math.floor((width - outer) / 2) : 0;
 			const theme = ctx.ui.theme;
-			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent });
+			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent, permission: PINK.permission });
 			const text = outer - 4;
 			// o rótulo fica embaixo, na linha das dicas: à direita da 1ª linha ele estreitava o editor e o pedido quebrava em
 			// ~35 colunas na tela inicial (owner 2026-11-15)
@@ -1115,7 +1116,7 @@ export function assistantFooter({ theme, model, agent, ms, output, run }) {
 
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
-export const PINK = { agent: "build", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), runOf: new Map(), run: undefined, runTimer: undefined, lastRun: undefined, lastRunEnd: 0, thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
+export const PINK = { agent: "build", permission: globalThis.__pinkPermissionSaved === "ask" ? "ask" : "edits", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), runOf: new Map(), run: undefined, runTimer: undefined, lastRun: undefined, lastRunEnd: 0, thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
 
 // "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
 export function labelUserMarkdown(markdown, context) {
@@ -1136,6 +1137,23 @@ function switchAgent(ctx, next = PINK.agent === "build" ? "plan" : "build") {
 	PINK.agent = next;
 	ctx.ui?.notify?.(next === "plan" ? "Agente Plano: só leitura (tab volta ao Build)" : "Agente Build: edita e roda comandos", "info");
 }
+
+// modo de permissão (card 1dfwh7kfzfg), alt+m roda: pergunta tudo → aceita edições → plano. Não usa tab (Build/Plano) nem
+// shift+tab (pensamento). O pink-permissions lê o modo por globalThis.__pinkPermissionMode na hora de cada ferramenta.
+export const MODES = { ask: "Pergunta tudo: confirma cada edição e comando", edits: "Aceita edições: só confirma o perigoso (padrão)", plan: "Plano: só leitura" };
+export const currentMode = () => (PINK.agent === "plan" ? "plan" : PINK.permission);
+export const nextMode = (mode = currentMode()) => ({ ask: "edits", edits: "plan", plan: "ask" })[mode] ?? "edits";
+export function setMode(ctx, mode) {
+	if (!MODES[mode]) return;
+	if (mode === "plan") return switchAgent(ctx, "plan");
+	PINK.permission = mode;
+	// fora do PINK: o /reload reimporta o módulo e o "pergunta tudo" não pode voltar sozinho ao padrão menos seguro
+	globalThis.__pinkPermissionSaved = mode;
+	PINK.agent = "build";
+	ctx.ui?.notify?.(`Modo ${MODES[mode]} (alt+m troca)`, "info");
+}
+Object.defineProperty(globalThis, "__pinkPermissionMode", { get: () => currentMode(), configurable: true });
+const MODE_ARGS = { perguntar: "ask", editar: "edits", plano: "plan" };
 
 export const INIT_PROMPT = "Analise este repositório e crie o arquivo AGENTS.md na raiz (ou atualize, se já existir, sem perder o que vale). Inclua, de forma concisa: os comandos de build, teste e lint (e como rodar um único teste), a arquitetura em alto nível e as convenções de código que um agente precisa seguir. Não invente o que não estiver no repositório.";
 
@@ -1165,6 +1183,16 @@ function registerOpenCodeFunctions(pi) {
 	const command = (name, description, handler) => pi.registerCommand?.(name, { description, handler });
 	command("plan", "Agente Plano: só lê e planeja, não edita (tab troca)", async (_args, ctx) => switchAgent(ctx, "plan"));
 	command("build", "Agente Build: edita e roda comandos (tab troca)", async (_args, ctx) => switchAgent(ctx, "build"));
+	pi.registerShortcut?.("alt+m", { description: "Troca o modo de permissão: pergunta tudo, aceita edições, plano", handler: (ctx) => setMode(ctx, nextMode()) });
+	pi.registerCommand?.("modo", {
+		description: "Modo de permissão: perguntar, editar ou plano (sem nome, troca para o próximo; alt+m)",
+		getArgumentCompletions: (prefix) => Object.keys(MODE_ARGS).filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name })),
+		handler: async (args, ctx) => {
+			const name = String(args ?? "").trim().toLowerCase();
+			if (name && !MODE_ARGS[name]) return void ctx.ui.notify?.("Use /modo perguntar, /modo editar ou /modo plano", "warning");
+			setMode(ctx, name ? MODE_ARGS[name] : nextMode());
+		},
+	});
 	command("help", "Paleta de comandos (ctrl+p)", async (_args, ctx) => openPalette(pi, ctx));
 	command("details", "Mostra ou esconde a saída das ferramentas (ctrl+o)", async (_args, ctx) => ctx.ui.setToolsExpanded?.(!ctx.ui.getToolsExpanded?.()));
 	command("init", "Cria ou atualiza o AGENTS.md do projeto", async () => pi.sendUserMessage?.(INIT_PROMPT));

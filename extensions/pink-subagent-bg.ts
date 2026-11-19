@@ -1,0 +1,136 @@
+// Subagentes em segundo plano (owner 2026-11-18, card 1dfwh7kfzfa), como no Claude Code: com background:true a ferramenta
+// subagent devolve na hora um id, a conversa segue livre e o resultado chega depois como mensagem que abre um novo turno.
+// Uma linha acima do campo de texto mostra quem está rodando; /subagentes lista e cancela. Ao fechar, trocar ou recarregar
+// a sessão (session_shutdown) os filhos são abortados e nada é entregue: o resultado nunca cai em outra conversa.
+// Copiado para examples/extensions/subagent/background.ts pelo build (rebrand.json); o index.ts do subagente o importa.
+
+export const MAX_BACKGROUND = 4;
+const OUTPUT_CAP = 50 * 1024;
+const WIDGET = "pink-subagents";
+
+type Item = { agent: string; task: string; cwd?: string };
+type Outcome = { failed: boolean; text: string };
+type Job = { id: number; agent: string; task: string; started: number; controller: AbortController };
+type Run = (item: Item, signal: AbortSignal) => Promise<Outcome>;
+
+const oneLine = (text: string, max: number) => {
+	const flat = text.replace(/\s+/g, " ").trim();
+	return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+};
+const clock = (ms: number) => {
+	const s = Math.max(0, Math.floor(ms / 1000));
+	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+// a lateral SESSÕES do mux (pink/mux) lê a contagem deste aviso; fora do mux não escreve nada
+const muxWrite = (text: string) => {
+	if (process.env.PINK_MUX_CHILD === "1" && process.stdout.isTTY) process.stdout.write(text);
+};
+
+export function createBackground(pi: any, { now = Date.now, write = muxWrite } = {}) {
+	const jobs = new Map<number, Job>();
+	let next = 1;
+	let closed = false;
+	let ui: any;
+	let timer: ReturnType<typeof setInterval> | undefined;
+	let shown = 0;
+
+	const lines = () => [
+		...[...jobs.values()].map((job) => `⏳ #${job.id} ${job.agent} · ${clock(now() - job.started)} · ${oneLine(job.task, 60)}`),
+		"   /subagentes para listar ou cancelar",
+	];
+	const refresh = () => {
+		try {
+			ui?.setWidget(WIDGET, jobs.size && !closed ? lines() : undefined);
+		} catch {
+			/* tela já fechada */
+		}
+		const count = closed ? 0 : jobs.size;
+		if (count !== shown) {
+			shown = count; // só quando muda: o relógio redesenha a cada segundo, o aviso ao mux não
+			try {
+				write(`\x1b]9;pink-subagents=${count}\x07`);
+			} catch {
+				/* terminal fechado */
+			}
+		}
+		if (jobs.size && !closed && !timer) {
+			timer = setInterval(refresh, 1000); // o relógio de cada linha
+			timer.unref?.();
+		} else if ((!jobs.size || closed) && timer) {
+			clearInterval(timer);
+			timer = undefined;
+		}
+	};
+
+	const finish = (job: Job, outcome: Outcome) => {
+		if (!jobs.delete(job.id) || closed) return; // sessão encerrada: nada é entregue
+		refresh();
+		const cancelled = job.controller.signal.aborted;
+		const verb = cancelled ? "foi cancelado" : outcome.failed ? "falhou" : "terminou";
+		const body = outcome.text.length > OUTPUT_CAP ? `${outcome.text.slice(0, OUTPUT_CAP)}\n\n[saída cortada em ${OUTPUT_CAP} caracteres]` : outcome.text;
+		pi.sendMessage(
+			{
+				customType: "subagent-result",
+				display: true,
+				content: `Subagente em segundo plano #${job.id} (${job.agent}) ${verb}.\n\n${body || "(sem saída)"}`,
+				details: { id: job.id, agent: job.agent, failed: outcome.failed, cancelled },
+			},
+			// cancelado pela pessoa: o modelo fica sabendo no próximo turno, sem abrir um sozinho
+			cancelled ? { deliverAs: "nextTurn" } : { triggerTurn: true, deliverAs: "followUp" },
+		);
+	};
+
+	function start(items: Item[], chain: boolean, run: Run, ctx: any): { text: string; error: boolean } {
+		if (chain) return { text: "background não vale no modo chain (cada passo depende do anterior). Use single ou tasks.", error: true };
+		if (jobs.size + items.length > MAX_BACKGROUND)
+			return { text: `Limite de ${MAX_BACKGROUND} subagentes em segundo plano (rodando: ${jobs.size}). Espere um terminar ou rode sem background.`, error: true };
+		ui = ctx.ui;
+		const started = items.map((item) => {
+			const job: Job = { id: next++, agent: item.agent, task: item.task, started: now(), controller: new AbortController() };
+			jobs.set(job.id, job);
+			run(item, job.controller.signal)
+				.then(
+					(outcome) => finish(job, outcome),
+					(error) => finish(job, { failed: true, text: String(error?.message ?? error) }),
+				)
+				.catch(() => {}); // erro ao entregar não pode derrubar o Pink (unhandledRejection)
+			return job;
+		});
+		refresh();
+		const ids = started.map((job) => `#${job.id} (${job.agent})`).join(", ");
+		return {
+			text: `Iniciado em segundo plano: ${ids}. O resultado chega sozinho como mensagem quando terminar; siga com outra coisa, não espere nem consulte.`,
+			error: false,
+		};
+	}
+
+	function cancel(which: string): number {
+		const targets = which === "todos" ? [...jobs.values()] : [jobs.get(Number(which.replace(/^#/, "")))].filter(Boolean) as Job[];
+		for (const job of targets) job.controller.abort();
+		return targets.length;
+	}
+
+	pi.registerCommand("subagentes", {
+		description: "Subagentes em segundo plano: lista; 'cancelar <n>' ou 'cancelar todos'",
+		getArgumentCompletions: (prefix: string) =>
+			["cancelar todos", ...[...jobs.keys()].map((id) => `cancelar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
+		handler: async (args: string, ctx: any) => {
+			const [verb, target] = args.trim().split(/\s+/);
+			if (verb === "cancelar") {
+				const count = target ? cancel(target) : 0;
+				ctx.ui.notify(count ? `Cancelando ${count} subagente(s).` : "Use /subagentes cancelar <n> ou /subagentes cancelar todos.", count ? "info" : "warning");
+				return;
+			}
+			ctx.ui.notify(jobs.size ? lines().slice(0, -1).join("\n") : "Nenhum subagente em segundo plano.", "info");
+		},
+	});
+
+	pi.on("session_shutdown", () => {
+		closed = true;
+		for (const job of jobs.values()) job.controller.abort();
+		jobs.clear();
+		refresh();
+	});
+
+	return { start, cancel, jobs };
+}
