@@ -143,6 +143,14 @@
     {
       "from": "extensions/pink-sandbox.cs",
       "to": "extensions/pink-sandbox.cs"
+    },
+    {
+      "from": "extensions/pink-tela.ts",
+      "to": "extensions/pink-tela.ts"
+    },
+    {
+      "from": "extensions/pink-i18n.ts",
+      "to": "extensions/pink-i18n.ts"
     }
   ],
   "env_rename": {
@@ -2045,7 +2053,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-lsp.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-rules.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-review.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skill-propose.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sandbox.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-lsp.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-rules.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-review.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skill-propose.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sandbox.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-tela.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
