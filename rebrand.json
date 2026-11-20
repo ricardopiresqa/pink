@@ -19,8 +19,14 @@
         "rebrand": "rebrand.json in the Thoth repository (pink/)"
       }
     },
-    "dependencies": {"undici": "8.12.3", "@dietrichgebert/ponytail": "5.3.3"},
-    "optionalDependencies": {"node-pty": "1.1.0", "@xterm/headless": "5.5.0"},
+    "dependencies": {
+      "undici": "8.12.3",
+      "@dietrichgebert/ponytail": "5.3.3"
+    },
+    "optionalDependencies": {
+      "node-pty": "1.1.0",
+      "@xterm/headless": "5.5.0"
+    },
     "files_add": [
       "LICENSE-PI.txt",
       "NOTICE.md",
@@ -2677,7 +2683,42 @@
       "file": "examples/extensions/subagent/index.ts",
       "count": 1,
       "find": "\t\t\tif (params.chain && params.chain.length > 0) {",
-      "replace": "\t\t\t// Pink: em segundo plano (só com tela; sem ela o processo acaba antes do resultado, então espera como antes)\n\t\t\tif (params.background && ctx.hasUI) {\n\t\t\t\tconst items = hasTasks ? params.tasks! : hasSingle ? [{ agent: params.agent!, task: params.task!, cwd: params.cwd }] : [];\n\t\t\t\tconst started = background.start(items, hasChain, async (item, jobSignal) => {\n\t\t\t\t\tconst result = await runSingleAgent(ctx.cwd, dispatchDefaults, agents, item.agent, item.task, item.cwd, undefined, jobSignal, undefined, makeDetails(\"single\"));\n\t\t\t\t\tconst failed = isFailedResult(result);\n\t\t\t\t\treturn { failed, text: failed ? getResultOutput(result) : getFinalOutput(result.messages) };\n\t\t\t\t}, ctx);\n\t\t\t\treturn { content: [{ type: \"text\", text: started.text }], details: makeDetails(hasTasks ? \"parallel\" : \"single\")([]), isError: started.error };\n\t\t\t}\n\n\t\t\tif (params.chain && params.chain.length > 0) {"
+      "replace": "\t\t\t// Pink: em segundo plano (só com tela; sem ela o processo acaba antes do resultado, então espera como antes)\n\t\t\tif (params.background && ctx.hasUI) {\n\t\t\t\tconst items = hasTasks ? params.tasks! : hasSingle ? [{ agent: params.agent!, task: params.task!, cwd: params.cwd }] : [];\n\t\t\t\tconst started = background.start(items, hasChain, async (item, jobSignal, onTokens) => {\n\t\t\t\t\tconst result = await runSingleAgent(ctx.cwd, dispatchDefaults, agents, item.agent, item.task, item.cwd, undefined, jobSignal, (update) => onTokens?.(update?.details?.results?.[0]?.usage?.output ?? 0), makeDetails(\"single\"));\n\t\t\t\t\tconst failed = isFailedResult(result);\n\t\t\t\t\treturn { failed, text: failed ? getResultOutput(result) : getFinalOutput(result.messages) };\n\t\t\t\t}, ctx);\n\t\t\t\treturn { content: [{ type: \"text\", text: started.text }], details: makeDetails(hasTasks ? \"parallel\" : \"single\")([]), isError: started.error };\n\t\t\t}\n\n\t\t\tif (params.chain && params.chain.length > 0) {"
+    },
+    {
+      "id": "questionnaire-click-rows",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "let cachedLines: string[] | undefined;",
+      "replace": "let cachedLines: string[] | undefined;\n\t\t\t\tlet rowOptions: (number | undefined)[] = []; // render line -> option index (click)\n\t\t\t\tlet mouseQuietUntil = 0; // after a click answers, the second click of a double click must not answer the next question",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-click-reset",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "const lines: string[] = [];",
+      "replace": "const lines: string[] = [];\n\t\t\t\t\trowOptions = [];",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-click-mark",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "addWrappedWithPrefix(prefix, theme.fg(color, label));\n\t\t\t\t\t\t\tif (opt.description) {\n\t\t\t\t\t\t\t\taddWrappedWithPrefix(\"     \", theme.fg(\"muted\", opt.description));\n\t\t\t\t\t\t\t}",
+      "replace": "const first = lines.length;\n\t\t\t\t\t\t\taddWrappedWithPrefix(prefix, theme.fg(color, label));\n\t\t\t\t\t\t\tif (opt.description) addWrappedWithPrefix(\"     \", theme.fg(\"muted\", opt.description));\n\t\t\t\t\t\t\tfor (let row = first; row < lines.length; row++) rowOptions[row] = i;",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-click-handler",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "function render(width: number): string[] {",
+      "replace": "// Pink (owner 2026-11-20): clicking an option is the same as moving to it and pressing Enter\n\t\t\t\tfunction handleMouse(event: any) {\n\t\t\t\t\tif (inputMode || currentTab === questions.length || event?.button !== \"left\") return undefined;\n\t\t\t\t\tconst index = rowOptions[event.y];\n\t\t\t\t\tif (index === undefined) return undefined;\n\t\t\t\t\tif (Date.now() < mouseQuietUntil || (event.clickCount ?? 1) > 1) return event.type === \"press\" ? { handled: true } : undefined;\n\t\t\t\t\tif (event.type === \"press\") {\n\t\t\t\t\t\toptionIndex = index;\n\t\t\t\t\t\trefresh();\n\t\t\t\t\t\treturn { handled: true };\n\t\t\t\t\t}\n\t\t\t\t\tif (event.type !== \"click\") return undefined;\n\t\t\t\t\toptionIndex = index;\n\t\t\t\t\thandleInput(\"\\r\");\n\t\t\t\t\tmouseQuietUntil = Date.now() + 400;\n\t\t\t\t\treturn { handled: true };\n\t\t\t\t}\n\n\t\t\t\tfunction render(width: number): string[] {",
+      "count": 1
+    },
+    {
+      "id": "questionnaire-click-export",
+      "file": "examples/extensions/questionnaire.ts",
+      "find": "handleInput,",
+      "replace": "handleInput,\n\t\t\t\t\thandleMouse,",
+      "count": 1
     }
   ],
   "left_as_upstream": [

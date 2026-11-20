@@ -10,8 +10,9 @@ const WIDGET = "pink-subagents";
 
 type Item = { agent: string; task: string; cwd?: string };
 type Outcome = { failed: boolean; text: string };
-type Job = { id: number; agent: string; task: string; started: number; controller: AbortController };
-type Run = (item: Item, signal: AbortSignal) => Promise<Outcome>;
+type Job = { id: number; agent: string; task: string; started: number; controller: AbortController; tokens: number };
+type Run = (item: Item, signal: AbortSignal, onTokens: (output: number) => void) => Promise<Outcome>;
+const tokens = (n: number) => (n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`);
 
 const oneLine = (text: string, max: number) => {
 	const flat = text.replace(/\s+/g, " ").trim();
@@ -35,12 +36,13 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 	let shown = 0;
 
 	const lines = () => [
-		...[...jobs.values()].map((job) => `⏳ #${job.id} ${job.agent} · ${clock(now() - job.started)} · ${oneLine(job.task, 60)}`),
+		...[...jobs.values()].map((job) => `⏳ #${job.id} ${job.agent} · ${oneLine(job.task, 60)} · ${clock(now() - job.started)} · ↓ ${tokens(job.tokens)} tokens`),
 		"   /subagentes para listar ou cancelar",
 	];
 	const refresh = () => {
 		try {
-			ui?.setWidget(WIDGET, jobs.size && !closed ? lines() : undefined);
+			// embaixo da caixa de texto, como o painel do Claude Code (owner 2026-11-20, card 1dfwh7kg4g2)
+			ui?.setWidget(WIDGET, jobs.size && !closed ? lines() : undefined, { placement: "belowEditor" });
 		} catch {
 			/* tela já fechada */
 		}
@@ -86,9 +88,11 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 			return { text: `Limite de ${MAX_BACKGROUND} subagentes em segundo plano (rodando: ${jobs.size}). Espere um terminar ou rode sem background.`, error: true };
 		ui = ctx.ui;
 		const started = items.map((item) => {
-			const job: Job = { id: next++, agent: item.agent, task: item.task, started: now(), controller: new AbortController() };
+			const job: Job = { id: next++, agent: item.agent, task: item.task, started: now(), controller: new AbortController(), tokens: 0 };
 			jobs.set(job.id, job);
-			run(item, job.controller.signal)
+			run(item, job.controller.signal, (output) => {
+				job.tokens = Math.max(job.tokens, Number(output) || 0); // o relógio de 1 s redesenha
+			})
 				.then(
 					(outcome) => finish(job, outcome),
 					(error) => finish(job, { failed: true, text: String(error?.message ?? error) }),

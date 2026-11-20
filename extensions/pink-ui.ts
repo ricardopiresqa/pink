@@ -165,11 +165,16 @@ export function normalizeTodos(todos) {
 	return (Array.isArray(todos) ? todos : []).map((item) => ({ content: String(item?.content ?? "").trim(), status: TODO_STATUS.has(item?.status) ? item.status : "pending" })).filter((item) => item.content);
 }
 
-export function todoLines({ theme, todos, width }) {
+// `max`: linhas no total (com o título); passando dele, ficam as em andamento e pendentes e um "+N"
+export function todoLines({ theme, todos, width, max = Infinity }) {
 	const mark = { pending: theme.fg("dim", "○"), in_progress: theme.fg("accent", "◐"), completed: theme.fg("success", "✓"), cancelled: theme.fg("dim", "✗") };
 	const done = todos.filter((item) => item.status === "completed").length;
-	return [fit(`${theme.fg("text", "Tarefas")} ${theme.fg("muted", `${done}/${todos.length}`)}`, width),
-		...todos.map((item) => fit(`  ${mark[item.status]} ${item.status === "completed" || item.status === "cancelled" ? theme.fg("dim", item.content) : theme.fg("text", item.content)}`, width))];
+	const line = (item) => fit(`  ${mark[item.status]} ${item.status === "completed" || item.status === "cancelled" ? theme.fg("dim", item.content) : theme.fg("text", item.content)}`, width);
+	const title = fit(`${theme.fg("text", "Tarefas")} ${theme.fg("muted", `${done}/${todos.length}`)}`, width);
+	if (todos.length + 1 <= max) return [title, ...todos.map(line)];
+	const open = todos.filter((item) => item.status === "in_progress").concat(todos.filter((item) => item.status === "pending"));
+	const shown = open.slice(0, Math.max(1, max - 2));
+	return [title, ...shown.map(line), fit(theme.fg("dim", `  … +${todos.length - shown.length} tarefas`), width)];
 }
 
 export function todosFromBranch(entries) {
@@ -917,7 +922,8 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
 	ctx.ui.setWidget?.("pink-tarefas", (tui, theme) => ({
-		render: live((width) => (!PINK.todos.some((item) => item.status === "pending" || item.status === "in_progress") || columns(tui.terminal?.columns ?? width).right ? [] : todoLines({ theme, todos: PINK.todos, width })), []),
+		// no teto: em janela estreita a lista inteira empurrava as perguntas do agente para fora da tela (owner 2026-11-20)
+		render: live((width) => (!PINK.todos.some((item) => item.status === "pending" || item.status === "in_progress") || columns(tui.terminal?.columns ?? width).right ? [] : todoLines({ theme, todos: PINK.todos, width, max: Math.max(3, Math.floor((tui.terminal?.rows ?? 24) / 5)) })), []),
 		invalidate() {},
 	}));
 	ctx.ui.setFooter((tui, theme) => {
@@ -993,6 +999,55 @@ export function diffStats(patch) {
 	return { add, del };
 }
 
+// diff aberto como no Claude Code (owner 2026-11-20, card 1dfwh7kg4g2): número da linha, fundo vermelho no que saiu e
+// verde no que entrou; linha longa quebra com o recuo do número. `diff` no formato do edit ("+12 texto", "-12 texto",
+// " 12 texto", "   ..."); `max` linhas de diff, o resto vira "+N linhas (ctrl+o)"
+// CJK e emoji ocupam 2 colunas; o diff é o primeiro lugar que desenha texto arbitrário de arquivo (Argus 2026-11-20)
+const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u;
+const cols = (ch) => (WIDE.test(ch) ? 2 : 1);
+// controles (ESC, \r, NUL, U+2028...) do arquivo não chegam ao terminal: viram "·"
+const clean = (text) => text.replace(/\t/g, "   ").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "·");
+
+export function diffBlock({ theme, diff, width, max = Infinity }) {
+	const rows = String(diff ?? "").replace(/\r/g, "").split("\n").filter((line) => line !== "");
+	const parsed = rows.map((line) => line.match(/^([+\- ])(\s*\d*)\s(.*)$/));
+	const numWidth = Math.max(1, ...parsed.map((match) => (match ? match[2].trim().length : 0)));
+	const room = Math.max(4, width - numWidth - 3);
+	const paint = { "+": (text) => (theme.bg ? theme.bg("toolSuccessBg", text) : theme.fg("success", text)), "-": (text) => (theme.bg ? theme.bg("toolErrorBg", text) : theme.fg("error", text)) };
+	const out = [];
+	const shown = rows.slice(0, max);
+	shown.forEach((line, index) => {
+		const match = parsed[index];
+		if (!match) return void out.push(fit(theme.fg("dim", " ".repeat(numWidth + 1) + clean(line.trim())), width));
+		const [, sign, num, content] = match;
+		const pieces = [];
+		let piece = "", used = 0;
+		for (const ch of clean(content)) {
+			if (used + cols(ch) > room) pieces.push([piece, used]), (piece = ""), (used = 0);
+			piece += ch;
+			used += cols(ch);
+		}
+		pieces.push([piece, used]);
+		pieces.forEach(([piece, used], part) => {
+			const head = `${part === 0 ? num.trim().padStart(numWidth) : " ".repeat(numWidth)} ${part === 0 && sign !== " " ? sign : " "} `;
+			const text = head + piece + " ".repeat(Math.max(0, width - numWidth - 3 - used));
+			out.push(paint[sign] ? paint[sign](text) : theme.fg("toolDiffContext", text));
+		});
+	});
+	if (rows.length > shown.length) out.push(fit(theme.fg("dim", `${" ".repeat(numWidth + 1)}… +${rows.length - shown.length} linhas (ctrl+o)`), width));
+	return out;
+}
+
+// o write vira um diff só de linhas novas (o arquivo inteiro entrou)
+// só as `max` primeiras linhas viram diff (arquivo de MBs não é montado inteiro); o resto entra como "+N linhas"
+export function writeDiff(content, max = 40) {
+	if (typeof content !== "string") return "";
+	const all = content.replace(/\r/g, "").replace(/\n$/, "");
+	const head = all.split("\n", max);
+	const rest = (all.match(/\n/g)?.length ?? 0) + 1 - head.length;
+	return [...head.map((line, index) => `+${index + 1} ${line}`), ...(rest > 0 ? [`   … +${rest} linhas (ctrl+o)`] : [])].join("\n");
+}
+
 export function toolSummary(name, args = {}, result) {
 	const file = (value) => String(value ?? "").replace(/\\/g, "/");
 	if (name === "read") return `Leu ${file(args.path)}`;
@@ -1037,7 +1092,19 @@ export function compactToolRenderer(toolName, next) {
 			if (options.expanded) return wrap(base?.renderResult?.(result, options, theme, context) ?? output(result, theme, 0), context.outputPad);
 			if (options.isPartial) return empty;
 			const time = context.durationMs >= 100 ? theme.fg("dim", ` · ${(context.durationMs / 1000).toFixed(1)}s`) : "";
-			return line(theme, context.outputPad, toolSummary(toolName, context.args ?? {}, result), `${time}${context.isError ? theme.fg("error", " · erro") : ""}`);
+			const summary = line(theme, context.outputPad, toolSummary(toolName, context.args ?? {}, result), `${time}${context.isError ? theme.fg("error", " · erro") : ""}`);
+			// edit e write: o diff fica aberto sob a linha (como no Claude Code); o write mostra as primeiras 40 linhas
+			const diff = context.isError ? "" : toolName === "edit" ? result?.details?.diff : toolName === "write" ? writeDiff(context.args?.content) : "";
+			if (!diff) return summary;
+			const cache = new Map();
+			const pad2 = context.outputPad + 2;
+			return {
+				render: (width) => {
+					if (!cache.has(width)) cache.set(width, [...summary.render(width), ...diffBlock({ theme, diff, width: Math.max(8, width - pad2), max: 200 }).map((row) => " ".repeat(pad2) + row)]);
+					return cache.get(width);
+				},
+				invalidate: () => cache.clear(),
+			};
 		},
 	};
 }

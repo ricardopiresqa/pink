@@ -57,7 +57,11 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 	const lines = () => [...jobs.values()].map((job) => `⚙ %${job.id} ${job.shell} · ${clock(now() - job.started)} · ${oneLine(job.command, 60)}`);
 	const refresh = () => {
 		try {
-			ui?.setWidget(WIDGET, jobs.size && !closed ? [...lines(), "   /processos para listar ou encerrar"] : undefined);
+			// embaixo da caixa de texto, junto dos subagentes (owner 2026-11-20, card 1dfwh7kg4g2)
+			// teto de 4 linhas: mais que isso empurrava o rodapé para fora em tela baixa
+			const all = lines();
+			const shownLines = all.length > 4 ? [...all.slice(0, 3), `   … +${all.length - 3} processos`] : all;
+			ui?.setWidget(WIDGET, jobs.size && !closed ? [...shownLines, "   /processos para listar ou encerrar"] : undefined, { placement: "belowEditor" });
 		} catch {
 			/* tela já fechada */
 		}

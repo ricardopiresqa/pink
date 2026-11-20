@@ -192,8 +192,8 @@ def test_2_the_result_arrives_as_a_message_that_starts_a_turn(facts: dict) -> No
 
 def test_3_the_widget_lists_the_running_job_and_the_command_lists_and_cancels(facts: dict) -> None:
     assert facts["widget"]["key"] == "pink-subagents"
-    assert facts["widget"]["line"] == "⏳ #1 scout · 0:00 · ler o repo inteiro"  # linha do widget: id, agente, tarefa
-    assert "#1 scout · 1:05" in facts["listing"]  # a lista do comando mostra o tempo decorrido
+    assert facts["widget"]["line"] == "⏳ #1 scout · ler o repo inteiro · 0:00 · ↓ 0 tokens"  # id, agente, tarefa, tempo, tokens (card 1dfwh7kg4g2)
+    assert "#1 scout · ler o repo inteiro · 1:05" in facts["listing"]  # a lista do comando mostra o tempo decorrido
     assert facts["completions"] == ["cancelar todos", "cancelar 1"]
     assert facts["cancelNote"] == {"text": "Cancelando 1 subagente(s).", "level": "info"}
     assert facts["afterCancelWidget"] is None and facts["sentAfterCancel"] == 1  # some do widget; o aviso de cancelado vai como nextTurn
