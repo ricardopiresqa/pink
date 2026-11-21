@@ -690,7 +690,7 @@ export function live(fn, fallback) {
 
 export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel"];
 
-export function install(pi, ctx, { CustomEditor, SessionManager, version = "", matchesKey, onPalette, onAgent }) {
+export function install(pink, ctx, { CustomEditor, SessionManager, version = "", matchesKey, onPalette, onAgent }) {
 	const state = { home: !hasMessages(ctx), tui: undefined, branch: "", sessions: [] };
 	const redraw = () => state.tui?.requestRender();
 	const leaveHome = () => {
@@ -701,12 +701,12 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	};
 	// sessão do multiplexador (pink/mux): progresso (OSC 9;4) enquanto trabalha e sino ao terminar, para a lateral mostrar o estado
 	const signal = (text) => process.env.PINK_MUX_CHILD === "1" && process.stdout.isTTY && process.stdout.write(text);
-	pi.on("agent_start", () => {
+	pink.on("agent_start", () => {
 		signal("\x1b]9;4;3\x07");
 		leaveHome();
 	});
-	pi.on("input", leaveHome);
-	void pi.exec?.("git", ["branch", "--show-current"], { cwd: ctx.cwd }).then((result) => {
+	pink.on("input", leaveHome);
+	void pink.exec?.("git", ["branch", "--show-current"], { cwd: ctx.cwd }).then((result) => {
 		state.branch = (result?.stdout ?? "").trim();
 		redraw();
 	}).catch(() => undefined);
@@ -717,15 +717,15 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	}).catch(() => undefined);
 	loadSessions();
 	PINK.refreshSessions = loadSessions;  // o "Apagar sessão" relê a coluna depois de mover o arquivo
-	pi.on("agent_end", () => {
+	pink.on("agent_end", () => {
 		signal("\x1b]9;4;0\x07\x07");
 		// o multiplexador guarda o arquivo de cada sessão aberta para reabri-la no próximo Pink (card 1dfwh7kfyty)
 		const file = ctx.sessionManager?.getSessionFile?.();
 		if (file) signal(`\x1b]9;pink-session=${file}\x07`);
 		// título automático (owner 2026-10-29): só quando a sessão ainda não tem nome
-		if (!pi.getSessionName?.()) {
+		if (!pink.getSessionName?.()) {
 			const title = autoTitle(ctx.sessionManager?.getBranch?.());
-			if (title) pi.setSessionName?.(title);
+			if (title) pink.setSessionName?.(title);
 		}
 		loadSessions();
 	});
@@ -774,7 +774,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			const outer = state.home ? Math.min(width, HOME_WIDTH) : width;
 			const margin = state.home ? Math.floor((width - outer) / 2) : 0;
 			const theme = ctx.ui.theme;
-			const label = modelLabel({ theme, model: ctx.model, thinking: pi.getThinkingLevel?.(), agent: PINK.agent, permission: PINK.permission });
+			const label = modelLabel({ theme, model: ctx.model, thinking: pink.getThinkingLevel?.(), agent: PINK.agent, permission: PINK.permission });
 			const text = outer - 4;
 			// o rótulo fica embaixo, na linha das dicas: à direita da 1ª linha ele estreitava o editor e o pedido quebrava em
 			// ~35 colunas na tela inicial (owner 2026-11-15)
@@ -913,7 +913,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 				const title = ctx.sessionManager?.getSessionName?.() || sessionStats(ctx.sessionManager?.getEntries?.()).title || t("Sessão atual", "Sesión actual", "Current session");
 				const listed = state.sessions.map((item) => ({ title: item.name || item.firstMessage, current: item.path === current, when: relativeTime(item.modified) }));
 				const sessions = listed.some((item) => item.current) ? listed : [{ title, current: true, when: relativeTime(Date.now()) }, ...listed];
-				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pi.getActiveTools?.() ?? []).length } });
+				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pink.getActiveTools?.() ?? []).length } });
 			}
 			startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
@@ -1196,8 +1196,8 @@ function userText(entry) {
 	return Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
 }
 
-async function openPalette(pi, ctx) {
-	const choice = await ctx.ui.select?.(t("Comandos  (Enter coloca na caixa de digitar)", "Comandos  (Enter lo pone en la caja de escribir)", "Commands  (Enter puts it in the input box)"), paletteItems(pi.getCommands?.() ?? []));
+async function openPalette(pink, ctx) {
+	const choice = await ctx.ui.select?.(t("Comandos  (Enter coloca na caixa de digitar)", "Comandos  (Enter lo pone en la caja de escribir)", "Commands  (Enter puts it in the input box)"), paletteItems(pink.getCommands?.() ?? []));
 	if (choice) ctx.ui.setEditorText?.(choice.split("  ")[0]);
 }
 
@@ -1247,12 +1247,12 @@ async function deleteSession(ctx) {
 	PINK.refreshSessions?.();
 }
 
-function registerOpenCodeFunctions(pi) {
-	const command = (name, description, handler) => pi.registerCommand?.(name, { description, handler });
+function registerOpenCodeFunctions(pink) {
+	const command = (name, description, handler) => pink.registerCommand?.(name, { description, handler });
 	command("plan", t("Agente Plano: só lê e planeja, não edita (tab troca)", "Agente Plan: solo lee y planifica, no edita (tab cambia)", "Plan agent: reads and plans, does not edit (tab switches)"), async (_args, ctx) => switchAgent(ctx, "plan"));
 	command("build", t("Agente Build: edita e roda comandos (tab troca)", "Agente Build: edita y ejecuta comandos (tab cambia)", "Build agent: edits and runs commands (tab switches)"), async (_args, ctx) => switchAgent(ctx, "build"));
-	pi.registerShortcut?.("alt+m", { description: t("Troca o modo de permissão: pergunta tudo, aceita edições, plano", "Cambia el modo de permisos: pregunta todo, acepta ediciones, plan", "Switches the permission mode: ask everything, accept edits, plan"), handler: (ctx) => setMode(ctx, nextMode()) });
-	pi.registerCommand?.("modo", {
+	pink.registerShortcut?.("alt+m", { description: t("Troca o modo de permissão: pergunta tudo, aceita edições, plano", "Cambia el modo de permisos: pregunta todo, acepta ediciones, plan", "Switches the permission mode: ask everything, accept edits, plan"), handler: (ctx) => setMode(ctx, nextMode()) });
+	pink.registerCommand?.("modo", {
 		description: t("Modo de permissão: perguntar, editar ou plano (sem nome, troca para o próximo; alt+m)", "Modo de permisos: preguntar, editar o plan (sin nombre, pasa al siguiente; alt+m)", "Permission mode: ask, edit or plan (no name, moves to the next; alt+m)"),
 		getArgumentCompletions: (prefix) => Object.keys(MODE_ARGS).filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name })),
 		handler: async (args, ctx) => {
@@ -1261,9 +1261,9 @@ function registerOpenCodeFunctions(pi) {
 			setMode(ctx, name ? MODE_ARGS[name] : nextMode());
 		},
 	});
-	command("help", t("Paleta de comandos (ctrl+p)", "Paleta de comandos (ctrl+p)", "Command palette (ctrl+p)"), async (_args, ctx) => openPalette(pi, ctx));
+	command("help", t("Paleta de comandos (ctrl+p)", "Paleta de comandos (ctrl+p)", "Command palette (ctrl+p)"), async (_args, ctx) => openPalette(pink, ctx));
 	command("details", t("Mostra ou esconde a saída das ferramentas (ctrl+o)", "Muestra u oculta la salida de las herramientas (ctrl+o)", "Show or hide tool output (ctrl+o)"), async (_args, ctx) => ctx.ui.setToolsExpanded?.(!ctx.ui.getToolsExpanded?.()));
-	command("init", t("Cria ou atualiza o AGENTS.md do projeto", "Crea o actualiza el AGENTS.md del proyecto", "Create or update the project's AGENTS.md"), async () => pi.sendUserMessage?.(INIT_PROMPT));
+	command("init", t("Cria ou atualiza o AGENTS.md do projeto", "Crea o actualiza el AGENTS.md del proyecto", "Create or update the project's AGENTS.md"), async () => pink.sendUserMessage?.(INIT_PROMPT));
 	command("themes", t("Escolhe o tema (fica salvo)", "Elige el tema (queda guardado)", "Choose the theme (it is saved)"), async (_args, ctx) => {
 		const name = await ctx.ui.select?.("Temas", (ctx.ui.getAllThemes?.() ?? []).map((theme) => theme.name));
 		if (!name) return;
@@ -1311,7 +1311,7 @@ function registerOpenCodeFunctions(pi) {
 	});
 	// "Trabalhando · 1m 12s · ↓ 3.1k tokens" ao vivo; no fim, o rodapé da última resposta guarda o total do pedido
 	// (registrado antes do ponto de restauração: o Pink espera cada gancho, e o git não pode atrasar o relógio)
-	pi.on("agent_start", async (_event, ctx) => {
+	pink.on("agent_start", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
 		const run = (PINK.run = continueRun(PINK.lastRun, PINK.lastRunEnd) ?? createRun());
 		const show = () => {
@@ -1326,14 +1326,14 @@ function registerOpenCodeFunctions(pi) {
 		PINK.runTimer = setInterval(show, 1000);
 		PINK.runTimer.unref?.();
 	});
-	pi.on("agent_end", async (_event, ctx) => {
+	pink.on("agent_end", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
 		ctx.ui.setWorkingMessage?.();
 		if (PINK.run?.last !== undefined) PINK.runOf.set(PINK.run.last, PINK.run.summary());
 		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
 	});
 	// ponto de restauração dos arquivos antes de cada mensagem (só na TUI, só num repositório Git)
-	pi.on("agent_start", async (_event, ctx) => {
+	pink.on("agent_start", async (_event, ctx) => {
 		const leaf = ctx.sessionManager?.getLeafEntry?.();
 		if (ctx.mode !== "tui" || leaf?.type !== "message" || leaf.message?.role !== "user") return;
 		PINK.redo.length = 0;
@@ -1341,14 +1341,14 @@ function registerOpenCodeFunctions(pi) {
 		if (!snapshot) return;
 		PINK.snapshots.set(leaf.id, snapshot);
 		// card 1dfwh7kfmqr: o ponto também vai para a sessão (fora do contexto do modelo); o /undo funciona depois de reabrir
-		try { pi.appendEntry?.(UNDO_ENTRY, { entryId: leaf.id, top: snapshot.top, tree: snapshot.tree }); } catch { /* sem gravar: o /undo desta execução ainda vale */ }
+		try { pink.appendEntry?.(UNDO_ENTRY, { entryId: leaf.id, top: snapshot.top, tree: snapshot.tree }); } catch { /* sem gravar: o /undo desta execução ainda vale */ }
 	});
-	pi.on("message_start", async (event) => {
+	pink.on("message_start", async (event) => {
 		if (event?.message?.role !== "assistant") return;
 		PINK.agentOf.set(event.message.timestamp, PINK.agent);
 		PINK.timing.set(event.message.timestamp, { start: PINK.turnStart ?? Date.now() });  // do pedido ao fim, como o OpenCode
 	});
-	pi.on("message_update", async (event) => {
+	pink.on("message_update", async (event) => {
 		if (PINK.run) {
 			PINK.run.live(event?.message);
 			PINK.runShow?.();
@@ -1361,15 +1361,15 @@ function registerOpenCodeFunctions(pi) {
 		else if (runs.length && runs.at(-1).ms === undefined) runs.at(-1).ms = Date.now() - runs.at(-1).start;
 		PINK.thinking.set(key, runs);
 	});
-	pi.on("turn_start", async () => {
+	pink.on("turn_start", async () => {
 		PINK.turnStart = Date.now();
 	});
-	pi.on("message_end", async (event) => {
+	pink.on("message_end", async (event) => {
 		PINK.run?.add(event?.message);
 		const timing = event?.message?.role === "assistant" ? PINK.timing.get(event.message.timestamp) : undefined;
 		if (timing?.start) timing.ms = Date.now() - timing.start;
 	});
-	pi.on("tool_call", async (event, ctx) => {
+	pink.on("tool_call", async (event, ctx) => {
 		const target = event.toolName === "write" ? event.input?.path : undefined;
 		if (typeof target === "string" && target) {
 			try {
@@ -1379,33 +1379,33 @@ function registerOpenCodeFunctions(pi) {
 			}
 		}
 		if (PINK.agent !== "plan") return;
-		const decision = planDecision(event.toolName, pi.getAllTools?.().find((tool) => tool.name === event.toolName)?.annotations);
+		const decision = planDecision(event.toolName, pink.getAllTools?.().find((tool) => tool.name === event.toolName)?.annotations);
 		if (decision === "allow") return;
 		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.(t("Agente Plano: rodar este comando?", "Agente Plan: ¿ejecutar este comando?", "Plan agent: run this command?"), String(event.input?.command ?? event.toolName)))) return;
 		return { block: true, reason: t(`Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).`, `Agente Plan (solo lectura): ${event.toolName} no está permitido. Pide al usuario que cambie a Build (tab).`, `Plan agent (read-only): ${event.toolName} is not allowed. Ask the user to switch to Build (tab).`) };
 	});
 	// seções do prompt, não o prompt inteiro: devolver systemPrompt forçava o texto e apagava as seções das outras extensões (Ponytail)
-	pi.on("before_agent_start", async (event) => {
+	pink.on("before_agent_start", async (event) => {
 		const sections = event?.systemPromptOptions?.sections;
 		if (!sections || typeof sections !== "object") return { systemPrompt: `${event.systemPrompt ?? ""}${LANGUAGE_PROMPT}${PINK.agent === "plan" ? PLAN_PROMPT : ""}` };
 		sections.pink_language = LANGUAGE_PROMPT.trim();
 		if (PINK.agent === "plan") sections.pink_plan = PLAN_PROMPT.trim();
 		else delete sections.pink_plan;
 	});
-	pi.on("session_tree", async (_event, ctx) => {
+	pink.on("session_tree", async (_event, ctx) => {
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 	});
 }
 
 const TODO_RUNTIMES = new WeakSet();
 
-async function registerTodoTool(pi) {
+async function registerTodoTool(pink) {
 	// uma vez por runtime: trocar de sessão cria um runtime novo, que precisa da ferramenta de novo (antes sumia: "4 ativas")
-	if (TODO_RUNTIMES.has(pi) || !pi.registerTool) return;
-	TODO_RUNTIMES.add(pi);
+	if (TODO_RUNTIMES.has(pink) || !pink.registerTool) return;
+	TODO_RUNTIMES.add(pink);
 	const { Type } = await import("typebox");
 	const status = Type.Union(["pending", "in_progress", "completed", "cancelled"].map((value) => Type.Literal(value)));
-	pi.registerTool({
+	pink.registerTool({
 		name: "todowrite",
 		label: t("Tarefas", "Tareas", "Tasks"),
 		description: "Create and update the session todo list shown to the user. Send the WHOLE list on every change. Use it for work with 3 or more steps: keep exactly one item in_progress and mark items completed as soon as they are done.",
@@ -1418,10 +1418,10 @@ async function registerTodoTool(pi) {
 	});
 }
 
-export default function (pi) {
+export default function (pink) {
 	// ao sair, o contexto da extensão já foi desligado quando o Pink imprime a linha de retomar: o fechamento é montado no
 	// session_shutdown (contexto ainda ativo) e só recebe o comando de continuar depois
-	pi.on("session_shutdown", async (event, ctx) => {
+	pink.on("session_shutdown", async (event, ctx) => {
 		for (const name of PINK_GLOBALS) globalThis[name] = undefined;  // a sessão seguinte reinstala; até lá, nada lê o ctx antigo
 		clearInterval(PINK.runTimer);
 		if (event?.reason !== "quit" || ctx?.mode !== "tui") return;
@@ -1438,22 +1438,22 @@ export default function (pi) {
 			globalThis.__pinkExitBanner = undefined;  // sem fechamento, o Pink imprime a linha dele
 		}
 	});
-	pi.registerCommand?.("lateral", {
+	pink.registerCommand?.("lateral", {
 		description: t("Mostra ou esconde a lateral (sessão, contexto, tokens)", "Muestra u oculta la barra lateral (sesión, contexto, tokens)", "Show or hide the sidebar (session, context, tokens)"),
 		handler: async (_args, ctx) => {
 			globalThis.__pinkSidebarOn = !(globalThis.__pinkSidebarOn ?? true);
 			ctx.ui.notify?.(globalThis.__pinkSidebarOn ? t("Lateral visível", "Barra lateral visible", "Sidebar shown") : t("Lateral escondida", "Barra lateral oculta", "Sidebar hidden"), "info");
 		},
 	});
-	registerOpenCodeFunctions(pi);
-	pi.registerMarkdownTransformer?.(labelUserMarkdown);
-	pi.registerToolRenderer?.(compactToolRenderer);
-	pi.on("session_start", async (_event, ctx) => {
-		await registerTodoTool(pi);
+	registerOpenCodeFunctions(pink);
+	pink.registerMarkdownTransformer?.(labelUserMarkdown);
+	pink.registerToolRenderer?.(compactToolRenderer);
+	pink.on("session_start", async (_event, ctx) => {
+		await registerTodoTool(pink);
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 		if (ctx.mode !== "tui") return;
 		const { CustomEditor, SessionManager, VERSION } = await import("@earendil-works/pi-coding-agent");
 		const { matchesKey } = await import("@earendil-works/pi-tui");
-		install(pi, ctx, { CustomEditor, SessionManager, version: VERSION ?? "", matchesKey, onPalette: () => openPalette(pi, ctx), onAgent: () => switchAgent(ctx) });
+		install(pink, ctx, { CustomEditor, SessionManager, version: VERSION ?? "", matchesKey, onPalette: () => openPalette(pink, ctx), onAgent: () => switchAgent(ctx) });
 	});
 }

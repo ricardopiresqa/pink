@@ -33,23 +33,23 @@ export function rewrite(text: string, commands: Command[]): string | undefined {
 
 const SCOPE: Record<string, string> = { user: t("usuário", "usuario", "user"), project: t("projeto", "proyecto", "project") };
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return;
 	const commands = (): Command[] => {
 		try {
-			return pi.getCommands() ?? [];
+			return pink.getCommands() ?? [];
 		} catch {
 			return [];
 		}
 	};
 	// só o que a pessoa digitou (interface ou rpc): texto mandado por outra extensão nunca chama skill por este atalho.
 	// shortcut: /nome não segue a configuração enableSkillCommands (a base expande /skill:nome de qualquer jeito)
-	pi.on("input", (event: any) => {
+	pink.on("input", (event: any) => {
 		if (typeof event?.text !== "string" || event.source === "extension" || !NAME.test(event.text)) return { action: "continue" };
 		const text = rewrite(event.text, commands());
 		return text === undefined ? { action: "continue" } : { action: "transform", text };
 	});
-	pi.registerCommand("skills", {
+	pink.registerCommand("skills", {
 		description: t("Lista as skills (SKILL.md) desta sessão; chame uma com /nome", "Lista las skills (SKILL.md) de esta sesión; llama una con /nombre", "Lists this session's skills (SKILL.md); call one with /name"),
 		handler: async (_args: string, ctx: any) => {
 			const skills = skillsOf(commands());

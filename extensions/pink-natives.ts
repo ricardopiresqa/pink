@@ -40,7 +40,7 @@ export function findPackage(fromDir, name, exists = fs.existsSync) {
 	}
 }
 
-// só executáveis que o pi.exec (spawn sem shell) consegue abrir: no Windows, .exe/.com (um .cmd daria ENOENT).
+// só executáveis que o pink.exec (spawn sem shell) consegue abrir: no Windows, .exe/.com (um .cmd daria ENOENT).
 // Devolve o caminho absoluto e ignora pastas relativas do PATH (".", "bin"): quem chama roda esse caminho, nunca o nome
 // solto, porque no Windows o spawn procura primeiro na pasta do projeto e um rtk.exe plantado no repositório rodaria.
 export function onPath(name, env = process.env, exists = fs.existsSync, platform = process.platform) {
@@ -95,7 +95,7 @@ export function graphFor(cwd, trusted, env, exists = fs.existsSync, platform = p
 	return bin ? { graph, bin } : undefined;
 }
 
-export async function natives(pi, deps) {
+export async function natives(pink, deps) {
 	const { env = process.env, exists = fs.existsSync, fetcher = fetch, here, load = (file) => import(pathToFileURL(file).href), read, write = fs.writeFileSync, mkdir = fs.mkdirSync, platform = process.platform } = deps;
 	const file = path.join(agentDir(env), "pink-tools.json");
 	const choices = readChoices(file, read);
@@ -110,7 +110,7 @@ export async function natives(pi, deps) {
 	// um servidor com o mesmo nome no mcp.json tem precedência (o Pink mostra a troca no /mcp); erro de registro não derruba a sessão
 	const register = (name, config) => {
 		try {
-			pi.registerMcpServer?.(name, config);
+			pink.registerMcpServer?.(name, config);
 			return true;
 		} catch {
 			return false;
@@ -118,7 +118,7 @@ export async function natives(pi, deps) {
 	};
 	const unregister = (name) => {
 		try {
-			pi.unregisterMcpServer?.(name);
+			pink.unregisterMcpServer?.(name);
 		} catch {
 			// já não estava registrado
 		}
@@ -130,8 +130,8 @@ export async function natives(pi, deps) {
 			// shortcut: o process.env é global, os filhos do bash herdam; inofensivo (só cala o aviso do Ponytail ao abrir)
 			env.PONYTAIL_QUIET_STARTUP ??= "1";
 			const extension = await load(path.join(ponytail, "pi-extension", "index.js"));
-			extension.default(pi);
-			pi.on("resources_discover", async () => ({ skillPaths: [path.join(ponytail, "skills")] }));
+			extension.default(pink);
+			pink.on("resources_discover", async () => ({ skillPaths: [path.join(ponytail, "skills")] }));
 			report.ponytail = true;
 		} catch {
 			// pacote quebrado: o Pink segue sem o Ponytail
@@ -142,9 +142,9 @@ export async function natives(pi, deps) {
 	let rtkBin;
 	const findRtk = () => { rtkBin = on.rtk && env.PINK_RTK !== "0" ? onPath("rtk", env, exists, platform) : undefined; return Boolean(rtkBin); };
 	report.rtk = findRtk();
-	pi.on("tool_call", async (event, ctx) => {
+	pink.on("tool_call", async (event, ctx) => {
 		if (event?.toolName !== "bash" || !event.input || !rtkBin) return;
-		const result = await rtkRewrite(pi.exec.bind(pi), event.input.command, ctx?.signal, rtkBin);
+		const result = await rtkRewrite(pink.exec.bind(pink), event.input.command, ctx?.signal, rtkBin);
 		if (result.block) return { block: true, reason: `RTK: ${result.block}` };
 		event.input.command = result.command;
 	});
@@ -163,13 +163,13 @@ export async function natives(pi, deps) {
 			report.graphify = false;
 		}
 	};
-	pi.on("session_start", async (_event, ctx) => {
+	pink.on("session_start", async (_event, ctx) => {
 		report.rtk = findRtk();
 		syncGraphify(ctx);
 		if (!choices.exists && ctx?.mode === "tui") ctx.ui?.notify?.(t("O Pink tem ferramentas opcionais (Ponytail, RTK, Headroom, graphify): /ferramentas", "Pink tiene herramientas opcionales (Ponytail, RTK, Headroom, graphify): /ferramentas", "Pink has optional tools (Ponytail, RTK, Headroom, graphify): /ferramentas"), "info");
 	});
 
-	pi.registerCommand?.("ferramentas", {
+	pink.registerCommand?.("ferramentas", {
 		description: t("Liga ou desliga as ferramentas opcionais (Ponytail, RTK, Headroom, graphify)", "Activa o desactiva las herramientas opcionales (Ponytail, RTK, Headroom, graphify)", "Turns the optional tools on or off (Ponytail, RTK, Headroom, graphify)"),
 		handler: async (_args, ctx) => {
 			// a sonda do Headroom (até 1,5 s) roda uma vez por abertura do menu, não a cada Enter
@@ -202,6 +202,6 @@ export async function natives(pi, deps) {
 	return { report, headroomDone, file };
 }
 
-export default async function (pi) {
-	await natives(pi, { here: path.dirname(fileURLToPath(import.meta.url)) });
+export default async function (pink) {
+	await natives(pink, { here: path.dirname(fileURLToPath(import.meta.url)) });
 }

@@ -185,13 +185,13 @@ export function memoryTool(cwdOf: (ctx?: any) => string, env = process.env) {
 	};
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return;
 	let cwd = process.cwd();
 	// instantâneo por sessão: o prompt de sistema não muda a cada gravação (o cache do prefixo continua valendo); o list
 	// mostra o atual. O índice é refeito ao abrir, pegando o .md editado ou apagado à mão.
 	let section = "";
-	pi.on("session_start", (_event: any, ctx: any) => {
+	pink.on("session_start", (_event: any, ctx: any) => {
 		if (ctx?.cwd) cwd = ctx.cwd;
 		if (!isTrusted(ctx)) {
 			section = "";
@@ -204,15 +204,15 @@ export default function (pi: any) {
 		}
 		section = MEMORY_PROMPT(memoryDir(cwd), readIndex(cwd));
 	});
-	pi.registerTool(memoryTool((ctx) => ctx?.cwd ?? cwd));
+	pink.registerTool(memoryTool((ctx) => ctx?.cwd ?? cwd));
 	// seção do prompt, como as outras extensões do Pink: devolver systemPrompt apagaria as seções delas
-	pi.on("before_agent_start", async (event: any) => {
+	pink.on("before_agent_start", async (event: any) => {
 		if (!section) return;
 		const sections = event?.systemPromptOptions?.sections;
 		if (sections && typeof sections === "object") sections.pink_memory = section;
 		else return { systemPrompt: `${event?.systemPrompt ?? ""}\n\n${section}` };
 	});
-	pi.registerCommand("memoria", {
+	pink.registerCommand("memoria", {
 		description: t("Memória deste projeto: mostra a pasta e o índice (MEMORY.md); 'abrir' abre a pasta", "Memoria de este proyecto: muestra la carpeta y el índice (MEMORY.md); 'abrir' abre la carpeta", "This project's memory: shows the folder and the index (MEMORY.md); 'open' opens the folder"),
 		getArgumentCompletions: (prefix: string) => ("abrir".startsWith(prefix) ? [{ value: "abrir", label: "abrir" }] : null),
 		handler: async (args: string, ctx: any) => {

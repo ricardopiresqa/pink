@@ -103,7 +103,7 @@ const label = (entry: Entry) => `${entry.name} [${entry.short}] · ${entry.cwd}$
 // o conteúdo vai entre marcas: sem "<" literal nenhum texto fecha o bloco e escreve "como o sistema"
 const fence = (text: string) => String(text).replace(/</g, "&lt;");
 
-export function createBus(pi: any, { env = process.env, now = Date.now, alive = pidAlive, poll = POLL_MS } = {}) {
+export function createBus(pink: any, { env = process.env, now = Date.now, alive = pidAlive, poll = POLL_MS } = {}) {
 	let me: Entry | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let lastBeat = 0;
@@ -175,7 +175,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 				.filter(Boolean)
 				.join("\n");
 			try {
-				pi.sendMessage(
+				pink.sendMessage(
 					{ customType: "session-message", display: true, content, details: { from: sender ? { id: sender.id, short: sender.short, name: sender.name } : null } },
 					opens ? { triggerTurn: true, deliverAs: "followUp" } : { deliverAs: "nextTurn" },
 				);
@@ -226,7 +226,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 	};
 	const reply = (text: string, isError = false) => ({ content: [{ type: "text", text }], details: undefined, isError });
 
-	pi.on("session_start", (_event: any, ctx: any) => {
+	pink.on("session_start", (_event: any, ctx: any) => {
 		if (!ctx?.hasUI) return;
 		try {
 			register(ctx);
@@ -234,7 +234,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 			/* sem registro: a sessão só não aparece para as outras */
 		}
 	});
-	pi.on("session_info_changed", (event: any) => {
+	pink.on("session_info_changed", (event: any) => {
 		if (!me || !event?.name) return;
 		me.name = clean(event.name, 60);
 		try {
@@ -243,9 +243,9 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 			/* o nome antigo continua */
 		}
 	});
-	pi.on("session_shutdown", unregister);
+	pink.on("session_shutdown", unregister);
 
-	pi.registerTool({
+	pink.registerTool({
 		name: "sessions_list",
 		label: "sessions_list",
 		description: "List the other interactive Pink sessions open on this machine (name, short id, folder), to message one with session_send.",
@@ -256,7 +256,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 			return reply(others.length ? others.map(label).join("\n") : "Nenhuma outra sessão do Pink aberta nesta máquina.");
 		},
 	});
-	pi.registerTool({
+	pink.registerTool({
 		name: "session_send",
 		label: "session_send",
 		description:
@@ -277,7 +277,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 			return reply(`Colocada na caixa de ${label(target)}. Não quer dizer que já foi lida; a resposta, se vier, chega como mensagem.`);
 		},
 	});
-	pi.registerCommand("sessoes", {
+	pink.registerCommand("sessoes", {
 		description: t("Outras sessões do Pink abertas nesta máquina (para o agente conversar com elas)", "Otras sesiones de Pink abiertas en esta máquina (para que el agente hable con ellas)", "Other Pink sessions open on this machine (so the agent can talk to them)"),
 		handler: async (_args: string, ctx: any) => {
 			const others = listSessions(env, alive, now).filter((entry) => entry.id !== me?.id);
@@ -288,7 +288,7 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 	return { drain, register, unregister, me: () => me };
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return;
-	createBus(pi);
+	createBus(pink);
 }

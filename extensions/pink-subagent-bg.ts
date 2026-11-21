@@ -28,7 +28,7 @@ const muxWrite = (text: string) => {
 	if (process.env.PINK_MUX_CHILD === "1" && process.stdout.isTTY) process.stdout.write(text);
 };
 
-export function createBackground(pi: any, { now = Date.now, write = muxWrite } = {}) {
+export function createBackground(pink: any, { now = Date.now, write = muxWrite } = {}) {
 	const jobs = new Map<number, Job>();
 	let next = 1;
 	let closed = false;
@@ -71,7 +71,7 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 		const cancelled = job.controller.signal.aborted;
 		const verb = cancelled ? t("foi cancelado", "fue cancelado", "was cancelled") : outcome.failed ? t("falhou", "falló", "failed") : t("terminou", "terminó", "finished");
 		const body = outcome.text.length > OUTPUT_CAP ? `${outcome.text.slice(0, OUTPUT_CAP)}\n\n${t(`[saída cortada em ${OUTPUT_CAP} caracteres]`, `[salida cortada en ${OUTPUT_CAP} caracteres]`, `[output cut at ${OUTPUT_CAP} characters]`)}` : outcome.text;
-		pi.sendMessage(
+		pink.sendMessage(
 			{
 				customType: "subagent-result",
 				display: true,
@@ -115,7 +115,7 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 		return targets.length;
 	}
 
-	pi.registerCommand("subagentes", {
+	pink.registerCommand("subagentes", {
 		description: t("Subagentes em segundo plano: lista; 'cancelar <n>' ou 'cancelar todos'", "Subagentes en segundo plano: lista; 'cancelar <n>' o 'cancelar todos'", "Background subagents: list; 'cancel <n>' or 'cancel all'"),
 		getArgumentCompletions: (prefix: string) =>
 			["cancelar todos", ...[...jobs.keys()].map((id) => `cancelar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
@@ -130,7 +130,7 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 		},
 	});
 
-	pi.on("session_shutdown", () => {
+	pink.on("session_shutdown", () => {
 		closed = true;
 		for (const job of jobs.values()) job.controller.abort();
 		jobs.clear();

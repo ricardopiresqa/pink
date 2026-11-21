@@ -187,12 +187,12 @@ export function createRules({ load = loadRules } = {}) {
 }
 
 // também no subagente: ele edita arquivos e precisa das mesmas regras
-export default function (pi: any) {
+export default function (pink: any) {
 	const rules = createRules();
-	pi.on("tool_result", async (event: any, ctx: any) => rules.onResult(event, ctx));
+	pink.on("tool_result", async (event: any, ctx: any) => rules.onResult(event, ctx));
 	// contexto novo (sessão, compactação, outro ramo): a regra precisa entrar de novo
-	for (const name of ["session_start", "session_compact", "session_tree"]) pi.on(name, async () => rules.reset());
-	pi.registerCommand("regras", {
+	for (const name of ["session_start", "session_compact", "session_tree"]) pink.on(name, async () => rules.reset());
+	pink.registerCommand("regras", {
 		description: t("Lista as regras por tipo de arquivo (globs) e quais já entraram no contexto", "Lista las reglas por tipo de archivo (globs) y cuáles ya entraron en el contexto", "Lists the rules by file type (globs) and which ones are already in context"),
 		handler: async (_args: string, ctx: any) => ctx.ui.notify(rules.list(ctx), "info"),
 	});

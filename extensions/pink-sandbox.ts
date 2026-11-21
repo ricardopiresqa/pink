@@ -268,18 +268,18 @@ export function createSandbox({ env = process.env, platform = process.platform, 
 	return { on, off, remove, status, active: () => Boolean(state), operations: (kind: "bash" | "powershell", shellPath?: string) => (state ? makeOperations(state, kind, shellPath) : undefined) };
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	const sandbox = createSandbox();
 	(globalThis as any).__pinkSandbox = sandbox; // pink-shell-bg passa as operações ao bash e ao powershell quando ligado
 	// subagente: o pink-shell-bg fica de fora nele, então o bash e o powershell isolados são registrados aqui
 	if (process.env.PINK_SUBAGENT) {
 		if (!sandbox.active() || process.platform !== "win32") return;
-		pi.registerTool(createBashToolDefinition(process.cwd(), { operations: sandbox.operations("bash") }));
-		pi.registerTool(createPowerShellToolDefinition(process.cwd(), { operations: sandbox.operations("powershell") }));
+		pink.registerTool(createBashToolDefinition(process.cwd(), { operations: sandbox.operations("bash") }));
+		pink.registerTool(createPowerShellToolDefinition(process.cwd(), { operations: sandbox.operations("powershell") }));
 		return;
 	}
 	const label = (ctx: any) => ctx?.ui?.setStatus?.("pink-sandbox", sandbox.active() ? "sandbox" : undefined);
-	pi.registerCommand("sandbox", {
+	pink.registerCommand("sandbox", {
 		description: t("Isola os comandos do agente (só gravam na pasta do projeto): /sandbox ligar | desligar | status | remover", "Aísla los comandos del agente (solo escriben en la carpeta del proyecto): /sandbox activar | desactivar | status | quitar", "Isolates the agent's commands (they only write to the project folder): /sandbox on | off | status | remove"),
 		handler: async (args: string, ctx: any) => {
 			const verb = String(args ?? "").trim().toLowerCase();
@@ -293,5 +293,5 @@ export default function (pi: any) {
 			ctx.ui.notify(text, /^(Não|No |Could not|Did not)|não consegui|não encontrad|no pude|no encontr|could not|not found/i.test(text) ? "error" : "info");
 		},
 	});
-	pi.on("session_start", async (_event: any, ctx: any) => label(ctx));
+	pink.on("session_start", async (_event: any, ctx: any) => label(ctx));
 }

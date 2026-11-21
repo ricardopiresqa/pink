@@ -47,7 +47,7 @@ const muxWrite = (text: string) => {
 export const BACKGROUND_GUIDELINE =
 	"Set run_in_background: true for commands that run long or never end (dev servers, watchers, long builds or test suites): you get an id at once and the result arrives later as a message. Do not poll or sleep waiting for it; use background_watch to be told when a line appears (for example a server's ready line), background_output to peek and background_stop to end it. To wait for a pattern in a log file, run a background command that ends when it appears (bash: tail -n0 -F file | grep -m1 'pattern'; PowerShell: Get-Content file -Wait -Tail 0 | Select-String 'pattern' | Select-Object -First 1).";
 
-export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = {}) {
+export function createShellJobs(pink: any, { now = Date.now, write = muxWrite } = {}) {
 	const jobs = new Map<number, Job>();
 	let next = 1;
 	let closed = false;
@@ -85,7 +85,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 	};
 	const deliver = (content: string, details: any, turn: boolean) => {
 		if (closed) return; // sessão encerrada: nada é entregue
-		pi.sendMessage({ customType: "background-shell", display: true, content, details }, turn ? { triggerTurn: true, deliverAs: "followUp" } : { deliverAs: "nextTurn" });
+		pink.sendMessage({ customType: "background-shell", display: true, content, details }, turn ? { triggerTurn: true, deliverAs: "followUp" } : { deliverAs: "nextTurn" });
 	};
 	const clearWatches = (job: Job) => {
 		for (const watch of job.watches) if (watch.timer) clearTimeout(watch.timer);
@@ -143,7 +143,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 	const find = (id: unknown) => jobs.get(Number(String(id ?? "").replace(/^%/, "")));
 	const reply = (value: string, isError = false) => ({ content: [{ type: "text", text: value }], details: undefined, isError });
 
-	pi.registerTool({
+	pink.registerTool({
 		name: "background_output",
 		label: "background_output",
 		description: "Read the latest output (tail) of a command started with run_in_background, while it is still running.",
@@ -154,7 +154,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 			return reply(`%${job.id} rodando há ${clock(now() - job.started)}.\n\n${cap(job.output) || "(sem saída ainda)"}`);
 		},
 	});
-	pi.registerTool({
+	pink.registerTool({
 		name: "background_stop",
 		label: "background_stop",
 		description: "Stop a command started with run_in_background (kills its process tree).",
@@ -166,7 +166,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 			return reply(`Encerrando %${job.id}.`);
 		},
 	});
-	pi.registerTool({
+	pink.registerTool({
 		name: "background_watch",
 		label: "background_watch",
 		description: "Be told, with a message that starts a turn, when a line matching a regular expression appears in the output of a background command (e.g. a dev server's ready line). Fires once; optional timeout.",
@@ -197,7 +197,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		},
 	});
 
-	pi.registerCommand("processos", {
+	pink.registerCommand("processos", {
 		description: t("Comandos em segundo plano: lista; 'encerrar <n>' ou 'encerrar todos'", "Comandos en segundo plano: lista; 'encerrar <n>' o 'encerrar todos'", "Background commands: list; 'stop <n>' or 'stop all'"),
 		getArgumentCompletions: (prefix: string) =>
 			["encerrar todos", ...[...jobs.keys()].map((id) => `encerrar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
@@ -213,7 +213,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		},
 	});
 
-	pi.on("session_shutdown", () => {
+	pink.on("session_shutdown", () => {
 		closed = true;
 		for (const job of jobs.values()) {
 			clearWatches(job);
@@ -248,9 +248,9 @@ export function withBackground(base: any, make: (cwd: string, trusted: boolean) 
 	};
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return; // subagente roda sem tela: fica com o bash original
-	const jobs = createShellJobs(pi);
+	const jobs = createShellJobs(pink);
 	// as mesmas opções que o Pink passa ao bash embutido (prefixo e caminho do shell). O settings do projeto só vale em
 	// pasta confiável, como na sessão (Argus A1: shellPath de repositório estranho trocaria o executável de todo comando);
 	// lido uma vez por pasta e confiança, como a sessão faz ao abrir
@@ -281,6 +281,6 @@ export default function (pi: any) {
 		const operations = sandboxed("powershell");
 		return createPowerShellToolDefinition(cwd, operations ? { operations } : undefined);
 	};
-	pi.registerTool(withBackground(bash(process.cwd(), false), bash, "bash", jobs));
-	pi.registerTool(withBackground(powershell(process.cwd()), powershell, "powershell", jobs));
+	pink.registerTool(withBackground(bash(process.cwd(), false), bash, "bash", jobs));
+	pink.registerTool(withBackground(powershell(process.cwd()), powershell, "powershell", jobs));
 }

@@ -125,15 +125,15 @@ export const PROPOSE_PROMPT = (topic: string) =>
 		"Use scope project só se for específico deste repositório. A pessoa vê o arquivo e aprova antes de gravar; se não houver nada que valha uma skill, diga isso e não chame a ferramenta.",
 	].join("\n");
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return; // subagente não tem tela para a pessoa aprovar
-	pi.registerTool(proposeTool());
-	pi.registerCommand("skill-nova", {
+	pink.registerTool(proposeTool());
+	pink.registerCommand("skill-nova", {
 		description: t("Propõe uma skill a partir do que deu certo nesta sessão (você vê e aprova antes de gravar): /skill-nova [assunto]", "Propone una skill a partir de lo que funcionó en esta sesión (tú lo ves y apruebas antes de guardar): /skill-nova [asunto]", "Proposes a skill from what worked in this session (you see and approve it before it is saved): /skill-nova [topic]"),
 		handler: async (args: string, ctx: any) => {
 			const prompt = PROPOSE_PROMPT(String(args ?? "").trim());
-			if (ctx?.isIdle?.() === false) pi.sendUserMessage?.(prompt, { deliverAs: "followUp" });
-			else pi.sendUserMessage?.(prompt);
+			if (ctx?.isIdle?.() === false) pink.sendUserMessage?.(prompt, { deliverAs: "followUp" });
+			else pink.sendUserMessage?.(prompt);
 		},
 	});
 }

@@ -178,18 +178,18 @@ export function decide(rules, toolName, target) {
 }
 
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "todowrite", "tool_search"]);
-export function readsOnly(pi, toolName) {
+export function readsOnly(pink, toolName) {
 	if (READ_TOOLS.has(toolName)) return true;
 	// readOnlyHint é declarado pela própria ferramenta: de servidor MCP não vale (um servidor hostil se diria "só leitura")
 	if (toolName.startsWith("mcp__")) return false;
 	try {
-		return pi.getAllTools?.().find((tool) => tool.name === toolName)?.annotations?.readOnlyHint === true;
+		return pink.getAllTools?.().find((tool) => tool.name === toolName)?.annotations?.readOnlyHint === true;
 	} catch {
 		return false;
 	}
 }
 
-export function permissions(pi, deps = {}) {
+export function permissions(pink, deps = {}) {
 	const { env = process.env, read = fs.readFileSync } = deps;
 	const sessionAllowed = new Set();
 	const filesFor = (ctx) => {
@@ -198,7 +198,7 @@ export function permissions(pi, deps = {}) {
 		return files;
 	};
 	let warned = false;
-	pi.on("tool_call", async (event, ctx) => {
+	pink.on("tool_call", async (event, ctx) => {
 		const toolName = String(event?.toolName ?? "");
 		const target = targetOf(toolName, event?.input, ctx?.cwd ?? process.cwd());
 		const rules = loadRules(filesFor(ctx), read);
@@ -214,7 +214,7 @@ export function permissions(pi, deps = {}) {
 		}
 		let { action, why } = decide(rules, toolName, target);
 		// modo "pergunta tudo" (alt+m, pink-ui): o que só lê segue livre; o resto confirma, mesmo com allow (deny continua valendo)
-		if (action === "allow" && globalThis.__pinkPermissionMode === "ask" && !readsOnly(pi, toolName)) {
+		if (action === "allow" && globalThis.__pinkPermissionMode === "ask" && !readsOnly(pink, toolName)) {
 			action = "ask";
 			why = t("modo pergunta tudo (alt+m troca)", "modo pregunta todo (alt+m cambia)", "ask-for-everything mode (alt+m switches)");
 		}
@@ -230,7 +230,7 @@ export function permissions(pi, deps = {}) {
 		if (choice === session) { sessionAllowed.add(key); return undefined; }
 		return { block: true, reason: t("A pessoa negou esta ação", "La persona denegó esta acción", "The person denied this action") };
 	});
-	pi.registerCommand?.("permissoes", {
+	pink.registerCommand?.("permissoes", {
 		description: t("Mostra as permissões em uso (regras do usuário, do projeto e o padrão do Pink)", "Muestra los permisos en uso (reglas del usuario, del proyecto y el predeterminado de Pink)", "Shows the permissions in use (user rules, project rules and Pink's default)"),
 		handler: async (_args, ctx) => {
 			const files = filesFor(ctx);
@@ -249,6 +249,6 @@ export function permissions(pi, deps = {}) {
 	return { sessionAllowed };
 }
 
-export default function (pi) {
-	permissions(pi);
+export default function (pink) {
+	permissions(pink);
 }

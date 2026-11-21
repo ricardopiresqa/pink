@@ -262,6 +262,6 @@ def test_the_built_package_carries_the_background_patches_and_the_ui_branch(pack
     assert 'import { createBackground } from "./background.ts"' in index
     assert "params.background && ctx.hasUI" in index  # sem tela, o branch nao roda e a espera e a de antes
     assert "if (params.chain && params.chain.length > 0) {" in index  # o caminho de espera continua depois do branch
-    assert "const background = createBackground(pi);" in index
+    assert "const background = createBackground(pink);" in index  # card 1dfwh7kg5w6: o objeto da API chama pink
     types = (package_dir / "dist" / "core" / "extensions" / "types.d.ts").read_text(encoding="utf-8")
     assert "hasUI: boolean;" in types  # o campo que o branch le existe na API do Pi

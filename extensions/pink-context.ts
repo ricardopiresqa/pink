@@ -91,13 +91,13 @@ export function render(result: ReturnType<typeof breakdown>) {
 	return lines.join("\n");
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return;
-	pi.registerCommand("context", {
+	pink.registerCommand("context", {
 		description: t("Mostra o que ocupa o contexto: prompt, ferramentas, AGENTS.md, memória, skills, conversa e espaço livre", "Muestra lo que ocupa el contexto: prompt, herramientas, AGENTS.md, memoria, skills, conversación y espacio libre", "Shows what fills the context: prompt, tools, AGENTS.md, memory, skills, conversation and free space"),
 		handler: async (_args: string, ctx: any) => {
 			const options = ctx.getSystemPromptOptions?.() ?? {};
-			const active = new Set<string>(pi.getActiveTools?.() ?? []);
+			const active = new Set<string>(pink.getActiveTools?.() ?? []);
 			const usage = ctx.getContextUsage?.();
 			const branch = ctx.sessionManager?.getBranch?.() ?? [];
 			const result = breakdown({
@@ -105,7 +105,7 @@ export default function (pi: any) {
 				contextFiles: options.contextFiles,
 				sections: options.sections,
 				skills: options.skills,
-				tools: (pi.getAllTools?.() ?? []).filter((tool: any) => active.has(tool.name)),
+				tools: (pink.getAllTools?.() ?? []).filter((tool: any) => active.has(tool.name)),
 				usageTokens: usage?.tokens,
 				window: usage?.contextWindow ?? ctx.model?.contextWindow,
 				conversationEstimate: conversationEstimate(branch),

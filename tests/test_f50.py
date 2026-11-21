@@ -771,7 +771,8 @@ def test_the_docs_say_pink_without_breaking_pinks_own_files_links_or_examples(pa
     assert "https://pi.dev/oauth/client.json" in docs["mcp.md"]  # o client ID real do login de MCP (left_as_upstream)
     assert not re.search(r"(?<![\w])PI_[A-Z*]", everything) and "/bug" not in docs["sessions.md"]
     assert "pink mcp add" in docs["mcp.md"] and "~/.pink/agent/mcp.json" in docs["mcp.md"]
-    assert "pi.on(" in everything and "pink.on(" not in everything  # o objeto da API de extensões continua `pi`
+    # card 1dfwh7kg5w6: o objeto da API nos docs e exemplos chama `pink` (o nome do parâmetro é livre)
+    assert "pink.on(" in everything and not re.search(r"(?<![\w.$])pi\.(on|register\w*)\(", everything)
 
 
 def test_ponytail_rtk_headroom_and_graphify_come_with_pink_and_fail_open(ui_facts: dict) -> None:

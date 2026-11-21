@@ -52,7 +52,7 @@ export function shouldNotify({ on, focused, focusKnown, elapsed }) {
 	return focusKnown ? !focused : elapsed >= LONG_RUN_MS;
 }
 
-export function notifyExtension(pi, deps = {}) {
+export function notifyExtension(pink, deps = {}) {
 	const { env = process.env, read = fs.readFileSync, write = fs.writeFileSync, mkdir = fs.mkdirSync, out = process.stdout, run = execFile, platform = process.platform, now = Date.now } = deps;
 	if (env.PINK_SUBAGENT) return;
 	const file = path.join(agentDir(env), "pink-notify.json");
@@ -65,7 +65,7 @@ export function notifyExtension(pi, deps = {}) {
 		if (!Array.isArray(cmd)) return void out.write(cmd.osc);
 		try { run(cmd[0], cmd[1], { windowsHide: true, timeout: 10_000, env: cmd[2] ? { ...process.env, ...cmd[2] } : process.env }, () => {}); } catch { /* sem notificador: segue sem aviso */ }
 	};
-	pi.on("session_start", async (_event, ctx) => {
+	pink.on("session_start", async (_event, ctx) => {
 		if (ctx?.mode !== "tui" || state.active) return;
 		state.active = true;
 		out.write("\x1b[?1004h"); // pede ao terminal os avisos de foco
@@ -78,20 +78,20 @@ export function notifyExtension(pi, deps = {}) {
 			return rest ? { data: rest } : { consume: true };
 		});
 	});
-	pi.on("session_shutdown", async () => {
+	pink.on("session_shutdown", async () => {
 		if (!state.active) return;
 		state.active = false;
 		state.unsubscribe?.();
 		out.write("\x1b[?1004l");
 	});
-	pi.on("agent_start", async () => { if (!state.start) state.start = now(); });
-	pi.on("agent_settled", async (event, ctx) => {
+	pink.on("agent_start", async () => { if (!state.start) state.start = now(); });
+	pink.on("agent_settled", async (event, ctx) => {
 		const elapsed = state.start ? now() - state.start : 0;
 		state.start = 0;
 		if (!state.active || event?.aborted || !shouldNotify({ on, focused: state.focused, focusKnown: state.focusKnown, elapsed })) return;
 		send("Pink", t(`Terminou em ${path.basename(ctx?.cwd ?? process.cwd())}: pronto para o próximo pedido`, `Terminó en ${path.basename(ctx?.cwd ?? process.cwd())}: listo para el próximo pedido`, `Finished in ${path.basename(ctx?.cwd ?? process.cwd())}: ready for the next request`));
 	});
-	pi.registerCommand?.("notificacoes", {
+	pink.registerCommand?.("notificacoes", {
 		description: t("Liga ou desliga a notificação do sistema quando o Pink termina e a janela está sem foco", "Activa o desactiva la notificación del sistema cuando Pink termina y la ventana no tiene el foco", "Turns the system notification on or off when Pink finishes and the window is not focused"),
 		handler: async (_args, ctx) => {
 			on = !on;
@@ -102,6 +102,6 @@ export function notifyExtension(pi, deps = {}) {
 	return { state, send, isOn: () => on };
 }
 
-export default function (pi) {
-	notifyExtension(pi);
+export default function (pink) {
+	notifyExtension(pink);
 }

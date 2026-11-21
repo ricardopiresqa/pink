@@ -6,9 +6,13 @@ original, porque é o que o código lê:
 
 | Nome | Por quê |
 |---|---|
-| `pi` nas extensões (`export default function (pi) { pi.on(...) }`) | é o objeto da API; toda extensão existente usa esse nome |
 | `@earendil-works/pi-*` nos `import` | é o nome dos módulos que o Pink entrega às extensões |
 | `pi.themes`, `pi.extensions` ... em `package.json` | é a chave que o código lê |
+| nomes internos do motor compilado (`dist/`): chaves de telemetria `pi.ai.*`, `pi-virtual`, cabeçalho `x-opencode-client: pi`, variáveis minificadas, `update pi` como apelido de `update self` | protocolo e chaves que o motor e os provedores usam; não aparecem na tela |
+| crédito do fork (README, CHANGELOG, esta página, `NOTICE.md`) | a licença MIT do Pi pede o crédito |
+
+As extensões e os exemplos usam `pink` como nome do objeto da API (`export default function (pink) { pink.on(...) }`);
+o nome do parâmetro é livre, então extensões antigas escritas com `pi` continuam funcionando.
 
 Diferenças de uso: o tema padrão é `pink` (além de `system`, `dark` e `light`); `f2` / `shift+f2` trocam o modelo e
 `ctrl+p` abre a paleta de comandos.

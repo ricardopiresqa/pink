@@ -69,7 +69,7 @@ export function runHook(hook, payload, cwd, env = process.env) {
 
 const textOf = (content) => (Array.isArray(content) ? content.map((c) => (c?.type === "text" ? c.text : "")).join("\n") : "");
 
-export function hooksExtension(pi, deps = {}) {
+export function hooksExtension(pink, deps = {}) {
 	const { env = process.env, read = fs.readFileSync, run = runHook } = deps;
 	let sessionContext = "";
 	const filesFor = (ctx) => {
@@ -103,12 +103,12 @@ export function hooksExtension(pi, deps = {}) {
 		}
 		return results;
 	};
-	pi.on("tool_call", async (event, ctx) => {
+	pink.on("tool_call", async (event, ctx) => {
 		const results = await fire("PreToolUse", ctx, { tool_name: event?.toolName, tool_input: event?.input }, event?.toolName, (r) => blockOf(r) !== undefined);
 		const reason = results.map(blockOf).find((r) => r !== undefined);
 		return reason === undefined ? undefined : { block: true, reason: t(`Bloqueado por hook: ${reason}`, `Bloqueado por el hook: ${reason}`, `Blocked by hook: ${reason}`) };
 	});
-	pi.on("tool_result", async (event, ctx) => {
+	pink.on("tool_result", async (event, ctx) => {
 		const results = await fire("PostToolUse", ctx, { tool_name: event?.toolName, tool_input: event?.input, tool_response: textOf(event?.content), is_error: Boolean(event?.isError) }, event?.toolName);
 		const feedback = results.filter((r) => r.code === 2 && r.stderr).map((r) => r.stderr);
 		if (!feedback.length) return undefined;
@@ -116,21 +116,21 @@ export function hooksExtension(pi, deps = {}) {
 	});
 	// subagente filho: só os hooks de ferramenta (segurança); sessão e fim são da conversa principal
 	if (env.PINK_SUBAGENT) return;
-	pi.on("session_start", async (event, ctx) => {
+	pink.on("session_start", async (event, ctx) => {
 		const results = await fire("SessionStart", ctx, { source: event?.reason });
 		sessionContext = results.filter((r) => r.code === 0 && r.stdout).map((r) => r.stdout).join("\n");
 	});
 	// seção do prompt de sistema da sessão inteira, como o Claude Code: uma mensagem solta depois do pedido o modelo
 	// ignorava (QA da Tifa, cenário 7)
-	pi.on("before_agent_start", async (event) => {
+	pink.on("before_agent_start", async (event) => {
 		const sections = event?.systemPromptOptions?.sections;
 		if (sessionContext && sections) sections.pink_hooks_session = `# Contexto do hook SessionStart (hooks.json)\n${sessionContext}`;
 		return undefined;
 	});
-	pi.on("agent_settled", async (event, ctx) => {
+	pink.on("agent_settled", async (event, ctx) => {
 		await fire("Stop", ctx, { aborted: Boolean(event?.aborted) });
 	});
-	pi.registerCommand?.("hooks", {
+	pink.registerCommand?.("hooks", {
 		description: t("Mostra os hooks em uso (usuário e projeto confiável)", "Muestra los hooks en uso (usuario y proyecto de confianza)", "Shows the hooks in use (user and trusted project)"),
 		handler: async (_args, ctx) => {
 			const files = filesFor(ctx);
@@ -141,6 +141,6 @@ export function hooksExtension(pi, deps = {}) {
 	});
 }
 
-export default function (pi) {
-	hooksExtension(pi);
+export default function (pink) {
+	hooksExtension(pink);
 }

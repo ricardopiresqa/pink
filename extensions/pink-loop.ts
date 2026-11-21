@@ -31,7 +31,7 @@ const oneLine = (text: string, max: number) => {
 };
 const reply = (text: string, isError = false) => ({ content: [{ type: "text", text }], details: undefined, isError });
 
-export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+export function createLoop(pink: any, { now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
 	let loop: Loop | undefined;
 	let timer: any;
 	let watchdog: any;
@@ -88,7 +88,7 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 			? t(`Repete a cada ${human(loop.every)}; não precisa agendar nada.`, `Se repite cada ${human(loop.every)}; no hace falta programar nada.`, `Repeats every ${human(loop.every)}; nothing to schedule.`)
 			: t(`Ao terminar, chame schedule_wakeup com delaySeconds (${MIN_SECONDS} a ${MAX_WAKE_SECONDS}) para a próxima rodada, ou stop:true se a tarefa acabou. Sem essa chamada o loop termina.`, `Al terminar, llama a schedule_wakeup con delaySeconds (${MIN_SECONDS} a ${MAX_WAKE_SECONDS}) para la próxima ronda, o stop:true si la tarea terminó. Sin esa llamada el loop termina.`, `When finished, call schedule_wakeup with delaySeconds (${MIN_SECONDS} to ${MAX_WAKE_SECONDS}) for the next round, or stop:true if the task is done. Without that call the loop ends.`);
 		show();
-		pi.sendMessage(
+		pink.sendMessage(
 			{ customType: "pink-loop", content: t(`Rodada ${loop.round} do /loop. Tarefa: ${loop.task}\n\n${how}`, `Ronda ${loop.round} del /loop. Tarea: ${loop.task}\n\n${how}`, `Round ${loop.round} of /loop. Task: ${loop.task}\n\n${how}`), display: true },
 			{ triggerTurn: true },
 		);
@@ -178,13 +178,13 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 	return { start, settled, stop, shutdown, wakeTool, state: () => loop };
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return;
-	const loop = createLoop(pi);
-	pi.registerTool(loop.wakeTool);
-	pi.on("agent_settled", (event: any) => loop.settled(event?.aborted === true));
-	pi.on("session_shutdown", () => loop.shutdown());
-	pi.registerCommand("loop", {
+	const loop = createLoop(pink);
+	pink.registerTool(loop.wakeTool);
+	pink.on("agent_settled", (event: any) => loop.settled(event?.aborted === true));
+	pink.on("session_shutdown", () => loop.shutdown());
+	pink.registerCommand("loop", {
 		description: t("Repete uma tarefa: /loop 5m <tarefa> (intervalo fixo), /loop <tarefa> (o agente escolhe o ritmo), /loop parar", "Repite una tarea: /loop 5m <tarea> (intervalo fijo), /loop <tarea> (el agente elige el ritmo), /loop parar", "Repeats a task: /loop 5m <task> (fixed interval), /loop <task> (the agent picks the pace), /loop stop"),
 		getArgumentCompletions: (prefix: string) => ("parar".startsWith(prefix) ? [{ value: "parar", label: "parar" }] : null),
 		handler: async (args: string, ctx: any) => loop.start(args ?? "", ctx),

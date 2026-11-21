@@ -96,11 +96,11 @@ export function sweepStale(tmp = os.tmpdir(), now = Date.now()) {
 	}
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT) return; // subagente não abre outro subagente
 	const dirs: string[] = [];
-	pi.on("session_start", async () => sweepStale());
-	pi.registerCommand("review", {
+	pink.on("session_start", async () => sweepStale());
+	pink.registerCommand("review", {
 		description: t("Revisão independente (subagente só leitura) do que não foi commitado, ou de tudo desde um branch: /review [branch] [foco]", "Revisión independiente (subagente solo lectura) de lo no confirmado, o de todo desde una rama: /review [rama] [foco]", "Independent review (read-only subagent) of uncommitted changes, or of everything since a branch: /review [branch] [focus]"),
 		handler: async (args: string, ctx: any) => {
 			if (ctx?.isProjectTrusted?.() !== true) return ctx.ui.notify(t("Pasta não confiável: o /review fica desligado (o git do projeto poderia rodar programas dele). Confie na pasta para usar.", "Carpeta no confiable: /review está desactivado (el git del proyecto podría ejecutar programas suyos). Confía en la carpeta para usarlo.", "Untrusted folder: /review is disabled (the project's git could run its programs). Trust the folder to use it."), "error");
@@ -119,11 +119,11 @@ export default function (pi: any) {
 			ctx.ui.notify(`Revisando ${found.label}: ${(found.files?.length ?? 0) + (found.extra ?? 0)} arquivo(s).`, "info");
 			const prompt = reviewPrompt(file, found, rest.join(" "));
 			// agente trabalhando: entra na fila em vez de ser recusado
-			if (ctx?.isIdle?.() === false) pi.sendUserMessage?.(prompt, { deliverAs: "followUp" });
-			else pi.sendUserMessage?.(prompt);
+			if (ctx?.isIdle?.() === false) pink.sendUserMessage?.(prompt, { deliverAs: "followUp" });
+			else pink.sendUserMessage?.(prompt);
 		},
 	});
-	pi.on("session_shutdown", async () => {
+	pink.on("session_shutdown", async () => {
 		for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 	});
 }

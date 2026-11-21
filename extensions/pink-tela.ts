@@ -209,7 +209,7 @@ const runProcess: Run = (exe, argv, signal) =>
 		child.on("close", (code) => resolve({ code, stdout, stderr }));
 	});
 
-export function createTela(pi: any, { env = process.env, run = runProcess, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install } = {}) {
+export function createTela(pink: any, { env = process.env, run = runProcess, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install } = {}) {
 	let on = false;
 	let starting = false;
 	let daemon: any;
@@ -388,7 +388,7 @@ export function createTela(pi: any, { env = process.env, run = runProcess, spawn
 		return reply(isRead(action) ? `${UNTRUSTED}\n${text}` : text, result.code !== 0, image);
 	}
 
-	pi.registerTool({
+	pink.registerTool({
 		name: "tela",
 		label: "tela",
 		description: [
@@ -405,7 +405,7 @@ export function createTela(pi: any, { env = process.env, run = runProcess, spawn
 		execute,
 	});
 
-	pi.registerCommand("tela", {
+	pink.registerCommand("tela", {
 		description: t("Acesso à tela do PC: instalar, ligar, desligar ou status (desligado por padrão)", "Acceso a la pantalla del PC: instalar, activar, desactivar o status (apagado por defecto)", "PC screen access: install, on, off or status (off by default)"),
 		getArgumentCompletions: (prefix: string) => ["instalar", "ligar", "desligar", "status"].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
 		handler: async (args: string, ctx: any) => {
@@ -430,13 +430,13 @@ export function createTela(pi: any, { env = process.env, run = runProcess, spawn
 		},
 	});
 
-	pi.on("session_shutdown", () => {
+	pink.on("session_shutdown", () => {
 		if (on || daemon || pipe) turnOff();
 	});
 
 	return { execute, turnOn, turnOff, status, isOn: () => on, pipe: () => pipe };
 }
 
-export default function (pi: any) {
-	createTela(pi);
+export default function (pink: any) {
+	createTela(pink);
 }

@@ -353,9 +353,9 @@ export function createLsp({ make = createClient, read = fs.readFileSync, stat = 
 	return { onResult, closeAll, clients };
 }
 
-export default function (pi: any) {
+export default function (pink: any) {
 	if (process.env.PINK_SUBAGENT || process.env.PINK_NO_LSP === "1") return;
 	const lsp = createLsp();
-	pi.on("tool_result", (event: any, ctx: any) => lsp.onResult(event, ctx));
-	pi.on("session_shutdown", () => lsp.closeAll());
+	pink.on("tool_result", (event: any, ctx: any) => lsp.onResult(event, ctx));
+	pink.on("session_shutdown", () => lsp.closeAll());
 }

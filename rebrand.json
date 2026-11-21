@@ -1550,6 +1550,205 @@
       "regex": "(Bug in upstream v0\\.30\\.0: Sessions were saved to )~/\\.pink/agent/",
       "replace": "\\1the agent folder root",
       "min_count": 1
+    },
+    {
+      "id": "code-example-api-object",
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.js",
+        "examples/**/*.mjs"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![-/@\\w.$'\\\"`])pi\\b(?![-\\w$'\\\"`])",
+      "replace": "pink",
+      "min_count": 50
+    },
+    {
+      "id": "docs-api-object",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![-/@\\w.$])pi(?=\\.(?:on|register\\w*|send\\w*|exec|get\\w*|set\\w*|append\\w*|unregister\\w*|events|ui)\\b|: ExtensionAPI\\b|\\)\\s*\\{|, ctx\\b)",
+      "replace": "pink",
+      "min_count": 5
+    },
+    {
+      "id": "docs-sdk-name",
+      "files": [
+        "docs/**/*.md",
+        "examples/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<![-/@\\w.])pi-coding-agent(?![-\\w/\\\"'])",
+      "replace": "Pink",
+      "min_count": 1
+    },
+    {
+      "id": "code-example-exit-pi",
+      "files": [
+        "examples/**/*.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\bexit pi\\b",
+      "replace": "exit pink",
+      "min_count": 2
+    },
+    {
+      "id": "code-register-command-hint",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [],
+      "regex": "Use pi\\.registerCommand",
+      "replace": "Use pink.registerCommand",
+      "min_count": 2
+    },
+    {
+      "id": "code-sdk-visible-text",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<=Update )pi\\b|(?<![\\w.$/-])pi(?= (?:docs|packages|topics|\\.md\\b))|(?<=AI_AGENT = \\\")pi(?=\\\")",
+      "replace": "pink",
+      "min_count": 5
+    },
+    {
+      "id": "code-config-dir-text",
+      "files": [
+        "dist/**/*.js",
+        "dist/**/*.d.ts",
+        "examples/**/*.ts"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "\\.pi/mcp\\.json|(?<=containing )\\.pi(?=,)|(?<=cwd/)\\.pi\\b|(?<=a )\\.pi(?= directory)",
+      "replace": ".pink",
+      "min_count": 6
+    },
+    {
+      "id": "docs-api-object-backtick",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "methods on `pi`",
+      "replace": "methods on `pink`",
+      "min_count": 1
+    },
+    {
+      "id": "docs-source-upstream",
+      "files": [
+        "docs/**/*.md"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(Source files\\*\\*|Source on GitHub) \\(pi\\)",
+      "replace": "\\1 (upstream)",
+      "min_count": 2
+    },
+    {
+      "id": "code-schema-infers",
+      "files": [
+        "schemas/**/*.json"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "When false, pi infers",
+      "replace": "When false, Pink infers",
+      "min_count": 1
+    },
+    {
+      "id": "code-update-alias-dist",
+      "files": [
+        "dist/package-manager-cli.js",
+        "dist/cli/args.js"
+      ],
+      "exclude": [
+        "dist/bundle/**/*",
+        "dist/mux/**/*",
+        "docs/containerization.md",
+        "docs/PINK.md"
+      ],
+      "regex": "(?<=\\[source\\|self\\|)pi(?=\\])|(?<=Reinstall )pi\\b|(?<=alias to )pi\\b|(?<=update )pi(?= {5})|(?<=source === \\\")pi(?=\\\")",
+      "replace": "pink",
+      "min_count": 6
+    },
+    {
+      "id": "code-bundle-bug-zip",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "`pi-bug-report-",
+      "replace": "`pink-bug-report-",
+      "min_count": 1
+    },
+    {
+      "id": "code-bundle-bug-prompt",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "a bug report about pi, the coding agent",
+      "replace": "a bug report about pink, the coding agent",
+      "min_count": 1
+    },
+    {
+      "id": "code-bundle-bug-devs",
+      "files": [
+        "dist/bundle/**/*.js"
+      ],
+      "exclude": [],
+      "regex": "a report for the pi developers",
+      "replace": "a report for the upstream developers",
+      "min_count": 1
     }
   ],
   "move_files": [
