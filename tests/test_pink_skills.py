@@ -126,6 +126,7 @@ def skills_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPath
     ext.mkdir(exist_ok=True)
     module = ext / "pink-skills.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-skills.ts", module)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", module.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     home = tmp_path_factory.mktemp("skills-home")
     keep = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA"}
     env = {name: value for name, value in os.environ.items() if name.upper() in keep}

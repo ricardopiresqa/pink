@@ -3,6 +3,7 @@
 // O total vem do núcleo (getContextUsage, medido na última resposta); as partes são estimadas.
 // shortcut: estimativa por caracteres/4, como o estimateTokens do núcleo; trocar por tokenizador do modelo se a diferença importar
 
+import { t } from "./pink-i18n.ts";
 export const estimate = (text: unknown) => Math.ceil(String(text ?? "").length / 4);
 const IMAGE_TOKENS = 1200; // como o núcleo: imagem conta fixo, não o base64
 
@@ -63,12 +64,12 @@ export function breakdown(input: Input) {
 	const used = measured ? Math.max(input.usageTokens as number, fixed) : fixed + conversation;
 	const window = input.window && input.window > 0 ? input.window : 0;
 	const parts: Part[] = [
-		{ label: "Prompt de sistema", tokens: system },
-		{ label: "Ferramentas", tokens: tools },
-		{ label: "AGENTS.md e instruções", tokens: agents },
-		{ label: "Memória do projeto", tokens: memory },
-		{ label: "Skills (lista)", tokens: skills },
-		{ label: "Conversa", tokens: conversation },
+		{ label: t("Prompt de sistema", "Prompt de sistema", "System prompt"), tokens: system },
+		{ label: t("Ferramentas", "Herramientas", "Tools"), tokens: tools },
+		{ label: t("AGENTS.md e instruções", "AGENTS.md e instrucciones", "AGENTS.md and instructions"), tokens: agents },
+		{ label: t("Memória do projeto", "Memoria del proyecto", "Project memory"), tokens: memory },
+		{ label: t("Skills (lista)", "Skills (lista)", "Skills (list)"), tokens: skills },
+		{ label: t("Conversa", "Conversación", "Conversation"), tokens: conversation },
 	];
 	return { parts, used, window, free: window ? Math.max(0, window - used) : undefined, measured };
 }
@@ -78,21 +79,22 @@ const pct = (n: number, of: number) => (of ? `${((n / of) * 100).toFixed(1)}%` :
 
 export function render(result: ReturnType<typeof breakdown>) {
 	const { parts, used, window, free, measured } = result;
-	const width = Math.max(...parts.map((part) => part.label.length), "Espaço livre".length);
+	const freeLabel = t("Espaço livre", "Espacio libre", "Free space");
+	const width = Math.max(...parts.map((part) => part.label.length), freeLabel.length);
 	const row = (label: string, tokens: number) => `${label.padEnd(width)}  ${thousands(tokens).padStart(6)}  ${pct(tokens, window).padStart(6)}`;
 	const lines = [
-		window ? `Contexto: ${thousands(used)} de ${thousands(window)} tokens (${pct(used, window)})` : `Contexto: ${thousands(used)} tokens (janela do modelo desconhecida)`,
+		window ? t(`Contexto: ${thousands(used)} de ${thousands(window)} tokens (${pct(used, window)})`, `Contexto: ${thousands(used)} de ${thousands(window)} tokens (${pct(used, window)})`, `Context: ${thousands(used)} of ${thousands(window)} tokens (${pct(used, window)})`) : t(`Contexto: ${thousands(used)} tokens (janela do modelo desconhecida)`, `Contexto: ${thousands(used)} tokens (ventana del modelo desconocida)`, `Context: ${thousands(used)} tokens (model window unknown)`),
 		...parts.map((part) => row(part.label, part.tokens)),
 	];
-	if (free !== undefined) lines.push(row("Espaço livre", free));
-	lines.push(measured ? "Total medido na última resposta; as partes são estimadas." : "Sem medição ainda (sessão nova ou recém-compactada): tudo estimado.");
+	if (free !== undefined) lines.push(row(freeLabel, free));
+	lines.push(measured ? t("Total medido na última resposta; as partes são estimadas.", "Total medido en la última respuesta; las partes son estimadas.", "Total measured on the last response; the parts are estimated.") : t("Sem medição ainda (sessão nova ou recém-compactada): tudo estimado.", "Aún sin medición (sesión nueva o recién compactada): todo estimado.", "No measurement yet (new or just-compacted session): all estimated."));
 	return lines.join("\n");
 }
 
 export default function (pi: any) {
 	if (process.env.PINK_SUBAGENT) return;
 	pi.registerCommand("context", {
-		description: "Mostra o que ocupa o contexto: prompt, ferramentas, AGENTS.md, memória, skills, conversa e espaço livre",
+		description: t("Mostra o que ocupa o contexto: prompt, ferramentas, AGENTS.md, memória, skills, conversa e espaço livre", "Muestra lo que ocupa el contexto: prompt, herramientas, AGENTS.md, memoria, skills, conversación y espacio libre", "Shows what fills the context: prompt, tools, AGENTS.md, memory, skills, conversation and free space"),
 		handler: async (_args: string, ctx: any) => {
 			const options = ctx.getSystemPromptOptions?.() ?? {};
 			const active = new Set<string>(pi.getActiveTools?.() ?? []);

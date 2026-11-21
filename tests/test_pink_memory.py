@@ -208,6 +208,7 @@ def memory_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPath
     ext.mkdir(exist_ok=True)
     module = ext / "pink-memory.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-memory.ts", module)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", module.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     work = tmp_path_factory.mktemp("memory-projeto")  # pasta do projeto, fora do repositorio
     untrusted = tmp_path_factory.mktemp("memory-nao-confiavel")
     other = tmp_path_factory.mktemp("memory-outro")

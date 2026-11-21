@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { t } from "./pink-i18n.ts";
 
 export const MAX_SHOWN = 10;
 const MAX_FILE = 1024 * 1024;
@@ -118,8 +119,8 @@ export function formatDiagnostics(list: any[] | undefined, shown: string) {
 		const message = String(item.message ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
 		return `  ${shown}:${line}:${column} ${message}`;
 	});
-	const more = errors.length > MAX_SHOWN ? `\n  … mais ${errors.length - MAX_SHOWN}` : "";
-	return `Erros do servidor de linguagem depois desta mudança (${errors.length}):\n${lines.join("\n")}${more}`;
+	const more = errors.length > MAX_SHOWN ? `\n  … ${t("mais", "más", "more")} ${errors.length - MAX_SHOWN}` : "";
+	return `${t("Erros do servidor de linguagem depois desta mudança", "Errores del servidor de lenguaje después de este cambio", "Language server errors after this change")} (${errors.length}):\n${lines.join("\n")}${more}`;
 }
 
 // espera ms, ou menos se o sinal (Esc) abortar

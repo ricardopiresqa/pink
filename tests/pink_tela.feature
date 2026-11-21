@@ -94,7 +94,31 @@ Funcionalidade: a tela do PC só com /tela ligar, com o binário conferido e con
     Então a mensagem de status é mostrada com ctx.ui.notify
     E sem o cua-driver, /tela ligar notifica com nível de erro
 
-  Cenário: (15) leitura real de tamanho de tela, sem clicar nem digitar (opcional)
-    Dado que o cua-driver está instalado e confere
-    Quando a tela liga num pipe próprio e o agente pede get_screen_size
-    Então a resposta traz o tamanho da tela e a tela desliga ao fim
+  Cenário: (15) o cua-driver é só o do próprio Pink, na pasta do Pink
+    Quando a tela procura o cua-driver
+    Então só olha em <PINK_CODING_AGENT_DIR ou ~/.pink/agent>/cua-driver/cua-driver.exe
+    E PINK_CUA_DRIVER e a pasta do OpenBot são ignorados
+    E sem o arquivo, o status diz "Rode /tela instalar"
+
+  Cenário: (16) conferência com os cinco arquivos fixados
+    Dado que o cua-driver tem cua-driver.exe, cua-driver-uia.exe, cua-cursor-theme.exe, cua_driver_sdk.dll e cua_driver_node_runtime.node
+    Quando a conferência roda com todos os hashes certos
+    Então ela passa
+    Quando um dos cinco muda ou some
+    Então a mensagem nomeia o arquivo (e "ausente" se sumiu)
+
+  Cenário: (17) /tela instalar baixa a versão fixa com confirmação
+    Quando a pessoa roda /tela instalar e recusa a confirmação
+    Então nada é baixado
+    Quando a pessoa roda /tela instalar com a tela desligada e confirma
+    Então o zip é conferido pelo SHA-256 antes de extrair, os cinco arquivos são conferidos e copiados, a telemetria é desligada e a pasta de trabalho some
+    Quando o zip não bate, o download falha com HTTP de erro, ou um arquivo dentro do zip não bate
+    Então nada é gravado na pasta do Pink
+    Quando a tela está ligada
+    Então /tela instalar é recusado e nada é baixado
+
+  Cenário: (18) teste real de instalação, liga, lê o tamanho da tela e desliga (só com PINK_TELA_REAL=1)
+    Dado uma pasta temporária como PINK_CODING_AGENT_DIR
+    Quando a instalação real roda (31 MB do GitHub), depois ligar, get_screen_size e desligar
+    Então a resposta traz a resolução, nada sobra na pasta temporária e a instalação do dono fica intacta
+    E nenhum clique ou digitação acontece

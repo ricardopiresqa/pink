@@ -10,6 +10,7 @@
 // assistant-footer, user-bar) that only call globalThis.__pinkFrame, __pinkAssistantFooter and __pinkUserBar.
 // The layout functions are pure and exported for tests.
 
+import { t } from "./pink-i18n.ts";
 export const LOGO = [
 	"██████╗ ██╗███╗   ██╗██╗  ██╗",
 	"██╔══██╗██║████╗  ██║██║ ██╔╝",
@@ -110,28 +111,28 @@ export function footerLine({ theme, width, left, right }) {
 	return fit(`${left}${" ".repeat(gap)}${right}`, width);
 }
 
-const THINKING_PT = { minimal: "mínimo", low: "baixo", medium: "médio", high: "alto", xhigh: "muito alto", max: "máximo" };
+const THINKING_PT = { minimal: t("mínimo", "mínimo", "minimal"), low: t("baixo", "bajo", "low"), medium: t("médio", "medio", "medium"), high: t("alto", "alto", "high"), xhigh: t("muito alto", "muy alto", "very high"), max: t("máximo", "máximo", "max") };
 
 // "thoth  thoth  off" dizia modelo, provedor e nível sem explicar nada: agora o nome do modelo, o provedor só quando é
 // outro, e o pensamento só quando está ligado ("pensamento alto")
 // como no OpenCode, o agente (Build/Plano) vem antes do modelo, na cor da marca
 export function modelLabel({ theme, model, thinking, agent, permission = "edits" }) {
-	const mode = agent === "build" && permission === "ask" ? " (pergunta tudo)" : "";
+	const mode = agent === "build" && permission === "ask" ? t(" (pergunta tudo)", " (pregunta todo)", " (ask everything)") : "";
 	const who = AGENTS[agent] ? `${theme.fg("accent", `${AGENTS[agent].label}${mode}`)}${theme.fg("muted", " · ")}` : "";
-	if (!model) return `${who}${theme.fg("muted", "sem modelo")}`;
+	if (!model) return `${who}${theme.fg("muted", t("sem modelo", "sin modelo", "no model"))}`;
 	const name = model.name || model.id;
 	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";
-	const level = THINKING_PT[thinking] ? theme.fg("muted", ` · pensamento ${THINKING_PT[thinking]}`) : "";
+	const level = THINKING_PT[thinking] ? theme.fg("muted", ` · ${t("pensamento", "razonamiento", "thinking")} ${THINKING_PT[thinking]}`) : "";
 	return `${who}${name}${provider}${level}`;
 }
 
 export function hintsLine({ theme, width }) {
-	return center(theme.fg("dim", "ctrl+p comandos   tab agente   alt+m modo   @ arquivo   ! bash   ctrl+t pensamento   ctrl+c sair"), width);
+	return center(theme.fg("dim", t("ctrl+p comandos   tab agente   alt+m modo   @ arquivo   ! bash   ctrl+t pensamento   ctrl+c sair", "ctrl+p comandos   tab agente   alt+m modo   @ archivo   ! bash   ctrl+t razonamiento   ctrl+c salir", "ctrl+p commands   tab agent   alt+m mode   @ file   ! bash   ctrl+t thinking   ctrl+c quit")), width);
 }
 
 // -- funções do OpenCode (owner 2026-10-28: "gosto muito do opencode, poderia replicar as funções dele")
 // agentes: Build (padrão, tudo liberado) e Plano (só leitura: analisa e planeja, não edita), trocados com tab na caixa vazia
-export const AGENTS = { build: { label: "Build" }, plan: { label: "Plano" } };
+export const AGENTS = { build: { label: "Build" }, plan: { label: t("Plano", "Plan", "Plan") } };
 const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls", "todowrite", "tool_search"]);
 export const PLAN_PROMPT = "\n\n# Modo Plano (Pink)\nVocê está no agente Plano: só leia, pesquise e planeje. Não edite nem crie arquivos e não rode comandos que mudem o projeto. Termine com um plano em passos; o usuário troca para o agente Build (tab) para executar.";
 
@@ -142,15 +143,15 @@ export function planDecision(toolName, annotations) {
 
 // paleta de comandos (ctrl+p, como no OpenCode): os comandos do Pink com a descrição em português e os das extensões
 export const BUILTIN_COMMANDS = [
-	["new", "Nova sessão"], ["resume", "Trocar de sessão (lista as salvas)"], ["sessions", "Sessões desta pasta"], ["delete-session", "Apagar sessão (vai para a lixeira .trash)"], ["name", "Renomear a sessão"],
-	["model", "Escolher o modelo"], ["thinking", "Nível de pensamento"], ["themes", "Escolher o tema"], ["settings", "Configurações"],
-	["undo", "Desfazer a última mensagem e as mudanças nos arquivos"], ["redo", "Refazer o que o /undo desfez"],
-	["plan", "Agente Plano (só leitura)"], ["build", "Agente Build (edita e roda comandos)"], ["todos", "Lista de tarefas do agente"],
-	["compact", "Compactar o contexto"], ["tree", "Árvore da sessão"], ["fork", "Nova sessão a partir de uma mensagem"], ["clone", "Duplicar a sessão"],
-	["copy", "Copiar a última resposta"], ["export", "Exportar a sessão (HTML ou JSONL)"], ["share", "Compartilhar a sessão"], ["session", "Dados da sessão"],
-	["init", "Criar ou atualizar o AGENTS.md"], ["details", "Mostrar ou esconder a saída das ferramentas"], ["lateral", "Mostrar ou esconder a lateral"],
-	["hotkeys", "Atalhos de teclado"], ["login", "Entrar num provedor"], ["logout", "Sair de um provedor"], ["mcp", "Servidores MCP"],
-	["reload", "Recarregar extensões, temas e atalhos"], ["quit", "Sair do Pink"],
+	["new", t("Nova sessão", "Nueva sesión", "New session")], ["resume", t("Trocar de sessão (lista as salvas)", "Cambiar de sesión (lista las guardadas)", "Switch session (lists saved ones)")], ["sessions", t("Sessões desta pasta", "Sesiones de esta carpeta", "Sessions in this folder")], ["delete-session", t("Apagar sessão (vai para a lixeira .trash)", "Borrar sesión (va a la papelera .trash)", "Delete session (moves it to the .trash bin)")], ["name", t("Renomear a sessão", "Renombrar la sesión", "Rename the session")],
+	["model", t("Escolher o modelo", "Elegir el modelo", "Choose the model")], ["thinking", t("Nível de pensamento", "Nivel de razonamiento", "Thinking level")], ["themes", t("Escolher o tema", "Elegir el tema", "Choose the theme")], ["settings", t("Configurações", "Configuración", "Settings")],
+	["undo", t("Desfazer a última mensagem e as mudanças nos arquivos", "Deshacer el último mensaje y los cambios en los archivos", "Undo the last message and the file changes")], ["redo", t("Refazer o que o /undo desfez", "Rehacer lo que deshizo /undo", "Redo what /undo undid")],
+	["plan", t("Agente Plano (só leitura)", "Agente Plan (solo lectura)", "Plan agent (read-only)")], ["build", t("Agente Build (edita e roda comandos)", "Agente Build (edita y ejecuta comandos)", "Build agent (edits and runs commands)")], ["todos", t("Lista de tarefas do agente", "Lista de tareas del agente", "The agent's task list")],
+	["compact", t("Compactar o contexto", "Compactar el contexto", "Compact the context")], ["tree", t("Árvore da sessão", "Árbol de la sesión", "Session tree")], ["fork", t("Nova sessão a partir de uma mensagem", "Nueva sesión desde un mensaje", "New session from a message")], ["clone", t("Duplicar a sessão", "Duplicar la sesión", "Duplicate the session")],
+	["copy", t("Copiar a última resposta", "Copiar la última respuesta", "Copy the last response")], ["export", t("Exportar a sessão (HTML ou JSONL)", "Exportar la sesión (HTML o JSONL)", "Export the session (HTML or JSONL)")], ["share", t("Compartilhar a sessão", "Compartir la sesión", "Share the session")], ["session", t("Dados da sessão", "Datos de la sesión", "Session data")],
+	["init", t("Criar ou atualizar o AGENTS.md", "Crear o actualizar el AGENTS.md", "Create or update AGENTS.md")], ["details", t("Mostrar ou esconder a saída das ferramentas", "Mostrar u ocultar la salida de las herramientas", "Show or hide tool output")], ["lateral", t("Mostrar ou esconder a lateral", "Mostrar u ocultar la barra lateral", "Show or hide the sidebar")],
+	["hotkeys", t("Atalhos de teclado", "Atajos de teclado", "Keyboard shortcuts")], ["login", t("Entrar num provedor", "Iniciar sesión en un proveedor", "Log in to a provider")], ["logout", t("Sair de um provedor", "Cerrar sesión en un proveedor", "Log out of a provider")], ["mcp", t("Servidores MCP", "Servidores MCP", "MCP servers")],
+	["reload", t("Recarregar extensões, temas e atalhos", "Recargar extensiones, temas y atajos", "Reload extensions, themes and shortcuts")], ["quit", t("Sair do Pink", "Salir de Pink", "Quit Pink")],
 ];
 
 export function paletteItems(extensionCommands = []) {
@@ -170,11 +171,11 @@ export function todoLines({ theme, todos, width, max = Infinity }) {
 	const mark = { pending: theme.fg("dim", "○"), in_progress: theme.fg("accent", "◐"), completed: theme.fg("success", "✓"), cancelled: theme.fg("dim", "✗") };
 	const done = todos.filter((item) => item.status === "completed").length;
 	const line = (item) => fit(`  ${mark[item.status]} ${item.status === "completed" || item.status === "cancelled" ? theme.fg("dim", item.content) : theme.fg("text", item.content)}`, width);
-	const title = fit(`${theme.fg("text", "Tarefas")} ${theme.fg("muted", `${done}/${todos.length}`)}`, width);
+	const title = fit(`${theme.fg("text", t("Tarefas", "Tareas", "Tasks"))} ${theme.fg("muted", `${done}/${todos.length}`)}`, width);
 	if (todos.length + 1 <= max) return [title, ...todos.map(line)];
 	const open = todos.filter((item) => item.status === "in_progress").concat(todos.filter((item) => item.status === "pending"));
 	const shown = open.slice(0, Math.max(1, max - 2));
-	return [title, ...shown.map(line), fit(theme.fg("dim", `  … +${todos.length - shown.length} tarefas`), width)];
+	return [title, ...shown.map(line), fit(theme.fg("dim", `  … +${todos.length - shown.length} ${t("tarefas", "tareas", "tasks")}`), width)];
 }
 
 export function todosFromBranch(entries) {
@@ -280,8 +281,8 @@ export const LEFT_WIDTH = 32; // com a borda (pink.3: +2 para o horário de cada
 export const RIGHT_WIDTH = 36; // com a borda
 export const THREE_COLUMNS = 150; // >= 150: sessões, conversa e contexto
 export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: só a conversa
-export const PLACEHOLDER = "Peça a próxima etapa...";
-export const BOX_HINTS = "Enter enviar · shift+tab pensar · ctrl+t ver pensamento";
+export const PLACEHOLDER = t("Peça a próxima etapa...", "Pide el siguiente paso...", "Ask for the next step...");
+export const BOX_HINTS = t("Enter enviar · shift+tab pensar · ctrl+t ver pensamento", "Enter enviar · shift+tab pensar · ctrl+t ver razonamiento", "Enter send · shift+tab think · ctrl+t show thinking");
 
 export function frameColumns(width, { home = false, on = true, sessions = true } = {}) {
 	if (home || !on) return { left: false, right: false };
@@ -318,7 +319,7 @@ export function topBar({ theme, width, rows, data }) {
 	return barRows(rows) > 1 ? [line, theme.fg("borderMuted", "─".repeat(width))] : [line];
 }
 
-export const SHORTCUTS = [["ctrl+p", "comandos"], ["ctrl+c", "limpar"], ["/hotkeys", "ajuda"]]; // os atalhos reais do Pink
+export const SHORTCUTS = [["ctrl+p", t("comandos", "comandos", "commands")], ["ctrl+c", t("limpar", "limpiar", "clear")], ["/hotkeys", t("ajuda", "ayuda", "help")]]; // os atalhos reais do Pink
 
 export function bottomBar({ theme, width, rows, data }) {
 	const sep = theme.fg("dim", " │ ");
@@ -337,12 +338,12 @@ export function leftColumn({ theme, width, height, data }) {
 	// SESSÕES no alto (a atual destacada), "+ Nova sessão" e, embaixo, FERRAMENTAS com quantas estão ativas
 	const inner = Math.max(4, width - 1);
 	const cell = (text = "") => pad(fit(text, inner), inner);
-	const foot = height >= 8 ? [rule(theme, inner - 1), cell(` ${heading(theme, "FERRAMENTAS")}  ${theme.fg("success", "●")} ${theme.fg("muted", `${data.tools ?? 0} ativas`)}`)] : [];
-	const top = [cell(` ${heading(theme, "SESSÕES")}`), cell()];
+	const foot = height >= 8 ? [rule(theme, inner - 1), cell(` ${heading(theme, t("FERRAMENTAS", "HERRAMIENTAS", "TOOLS"))}  ${theme.fg("success", "●")} ${theme.fg("muted", `${data.tools ?? 0} ${t("ativas", "activas", "active")}`)}`)] : [];
+	const top = [cell(` ${heading(theme, t("SESSÕES", "SESIONES", "SESSIONS"))}`), cell()];
 	const room = Math.max(0, height - top.length - foot.length - 1);
 	const sessions = (data.sessions ?? []).slice(0, room);
 	// o horário à direita separa as sessões de mesmo nome ("oi" às 14:32 e "oi" ontem); a atual leva o ● no fim
-	const name = (title, room) => fit(String(title || "(sem título)").replace(/\s+/g, " ").trim(), room);
+	const name = (title, room) => fit(String(title || t("(sem título)", "(sin título)", "(untitled)")).replace(/\s+/g, " ").trim(), room);
 	const highlight = (value) => (theme.bg ? theme.bg("selectedBg", value) : value);
 	const entry = (item) => {
 		const when = item.when ? `${theme.fg("dim", item.when)}${item.current ? theme.fg("accent", " ●") : "  "} ` : item.current ? `${theme.fg("accent", "●")} ` : "";
@@ -351,7 +352,7 @@ export function leftColumn({ theme, width, height, data }) {
 		return footerLine({ theme, width: inner, left: ` ${item.current ? theme.fg("accent", "▌") : " "} ${title}`, right: when });
 	};
 	const list = sessions.map((item) => (item.current ? highlight(entry(item)) : entry(item)));
-	const body = [...top, ...list, cell(`   ${theme.fg("muted", "+ Nova sessão")} ${theme.fg("dim", "/new")}`)].slice(0, Math.max(0, height - foot.length));
+	const body = [...top, ...list, cell(`   ${theme.fg("muted", t("+ Nova sessão", "+ Nueva sesión", "+ New session"))} ${theme.fg("dim", "/new")}`)].slice(0, Math.max(0, height - foot.length));
 	const lines = [...body, ...Array(Math.max(0, height - body.length - foot.length)).fill(cell()), ...foot];
 	return lines.map((line) => `${pad(line, inner)}${theme.fg("borderMuted", "│")}`);
 }
@@ -362,38 +363,38 @@ export function rightColumn({ theme, width, height, data }) {
 	const out = [heading(theme, "CONTEXTO")];
 	const ctx = data.context;
 	if (ctx?.tokens != null && ctx.window) {
-		out.push(meter({ theme, percent: ctx.percent, cells: inner }), `${theme.fg("accent", `${kTokens(ctx.tokens)} tokens`)}${theme.fg("muted", ` · ${Math.round(ctx.percent ?? 0)}% de ${kTokens(ctx.window)}`)}`);
+		out.push(meter({ theme, percent: ctx.percent, cells: inner }), `${theme.fg("accent", `${kTokens(ctx.tokens)} tokens`)}${theme.fg("muted", ` · ${Math.round(ctx.percent ?? 0)}% ${t("de", "de", "of")} ${kTokens(ctx.window)}`)}`);
 	} else {
-		out.push(theme.fg("dim", "ainda sem medida"));
+		out.push(theme.fg("dim", t("ainda sem medida", "todavía sin medir", "not measured yet")));
 	}
 	if (data.thoth) out.push("", rule(theme, inner), heading(theme, "THOTH"), ...thothLines({ theme, thoth: data.thoth, width: inner }));
-	if (data.plan) out.push("", rule(theme, inner), heading(theme, "COTA"), ...planLines({ theme, plan: data.plan, width: inner }));
+	if (data.plan) out.push("", rule(theme, inner), heading(theme, t("COTA", "CUOTA", "QUOTA")), ...planLines({ theme, plan: data.plan, width: inner }));
 	if (data.mcp) {
 		out.push("", rule(theme, inner));
 		if (data.hits) data.hits.mcp = out.length; // a linha do título: o clique abre e fecha a lista
 		out.push(...mcpLines({ theme, mcp: data.mcp, open: data.mcpOpen, width: inner }));
 	}
 	const todos = data.todos ?? [];
-	out.push("", rule(theme, inner), heading(theme, "PLANO", todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
+	out.push("", rule(theme, inner), heading(theme, t("PLANO", "PLAN", "PLAN"), todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
 	if (todos.length) out.push(...todoLines({ theme, todos, width: inner }).slice(1).map((line) => line.replace(/^ {2}/, "")));
-	else out.push(theme.fg("dim", "sem plano nesta sessão"));
+	else out.push(theme.fg("dim", t("sem plano nesta sessão", "sin plan en esta sesión", "no plan in this session")));
 	const changes = data.changes ?? [];
-	out.push("", rule(theme, inner), heading(theme, "ALTERAÇÕES", changes.length ? theme.fg("muted", `  ${changes.length}`) : ""));
+	out.push("", rule(theme, inner), heading(theme, t("ALTERAÇÕES", "CAMBIOS", "CHANGES"), changes.length ? theme.fg("muted", `  ${changes.length}`) : ""));
 	if (changes.length) {
 		for (const item of changes) {
-			const status = item.status === "novo" ? `${theme.fg("accent", "●")} ${theme.fg("muted", "novo")}` : `${theme.fg("success", "●")} ${theme.fg("muted", "editado")}`;
+			const status = item.status === "novo" ? `${theme.fg("accent", "●")} ${theme.fg("muted", t("novo", "nuevo", "new"))}` : `${theme.fg("success", "●")} ${theme.fg("muted", t("editado", "editado", "edited"))}`;
 			const room = inner - visible(status) - 1;
 			const path = item.path.length > room ? `…${item.path.slice(-(room - 1))}` : item.path;
 			out.push(footerLine({ theme, width: inner, left: theme.fg("text", path), right: status }));
 		}
 	} else {
-		out.push(theme.fg("dim", "nenhum arquivo alterado"));
+		out.push(theme.fg("dim", t("nenhum arquivo alterado", "ningún archivo cambiado", "no files changed")));
 	}
-	out.push("", rule(theme, inner), heading(theme, "SESSÃO"));
-	out.push(`${theme.fg("text", formatTokens(data.input))} ${theme.fg("muted", "entrada")}${theme.fg("dim", " │ ")}${theme.fg("text", formatTokens(data.output))} ${theme.fg("muted", "saída")}`);
-	if (data.models?.length) out.push(theme.fg("muted", `modelo ${data.models.map(shortModel).join(", ")}`));
-	if (data.cost > 0) out.push(theme.fg("muted", `$${data.cost.toFixed(2)} gasto`));
-	if (data.project) out.push(theme.fg("muted", `projeto ${data.project}`));
+	out.push("", rule(theme, inner), heading(theme, t("SESSÃO", "SESIÓN", "SESSION")));
+	out.push(`${theme.fg("text", formatTokens(data.input))} ${theme.fg("muted", t("entrada", "entrada", "in"))}${theme.fg("dim", " │ ")}${theme.fg("text", formatTokens(data.output))} ${theme.fg("muted", t("saída", "salida", "out"))}`);
+	if (data.models?.length) out.push(theme.fg("muted", `${t("modelo", "modelo", "model")} ${data.models.map(shortModel).join(", ")}`));
+	if (data.cost > 0) out.push(theme.fg("muted", `$${data.cost.toFixed(2)} ${t("gasto", "gastado", "spent")}`));
+	if (data.project) out.push(theme.fg("muted", `${t("projeto", "proyecto", "project")} ${data.project}`));
 	const lines = out.slice(0, height).map((line) => pad(fit(line, inner), inner));
 	return [...lines, ...Array(Math.max(0, height - lines.length)).fill(" ".repeat(inner))].map((line) => `${theme.fg("borderMuted", "│")} ${line} `);
 }
@@ -490,7 +491,7 @@ export function thothSnapshot({ approvals, cards, calls }, now = Date.now()) {
 }
 
 export function thothLines({ theme, thoth, width }) {
-	if (!thoth?.ok) return [theme.fg("dim", thoth?.loading ? "consultando…" : "Thoth indisponível")];
+	if (!thoth?.ok) return [theme.fg("dim", thoth?.loading ? t("consultando…", "consultando…", "loading…") : t("Thoth indisponível", "Thoth no disponible", "Thoth unavailable"))];
 	const row = (label, value, tone = "text") => {
 		const left = theme.fg("muted", label);
 		return footerLine({ theme, width, left, right: value === undefined ? theme.fg("dim", "—") : theme.fg(tone, fit(value, Math.max(1, width - visible(left) - 1))) });
@@ -498,11 +499,11 @@ export function thothLines({ theme, thoth, width }) {
 	const detail = (text) => (text ? [theme.fg("dim", fit(`  ${text}`, width))] : []);
 	const { approvals, card, free } = thoth;
 	return [
-		row("aprovações", approvals && (approvals.count ? `${approvals.count} aguardando` : "nenhuma"), approvals?.count ? "warning" : "text"),
+		row(t("aprovações", "aprobaciones", "approvals"), approvals && (approvals.count ? `${approvals.count} ${t("aguardando", "pendientes", "waiting")}` : t("nenhuma", "ninguna", "none")), approvals?.count ? "warning" : "text"),
 		...detail(approvals?.top),
-		row("card", card === undefined ? undefined : card ? card.id : "nenhum em andamento", card ? "accent" : "text"),
+		row("card", card === undefined ? undefined : card ? card.id : t("nenhum em andamento", "ninguno en curso", "none in progress"), card ? "accent" : "text"),
 		...detail(card?.goal),
-		row("thoth free", free === undefined ? undefined : free ?? "sem chamadas"),
+		row("thoth free", free === undefined ? undefined : free ?? t("sem chamadas", "sin llamadas", "no calls")),
 	];
 }
 
@@ -564,24 +565,24 @@ export function resetLabel(epoch, now = new Date()) {
 	const when = new Date(epoch * 1000);
 	const hm = `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
 	if (when.toDateString() === now.toDateString()) return hm;
-	return `${["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][when.getDay()]} ${hm}`;
+	return `${t("dom,seg,ter,qua,qui,sex,sáb", "dom,lun,mar,mié,jue,vie,sáb", "Sun,Mon,Tue,Wed,Thu,Fri,Sat").split(",")[when.getDay()]} ${hm}`;
 }
 
 export function planLines({ theme, plan, width, now = new Date() }) {
-	if (!plan?.ok) return [theme.fg("dim", plan?.loading ? "consultando…" : "sem dado do plano (thoth-client uso)")];
+	if (!plan?.ok) return [theme.fg("dim", plan?.loading ? t("consultando…", "consultando…", "loading…") : t("sem dado do plano (thoth-client uso)", "sin dato del plan (thoth-client uso)", "no plan data (thoth-client uso)"))];
 	const out = [];
 	for (const [name, usage] of [["Claude", plan.claude], ["Codex", plan.codex]]) {
 		if (usage === undefined) continue;
 		out.push(theme.fg("text", name));
 		if (!usage) {
-			out.push(theme.fg("dim", name === "Claude" ? "  ligue: thoth-client uso ativar" : "  sem leitura ainda"));
+			out.push(theme.fg("dim", name === "Claude" ? t("  ligue: thoth-client uso ativar", "  activa: thoth-client uso activar", "  turn on: thoth-client uso activar") : t("  sem leitura ainda", "  sin lectura todavía", "  no reading yet")));
 			continue;
 		}
-		for (const [key, label] of [["h5", "5 h"], ["week", "semana"]]) {
+		for (const [key, label] of [["h5", "5 h"], ["week", t("semana", "semana", "week")]]) {
 			const window = usage[key];
 			if (!window) continue;
 			const tone = window.pct >= 90 ? "error" : window.pct >= 70 ? "warning" : "muted";
-			const right = theme.fg(tone, `${Math.round(window.pct)}%${window.resets ? ` · volta ${resetLabel(window.resets, now)}` : ""}`);
+			const right = theme.fg(tone, `${Math.round(window.pct)}%${window.resets ? ` · ${t("volta", "vuelve", "resets")} ${resetLabel(window.resets, now)}` : ""}`);
 			const left = theme.fg("muted", `  ${label}`);
 			out.push(footerLine({ theme, width, left, right }));
 			out.push(`  ${meter({ theme, percent: window.pct, cells: Math.max(4, width - 2) })}`);
@@ -593,9 +594,9 @@ export function planLines({ theme, plan, width, now = new Date() }) {
 // -- MCP (como a lateral do OpenCode): título com a contagem; clique abre a lista completa com o estado de cada um
 export function mcpLines({ theme, mcp, open, width }) {
 	const connected = mcp.filter((item) => String(item.state).startsWith("connected")).length;
-	const out = [heading(theme, `${open ? "▾" : "▸"} MCP`, theme.fg("muted", `  ${connected}/${mcp.length} conectados`))];
+	const out = [heading(theme, `${open ? "▾" : "▸"} MCP`, theme.fg("muted", `  ${connected}/${mcp.length} ${t("conectados", "conectados", "connected")}`))];
 	if (!open) return out;
-	if (!mcp.length) return [...out, theme.fg("dim", "nenhum MCP (pink mcp add)")];
+	if (!mcp.length) return [...out, theme.fg("dim", t("nenhum MCP (pink mcp add)", "ningún MCP (pink mcp add)", "no MCP (pink mcp add)"))];
 	for (const item of mcp) {
 		const state = safeText(item.state, 40);
 		const tone = state.startsWith("connected") ? "success" : state === "disabled" ? "dim" : state.startsWith("failed") || state === "needs sign-in" ? "error" : "warning";
@@ -655,10 +656,10 @@ export function exitBanner({ theme, title, stats, resume }) {
 		return out;
 	}), ""];
 	const field = (label, value) => `  ${theme.fg("muted", label.padEnd(10))}${value}`;
-	if (title) lines.push(field("Sessão", title.length > 70 ? `${title.slice(0, 69)}…` : title));
+	if (title) lines.push(field(t("Sessão", "Sesión", "Session"), title.length > 70 ? `${title.slice(0, 69)}…` : title));
 	const totals = (stats?.models ?? []).reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-	if (totals.input || totals.output) lines.push(field("Tokens", `${formatTokens(totals.input)} entrada  ${formatTokens(totals.output)} saída  $${(stats.cost ?? 0).toFixed(2)}`));
-	if (resume) lines.push(field("Continuar", theme.fg("accent", resume)));
+	if (totals.input || totals.output) lines.push(field("Tokens", `${formatTokens(totals.input)} ${t("entrada", "entrada", "in")}  ${formatTokens(totals.output)} ${t("saída", "salida", "out")}  $${(stats.cost ?? 0).toFixed(2)}`));
+	if (resume) lines.push(field(t("Continuar", "Continuar", "Resume"), theme.fg("accent", resume)));
 	return `${lines.join("\n")}\n\n`;
 }
 
@@ -737,7 +738,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	ctx.ui.setHeader((tui, theme) => {
 		state.tui = tui;
 		return {
-			render: live((width) => (state.home ? homeHeader({ theme, width, rows: homeRows(), subtitle: `coding agent · modelo ${ctx.model?.id ?? "thoth"}` }) : []), []),
+			render: live((width) => (state.home ? homeHeader({ theme, width, rows: homeRows(), subtitle: `coding agent · ${t("modelo", "modelo", "model")} ${ctx.model?.id ?? "thoth"}` }) : []), []),
 			invalidate() {},
 		};
 	});
@@ -790,7 +791,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 
 	// trocar de sessão só é permitido a comandos (ExtensionCommandContext): o clique e as teclas digitam o comando na caixa
 	const runCommand = (text) => {
-		if (ctx.isIdle && !ctx.isIdle()) return void ctx.ui.notify?.("Espere a resposta terminar para trocar de sessão", "info");
+		if (ctx.isIdle && !ctx.isIdle()) return void ctx.ui.notify?.(t("Espere a resposta terminar para trocar de sessão", "Espera a que termine la respuesta para cambiar de sesión", "Wait for the response to finish before switching sessions"), "info");
 		if (!state.editor?.setText) return;
 		state.editor.setText(text);
 		state.editor.handleInput("\r");
@@ -806,8 +807,8 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 	// pensamento atrás de um título, como no OpenCode: recolhido por padrão; o Pink abre e recolhe cada bloco com um clique,
 	// ctrl+t abre e recolhe todos; toda sessão começa recolhida, como o Claude Code (patch thinking-collapsed-every-session);
 	// o título do bloco aberto vem do patch thinking-header-when-shown
-	ctx.ui.setHiddenThinkingLabel?.("+ Pensou");
-	globalThis.__pinkThinkingHeader = "− Pensou · clique ou ctrl+t recolhe";
+	ctx.ui.setHiddenThinkingLabel?.(t("+ Pensou", "+ Pensó", "+ Thought"));
+	globalThis.__pinkThinkingHeader = t("− Pensou · clique ou ctrl+t recolhe", "− Pensó · haz clic o ctrl+t contrae", "− Thought · click or ctrl+t collapses");
 	globalThis.__pinkThinkingLabel = (message, runIndex) => thinkingLabel(PINK.thinking.get(message?.timestamp)?.[runIndex]?.ms);
 	// "Pink · Build" sobre cada resposta (patch assistant-label); o agente é o da hora da resposta, desconhecido em sessão reaberta
 	// rodapé de cada resposta final (patch assistant-footer), lido a cada quadro: o tempo chega no message_end
@@ -909,7 +910,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 			if (slot === "bottom") return bottomBar({ theme, width, rows: rows(), data: bars() });
 			if (slot === "left") {
 				const current = ctx.sessionManager?.getSessionFile?.();
-				const title = ctx.sessionManager?.getSessionName?.() || sessionStats(ctx.sessionManager?.getEntries?.()).title || "Sessão atual";
+				const title = ctx.sessionManager?.getSessionName?.() || sessionStats(ctx.sessionManager?.getEntries?.()).title || t("Sessão atual", "Sesión actual", "Current session");
 				const listed = state.sessions.map((item) => ({ title: item.name || item.firstMessage, current: item.path === current, when: relativeTime(item.modified) }));
 				const sessions = listed.some((item) => item.current) ? listed : [{ title, current: true, when: relativeTime(Date.now()) }, ...listed];
 				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pi.getActiveTools?.() ?? []).length } });
@@ -935,7 +936,7 @@ export function install(pi, ctx, { CustomEditor, SessionManager, version = "", m
 				const window = usage?.contextWindow ?? ctx.model?.contextWindow;
 				const used = usage && usage.percent !== null && window ? `${Math.round(usage.percent)}%/${Math.round(window / 1000)}k` : "";
 				const left = theme.fg("muted", ` ${tilde(ctx.cwd)}${state.branch ? ` (${state.branch})` : ""}`);
-				const right = `${theme.fg("muted", "ctrl+t pensamento")}${theme.fg("dim", `   ${used ? `ctx ${used}   ` : ""}pink ${version} `)}`;
+				const right = `${theme.fg("muted", t("ctrl+t pensamento", "ctrl+t razonamiento", "ctrl+t thinking"))}${theme.fg("dim", `   ${used ? `ctx ${used}   ` : ""}pink ${version} `)}`;
 				return [footerLine({ theme, width, left, right })];
 			}, []),
 			invalidate() {},
@@ -972,8 +973,8 @@ export function autoTitle(entries, max = 50) {
 
 // "Apagar sessão" nunca apaga (regra do owner): move o arquivo para <pasta das sessões>/.trash/, que o Pink não lista
 export function trashSession(file, current, { fs, path, now = Date.now() }) {
-	if (!file) return { ok: false, reason: "sessão sem arquivo" };
-	if (current && path.resolve(file).toLowerCase() === path.resolve(current).toLowerCase()) return { ok: false, reason: "é a sessão atual: troque de sessão antes de apagar" };
+	if (!file) return { ok: false, reason: t("sessão sem arquivo", "sesión sin archivo", "session has no file") };
+	if (current && path.resolve(file).toLowerCase() === path.resolve(current).toLowerCase()) return { ok: false, reason: t("é a sessão atual: troque de sessão antes de apagar", "es la sesión actual: cambia de sesión antes de borrar", "it is the current session: switch sessions before deleting") };
 	const dir = path.join(path.dirname(file), ".trash");
 	fs.mkdirSync(dir, { recursive: true });
 	let target = path.join(dir, path.basename(file));
@@ -1034,7 +1035,7 @@ export function diffBlock({ theme, diff, width, max = Infinity }) {
 			out.push(paint[sign] ? paint[sign](text) : theme.fg("toolDiffContext", text));
 		});
 	});
-	if (rows.length > shown.length) out.push(fit(theme.fg("dim", `${" ".repeat(numWidth + 1)}… +${rows.length - shown.length} linhas (ctrl+o)`), width));
+	if (rows.length > shown.length) out.push(fit(theme.fg("dim", `${" ".repeat(numWidth + 1)}… +${rows.length - shown.length} ${t("linhas", "líneas", "lines")} (ctrl+o)`), width));
 	return out;
 }
 
@@ -1045,25 +1046,25 @@ export function writeDiff(content, max = 40) {
 	const all = content.replace(/\r/g, "").replace(/\n$/, "");
 	const head = all.split("\n", max);
 	const rest = (all.match(/\n/g)?.length ?? 0) + 1 - head.length;
-	return [...head.map((line, index) => `+${index + 1} ${line}`), ...(rest > 0 ? [`   … +${rest} linhas (ctrl+o)`] : [])].join("\n");
+	return [...head.map((line, index) => `+${index + 1} ${line}`), ...(rest > 0 ? [`   … +${rest} ${t("linhas", "líneas", "lines")} (ctrl+o)`] : [])].join("\n");
 }
 
 export function toolSummary(name, args = {}, result) {
 	const file = (value) => String(value ?? "").replace(/\\/g, "/");
-	if (name === "read") return `Leu ${file(args.path)}`;
-	if (name === "write") return `Escreveu ${file(args.path)}${typeof args.content === "string" ? ` · ${args.content.split("\n").length} linhas` : ""}`;
+	if (name === "read") return `${t("Leu", "Leyó", "Read")} ${file(args.path)}`;
+	if (name === "write") return `${t("Escreveu", "Escribió", "Wrote")} ${file(args.path)}${typeof args.content === "string" ? ` · ${args.content.split("\n").length} ${t("linhas", "líneas", "lines")}` : ""}`;
 	if (name === "edit") {
 		const patch = result?.details?.patch ?? result?.details?.diff;
 		const stats = patch ? diffStats(patch) : undefined;
-		return `Editou ${file(args.path)}${stats ? ` +${stats.add} −${stats.del}` : ""}`;
+		return `${t("Editou", "Editó", "Edited")} ${file(args.path)}${stats ? ` +${stats.add} −${stats.del}` : ""}`;
 	}
-	if (name === "bash") return `Rodou: ${shorten(args.command, 60)}`;
-	if (name === "grep") return `Buscou "${shorten(args.pattern, 40)}"`;
-	if (name === "find") return `Procurou ${shorten(args.pattern ?? args.path, 40)}`;
-	if (name === "ls") return `Listou ${file(args.path ?? ".")}`;
+	if (name === "bash") return `${t("Rodou", "Ejecutó", "Ran")}: ${shorten(args.command, 60)}`;
+	if (name === "grep") return `${t("Buscou", "Buscó", "Searched")} "${shorten(args.pattern, 40)}"`;
+	if (name === "find") return `${t("Procurou", "Buscó", "Looked for")} ${shorten(args.pattern ?? args.path, 40)}`;
+	if (name === "ls") return `${t("Listou", "Listó", "Listed")} ${file(args.path ?? ".")}`;
 	if (name === "todowrite") {
 		const todos = normalizeTodos(args.todos);
-		return `Plano · ${todos.filter((item) => item.status === "completed").length}/${todos.length}`;
+		return `${t("Plano", "Plan", "Plan")} · ${todos.filter((item) => item.status === "completed").length}/${todos.length}`;
 	}
 	return name;
 }
@@ -1110,10 +1111,10 @@ export function compactToolRenderer(toolName, next) {
 }
 
 export function thinkingLabel(ms) {
-	return `+ Pensou${ms > 0 ? ` · ${(ms / 1000).toFixed(1)}s` : ""}`;
+	return `+ ${t("Pensou", "Pensó", "Thought")}${ms > 0 ? ` · ${(ms / 1000).toFixed(1)}s` : ""}`;
 }
 
-export const LANGUAGE_PROMPT = "\n\n# Idioma (Pink)\nResponda no idioma em que o usuário escreve. Quando não der para saber (mensagem curta, só código), responda em português do Brasil.";
+export const LANGUAGE_PROMPT = `\n\n# Idioma (Pink)\nResponda no idioma em que o usuário escreve. Quando não der para saber (mensagem curta, só código), responda ${t("em português do Brasil", "en español", "in English")}.`;
 
 // rodapé de cada resposta, como o do OpenCode: "Pink · thoth · 20.5s · 45.6 tok/s" (tempo e velocidade só quando medidos)
 export function shortModel(id) {
@@ -1187,7 +1188,7 @@ export const PINK = { agent: "build", permission: globalThis.__pinkPermissionSav
 
 // "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
 export function labelUserMarkdown(markdown, context) {
-	return context?.messageType === "user" ? `**Você**\n\n${markdown}` : markdown;
+	return context?.messageType === "user" ? `**${t("Você", "Tú", "You")}**\n\n${markdown}` : markdown;
 }
 
 function userText(entry) {
@@ -1196,18 +1197,18 @@ function userText(entry) {
 }
 
 async function openPalette(pi, ctx) {
-	const choice = await ctx.ui.select?.("Comandos  (Enter coloca na caixa de digitar)", paletteItems(pi.getCommands?.() ?? []));
+	const choice = await ctx.ui.select?.(t("Comandos  (Enter coloca na caixa de digitar)", "Comandos  (Enter lo pone en la caja de escribir)", "Commands  (Enter puts it in the input box)"), paletteItems(pi.getCommands?.() ?? []));
 	if (choice) ctx.ui.setEditorText?.(choice.split("  ")[0]);
 }
 
 function switchAgent(ctx, next = PINK.agent === "build" ? "plan" : "build") {
 	PINK.agent = next;
-	ctx.ui?.notify?.(next === "plan" ? "Agente Plano: só leitura (tab volta ao Build)" : "Agente Build: edita e roda comandos", "info");
+	ctx.ui?.notify?.(next === "plan" ? t("Agente Plano: só leitura (tab volta ao Build)", "Agente Plan: solo lectura (tab vuelve a Build)", "Plan agent: read-only (tab goes back to Build)") : t("Agente Build: edita e roda comandos", "Agente Build: edita y ejecuta comandos", "Build agent: edits and runs commands"), "info");
 }
 
 // modo de permissão (card 1dfwh7kfzfg), alt+m roda: pergunta tudo → aceita edições → plano. Não usa tab (Build/Plano) nem
 // shift+tab (pensamento). O pink-permissions lê o modo por globalThis.__pinkPermissionMode na hora de cada ferramenta.
-export const MODES = { ask: "Pergunta tudo: confirma cada edição e comando", edits: "Aceita edições: só confirma o perigoso (padrão)", plan: "Plano: só leitura" };
+export const MODES = { ask: t("Pergunta tudo: confirma cada edição e comando", "Pregunta todo: confirma cada edición y comando", "Ask everything: confirms every edit and command"), edits: t("Aceita edições: só confirma o perigoso (padrão)", "Acepta ediciones: solo confirma lo peligroso (predeterminado)", "Accept edits: only confirms risky actions (default)"), plan: t("Plano: só leitura", "Plan: solo lectura", "Plan: read-only") };
 export const currentMode = () => (PINK.agent === "plan" ? "plan" : PINK.permission);
 export const nextMode = (mode = currentMode()) => ({ ask: "edits", edits: "plan", plan: "ask" })[mode] ?? "edits";
 export function setMode(ctx, mode) {
@@ -1217,96 +1218,96 @@ export function setMode(ctx, mode) {
 	// fora do PINK: o /reload reimporta o módulo e o "pergunta tudo" não pode voltar sozinho ao padrão menos seguro
 	globalThis.__pinkPermissionSaved = mode;
 	PINK.agent = "build";
-	ctx.ui?.notify?.(`Modo ${MODES[mode]} (alt+m troca)`, "info");
+	ctx.ui?.notify?.(`${t("Modo", "Modo", "Mode")} ${MODES[mode]} (${t("alt+m troca", "alt+m cambia", "alt+m switches")})`, "info");
 }
 Object.defineProperty(globalThis, "__pinkPermissionMode", { get: () => currentMode(), configurable: true });
-const MODE_ARGS = { perguntar: "ask", editar: "edits", plano: "plan" };
+const MODE_ARGS = { perguntar: "ask", preguntar: "ask", ask: "ask", editar: "edits", edit: "edits", plano: "plan", plan: "plan" };
 
 export const INIT_PROMPT = "Analise este repositório e crie o arquivo AGENTS.md na raiz (ou atualize, se já existir, sem perder o que vale). Inclua, de forma concisa: os comandos de build, teste e lint (e como rodar um único teste), a arquitetura em alto nível e as convenções de código que um agente precisa seguir. Não invente o que não estiver no repositório.";
 
-const DELETE_ITEM = "× Apagar uma sessão…";
+const DELETE_ITEM = t("× Apagar uma sessão…", "× Borrar una sesión…", "× Delete a session…");
 
 async function deleteSession(ctx) {
 	const { SessionManager } = await import("@earendil-works/pi-coding-agent");
 	const current = ctx.sessionManager?.getSessionFile?.();
 	const path = node("node:path");
 	const list = (await SessionManager.list(ctx.cwd)).filter((item) => !current || path.resolve(item.path).toLowerCase() !== path.resolve(current).toLowerCase()).sort((a, b) => b.modified - a.modified).slice(0, 40);
-	if (!list.length) return void ctx.ui.notify?.("Nenhuma outra sessão para apagar (a atual não pode ser apagada)", "info");
-	const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || "(sem título)").replace(/\s+/g, " ").slice(0, 60)}  · ${relativeTime(item.modified)}`);
-	const choice = await ctx.ui.select?.("Apagar qual sessão? (vai para a lixeira .trash)", labels);
+	if (!list.length) return void ctx.ui.notify?.(t("Nenhuma outra sessão para apagar (a atual não pode ser apagada)", "No hay otra sesión para borrar (la actual no se puede borrar)", "No other session to delete (the current one cannot be deleted)"), "info");
+	const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || t("(sem título)", "(sin título)", "(untitled)")).replace(/\s+/g, " ").slice(0, 60)}  · ${relativeTime(item.modified)}`);
+	const choice = await ctx.ui.select?.(t("Apagar qual sessão? (vai para a lixeira .trash)", "¿Qué sesión borrar? (va a la papelera .trash)", "Which session to delete? (moves it to the .trash bin)"), labels);
 	if (!choice) return;
 	const item = list[labels.indexOf(choice)];
-	if (!(await ctx.ui.confirm?.("Apagar sessão?", `${choice}\nO arquivo vai para ${path.join(path.dirname(item.path), ".trash")} (nada é excluído).`))) return;
+	if (!(await ctx.ui.confirm?.(t("Apagar sessão?", "¿Borrar sesión?", "Delete session?"), `${choice}\n${t("O arquivo vai para", "El archivo va a", "The file goes to")} ${path.join(path.dirname(item.path), ".trash")} (${t("nada é excluído", "no se borra nada", "nothing is deleted")}).`))) return;
 	try {
 		const done = trashSession(item.path, current, { fs: node("node:fs"), path });
-		ctx.ui.notify?.(done.ok ? `Sessão na lixeira: ${done.target}` : `Não apagada: ${done.reason}`, done.ok ? "info" : "error");
+		ctx.ui.notify?.(done.ok ? t(`Sessão na lixeira: ${done.target}`, `Sesión en la papelera: ${done.target}`, `Session moved to the bin: ${done.target}`) : t(`Não apagada: ${done.reason}`, `No borrada: ${done.reason}`, `Not deleted: ${done.reason}`), done.ok ? "info" : "error");
 	} catch (error) {
-		ctx.ui.notify?.(`Não apagada: ${error?.message ?? error}`, "error");
+		ctx.ui.notify?.(t(`Não apagada: ${error?.message ?? error}`, `No borrada: ${error?.message ?? error}`, `Not deleted: ${error?.message ?? error}`), "error");
 	}
 	PINK.refreshSessions?.();
 }
 
 function registerOpenCodeFunctions(pi) {
 	const command = (name, description, handler) => pi.registerCommand?.(name, { description, handler });
-	command("plan", "Agente Plano: só lê e planeja, não edita (tab troca)", async (_args, ctx) => switchAgent(ctx, "plan"));
-	command("build", "Agente Build: edita e roda comandos (tab troca)", async (_args, ctx) => switchAgent(ctx, "build"));
-	pi.registerShortcut?.("alt+m", { description: "Troca o modo de permissão: pergunta tudo, aceita edições, plano", handler: (ctx) => setMode(ctx, nextMode()) });
+	command("plan", t("Agente Plano: só lê e planeja, não edita (tab troca)", "Agente Plan: solo lee y planifica, no edita (tab cambia)", "Plan agent: reads and plans, does not edit (tab switches)"), async (_args, ctx) => switchAgent(ctx, "plan"));
+	command("build", t("Agente Build: edita e roda comandos (tab troca)", "Agente Build: edita y ejecuta comandos (tab cambia)", "Build agent: edits and runs commands (tab switches)"), async (_args, ctx) => switchAgent(ctx, "build"));
+	pi.registerShortcut?.("alt+m", { description: t("Troca o modo de permissão: pergunta tudo, aceita edições, plano", "Cambia el modo de permisos: pregunta todo, acepta ediciones, plan", "Switches the permission mode: ask everything, accept edits, plan"), handler: (ctx) => setMode(ctx, nextMode()) });
 	pi.registerCommand?.("modo", {
-		description: "Modo de permissão: perguntar, editar ou plano (sem nome, troca para o próximo; alt+m)",
+		description: t("Modo de permissão: perguntar, editar ou plano (sem nome, troca para o próximo; alt+m)", "Modo de permisos: preguntar, editar o plan (sin nombre, pasa al siguiente; alt+m)", "Permission mode: ask, edit or plan (no name, moves to the next; alt+m)"),
 		getArgumentCompletions: (prefix) => Object.keys(MODE_ARGS).filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name })),
 		handler: async (args, ctx) => {
 			const name = String(args ?? "").trim().toLowerCase();
-			if (name && !MODE_ARGS[name]) return void ctx.ui.notify?.("Use /modo perguntar, /modo editar ou /modo plano", "warning");
+			if (name && !MODE_ARGS[name]) return void ctx.ui.notify?.(t("Use /modo perguntar, /modo editar ou /modo plano", "Usa /modo preguntar, /modo editar o /modo plan", "Use /modo ask, /modo edit or /modo plan"), "warning");
 			setMode(ctx, name ? MODE_ARGS[name] : nextMode());
 		},
 	});
-	command("help", "Paleta de comandos (ctrl+p)", async (_args, ctx) => openPalette(pi, ctx));
-	command("details", "Mostra ou esconde a saída das ferramentas (ctrl+o)", async (_args, ctx) => ctx.ui.setToolsExpanded?.(!ctx.ui.getToolsExpanded?.()));
-	command("init", "Cria ou atualiza o AGENTS.md do projeto", async () => pi.sendUserMessage?.(INIT_PROMPT));
-	command("themes", "Escolhe o tema (fica salvo)", async (_args, ctx) => {
+	command("help", t("Paleta de comandos (ctrl+p)", "Paleta de comandos (ctrl+p)", "Command palette (ctrl+p)"), async (_args, ctx) => openPalette(pi, ctx));
+	command("details", t("Mostra ou esconde a saída das ferramentas (ctrl+o)", "Muestra u oculta la salida de las herramientas (ctrl+o)", "Show or hide tool output (ctrl+o)"), async (_args, ctx) => ctx.ui.setToolsExpanded?.(!ctx.ui.getToolsExpanded?.()));
+	command("init", t("Cria ou atualiza o AGENTS.md do projeto", "Crea o actualiza el AGENTS.md del proyecto", "Create or update the project's AGENTS.md"), async () => pi.sendUserMessage?.(INIT_PROMPT));
+	command("themes", t("Escolhe o tema (fica salvo)", "Elige el tema (queda guardado)", "Choose the theme (it is saved)"), async (_args, ctx) => {
 		const name = await ctx.ui.select?.("Temas", (ctx.ui.getAllThemes?.() ?? []).map((theme) => theme.name));
 		if (!name) return;
 		const done = ctx.ui.setTheme?.(name);
-		ctx.ui.notify?.(done?.success ? `Tema ${name}` : `Tema ${name} não carregou: ${done?.error ?? "?"}`, done?.success ? "info" : "error");
+		ctx.ui.notify?.(done?.success ? t(`Tema ${name}`, `Tema ${name}`, `Theme ${name}`) : t(`Tema ${name} não carregou: ${done?.error ?? "?"}`, `El tema ${name} no se cargó: ${done?.error ?? "?"}`, `Theme ${name} did not load: ${done?.error ?? "?"}`), done?.success ? "info" : "error");
 	});
-	command("sessions", "Lista as sessões desta pasta e troca de sessão", async (_args, ctx) => {
+	command("sessions", t("Lista as sessões desta pasta e troca de sessão", "Lista las sesiones de esta carpeta y cambia de sesión", "Lists this folder's sessions and switches session"), async (_args, ctx) => {
 		const { SessionManager } = await import("@earendil-works/pi-coding-agent");
 		const list = (await SessionManager.list(ctx.cwd)).sort((a, b) => b.modified - a.modified).slice(0, 40);
-		if (!list.length) return void ctx.ui.notify?.("Nenhuma sessão salva nesta pasta", "info");
-		const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || "(sem título)").replace(/\s+/g, " ").slice(0, 60)}  · ${new Date(item.modified).toLocaleString("pt-BR")}`);
-		const choice = await ctx.ui.select?.("Sessões", [DELETE_ITEM, ...labels]);
+		if (!list.length) return void ctx.ui.notify?.(t("Nenhuma sessão salva nesta pasta", "Ninguna sesión guardada en esta carpeta", "No saved sessions in this folder"), "info");
+		const labels = list.map((item, i) => `${i + 1}. ${String(item.name || item.firstMessage || t("(sem título)", "(sin título)", "(untitled)")).replace(/\s+/g, " ").slice(0, 60)}  · ${new Date(item.modified).toLocaleString(t("pt-BR", "es-419", "en-US"))}`);
+		const choice = await ctx.ui.select?.(t("Sessões", "Sesiones", "Sessions"), [DELETE_ITEM, ...labels]);
 		if (choice === DELETE_ITEM) return void (await deleteSession(ctx));
 		if (choice) await ctx.switchSession(list[labels.indexOf(choice)].path);
 	});
-	command("session-open", "Abrir uma sessão pelo arquivo (o clique e alt+↑/↓ na coluna SESSÕES usam este)", async (args, ctx) => {
+	command("session-open", t("Abrir uma sessão pelo arquivo (o clique e alt+↑/↓ na coluna SESSÕES usam este)", "Abre una sesión por archivo (el clic y alt+↑/↓ en la columna SESIONES usan este)", "Open a session by file (the click and alt+↑/↓ in the SESSIONS column use this)"), async (args, ctx) => {
 		const target = String(args ?? "").trim();
 		if (target) await ctx.switchSession(target);
 	});
-	command("delete-session", "Apagar sessão (vai para a lixeira .trash, com confirmação)", async (_args, ctx) => deleteSession(ctx));
-	command("todos", "Mostra a lista de tarefas do agente", async (_args, ctx) => {
-		const lines = PINK.todos.length ? todoLines({ theme: ctx.ui.theme, todos: PINK.todos, width: 100 }) : ["Sem tarefas nesta sessão"];
+	command("delete-session", t("Apagar sessão (vai para a lixeira .trash, com confirmação)", "Borrar sesión (va a la papelera .trash, con confirmación)", "Delete session (moves it to the .trash bin, with confirmation)"), async (_args, ctx) => deleteSession(ctx));
+	command("todos", t("Mostra a lista de tarefas do agente", "Muestra la lista de tareas del agente", "Show the agent's task list"), async (_args, ctx) => {
+		const lines = PINK.todos.length ? todoLines({ theme: ctx.ui.theme, todos: PINK.todos, width: 100 }) : [t("Sem tarefas nesta sessão", "Sin tareas en esta sesión", "No tasks in this session")];
 		ctx.ui.notify?.(lines.join("\n"), "info");
 	});
-	command("undo", "Desfaz a última mensagem, as respostas e as mudanças nos arquivos", async (_args, ctx) => {
+	command("undo", t("Desfaz a última mensagem, as respostas e as mudanças nos arquivos", "Deshace el último mensaje, las respuestas y los cambios en los archivos", "Undo the last message, the responses and the file changes"), async (_args, ctx) => {
 		await ctx.waitForIdle?.();
 		const user = lastUserEntry(ctx.sessionManager.getBranch());
-		if (!user) return void ctx.ui.notify?.("Nada para desfazer", "info");
+		if (!user) return void ctx.ui.notify?.(t("Nada para desfazer", "Nada que deshacer", "Nothing to undo"), "info");
 		const leaf = ctx.sessionManager.getLeafId();
 		const snapshot = PINK.snapshots.get(user.id) ?? (await savedSnapshot(ctx.sessionManager.getEntries?.(), user.id, ctx.cwd));
 		if ((await ctx.navigateTree(user.id))?.cancelled) return;
 		const restored = snapshot ? await gitRestore(snapshot) : undefined;
 		PINK.redo.push({ leaf, files: restored?.now });
 		ctx.ui.setEditorText?.(userText(user));
-		ctx.ui.notify?.(restored ? `Desfeito: conversa e ${restored.changed} arquivo(s). /redo refaz` : "Desfeito: conversa (arquivos sem ponto salvo: fora do Git ou de antes desta execução do Pink). /redo refaz", "info");
+		ctx.ui.notify?.(restored ? t(`Desfeito: conversa e ${restored.changed} arquivo(s). /redo refaz`, `Deshecho: conversación y ${restored.changed} archivo(s). /redo rehace`, `Undone: conversation and ${restored.changed} file(s). /redo redoes`) : t("Desfeito: conversa (arquivos sem ponto salvo: fora do Git ou de antes desta execução do Pink). /redo refaz", "Deshecho: conversación (archivos sin punto guardado: fuera de Git o de antes de esta ejecución de Pink). /redo rehace", "Undone: conversation (files with no saved point: outside Git or from before this Pink run). /redo redoes"), "info");
 	});
-	command("redo", "Refaz o que o /undo desfez, com os arquivos", async (_args, ctx) => {
+	command("redo", t("Refaz o que o /undo desfez, com os arquivos", "Rehace lo que deshizo /undo, con los archivos", "Redo what /undo undid, with the files"), async (_args, ctx) => {
 		await ctx.waitForIdle?.();
 		const item = PINK.redo.pop();
-		if (!item) return void ctx.ui.notify?.("Nada para refazer", "info");
+		if (!item) return void ctx.ui.notify?.(t("Nada para refazer", "Nada que rehacer", "Nothing to redo"), "info");
 		if (item.leaf && (await ctx.navigateTree(item.leaf))?.cancelled) return void PINK.redo.push(item);
 		const restored = item.files ? await gitRestore(item.files) : undefined;
 		ctx.ui.setEditorText?.("");
-		ctx.ui.notify?.(restored ? `Refeito: conversa e ${restored.changed} arquivo(s)` : "Refeito: conversa", "info");
+		ctx.ui.notify?.(restored ? t(`Refeito: conversa e ${restored.changed} arquivo(s)`, `Rehecho: conversación y ${restored.changed} archivo(s)`, `Redone: conversation and ${restored.changed} file(s)`) : t("Refeito: conversa", "Rehecho: conversación", "Redone: conversation"), "info");
 	});
 	// "Trabalhando · 1m 12s · ↓ 3.1k tokens" ao vivo; no fim, o rodapé da última resposta guarda o total do pedido
 	// (registrado antes do ponto de restauração: o Pink espera cada gancho, e o git não pode atrasar o relógio)
@@ -1315,7 +1316,7 @@ function registerOpenCodeFunctions(pi) {
 		const run = (PINK.run = continueRun(PINK.lastRun, PINK.lastRunEnd) ?? createRun());
 		const show = () => {
 			try {
-				ctx.ui.setWorkingMessage?.(`Trabalhando · ${runLabel(run.summary())}`);
+				ctx.ui.setWorkingMessage?.(`${t("Trabalhando", "Trabajando", "Working")} · ${runLabel(run.summary())}`);
 			} catch {
 				clearInterval(PINK.runTimer);  // ctx velho (sessão trocada): para o relógio
 			}
@@ -1380,8 +1381,8 @@ function registerOpenCodeFunctions(pi) {
 		if (PINK.agent !== "plan") return;
 		const decision = planDecision(event.toolName, pi.getAllTools?.().find((tool) => tool.name === event.toolName)?.annotations);
 		if (decision === "allow") return;
-		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.("Agente Plano: rodar este comando?", String(event.input?.command ?? event.toolName)))) return;
-		return { block: true, reason: `Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).` };
+		if (decision === "ask" && ctx.hasUI && (await ctx.ui.confirm?.(t("Agente Plano: rodar este comando?", "Agente Plan: ¿ejecutar este comando?", "Plan agent: run this command?"), String(event.input?.command ?? event.toolName)))) return;
+		return { block: true, reason: t(`Agente Plano (só leitura): ${event.toolName} não é permitido. Peça ao usuário para trocar para o Build (tab).`, `Agente Plan (solo lectura): ${event.toolName} no está permitido. Pide al usuario que cambie a Build (tab).`, `Plan agent (read-only): ${event.toolName} is not allowed. Ask the user to switch to Build (tab).`) };
 	});
 	// seções do prompt, não o prompt inteiro: devolver systemPrompt forçava o texto e apagava as seções das outras extensões (Ponytail)
 	pi.on("before_agent_start", async (event) => {
@@ -1406,7 +1407,7 @@ async function registerTodoTool(pi) {
 	const status = Type.Union(["pending", "in_progress", "completed", "cancelled"].map((value) => Type.Literal(value)));
 	pi.registerTool({
 		name: "todowrite",
-		label: "Tarefas",
+		label: t("Tarefas", "Tareas", "Tasks"),
 		description: "Create and update the session todo list shown to the user. Send the WHOLE list on every change. Use it for work with 3 or more steps: keep exactly one item in_progress and mark items completed as soon as they are done.",
 		parameters: Type.Object({ todos: Type.Array(Type.Object({ content: Type.String({ description: "What to do, short" }), status })) }),
 		annotations: { readOnlyHint: true },
@@ -1438,10 +1439,10 @@ export default function (pi) {
 		}
 	});
 	pi.registerCommand?.("lateral", {
-		description: "Mostra ou esconde a lateral (sessão, contexto, tokens)",
+		description: t("Mostra ou esconde a lateral (sessão, contexto, tokens)", "Muestra u oculta la barra lateral (sesión, contexto, tokens)", "Show or hide the sidebar (session, context, tokens)"),
 		handler: async (_args, ctx) => {
 			globalThis.__pinkSidebarOn = !(globalThis.__pinkSidebarOn ?? true);
-			ctx.ui.notify?.(globalThis.__pinkSidebarOn ? "Lateral visível" : "Lateral escondida", "info");
+			ctx.ui.notify?.(globalThis.__pinkSidebarOn ? t("Lateral visível", "Barra lateral visible", "Sidebar shown") : t("Lateral escondida", "Barra lateral oculta", "Sidebar hidden"), "info");
 		},
 	});
 	registerOpenCodeFunctions(pi);

@@ -11,6 +11,7 @@
 // matcher: expressão regular sobre o nome da ferramenta, inteira, sem diferença de maiúsculas; vazio ou "*" = todas.
 // Diferença do Claude Code: tool_name chega como no Pink (bash, write, edit), sem session_id/transcript_path.
 // Em subagente (PINK_SUBAGENT) só rodam PreToolUse e PostToolUse.
+import { t } from "./pink-i18n.ts";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -33,10 +34,10 @@ export function loadHooks(files, read = fs.readFileSync) {
 			for (const group of Array.isArray(root?.[event]) ? root[event] : []) {
 				const list = Array.isArray(group?.hooks) ? group.hooks : [group];
 				for (const hook of list) {
-					if (typeof hook?.command !== "string" || !hook.command.trim()) { errors.push(`${file}: ${event} sem "command"`); continue; }
+					if (typeof hook?.command !== "string" || !hook.command.trim()) { errors.push(`${file}: ${event} ${t(`sem "command"`, `sin "command"`, `without "command"`)}`); continue; }
 					let matcher;
 					try { matcher = !group.matcher || group.matcher === "*" ? undefined : new RegExp(`^(?:${group.matcher})$`, "i"); }
-					catch { errors.push(`${file}: matcher inválido ${JSON.stringify(group.matcher)}`); continue; }
+					catch { errors.push(`${file}: ${t("matcher inválido", "matcher no válido", "invalid matcher")} ${JSON.stringify(group.matcher)}`); continue; }
 					const timeout = Number(hook.timeout) > 0 ? Number(hook.timeout) : DEFAULT_TIMEOUT;
 					hooks[event].push({ command: hook.command, timeout, matcher, file });
 				}
@@ -84,7 +85,7 @@ export function hooksExtension(pi, deps = {}) {
 		try { out = r.stdout.trim().startsWith("{") ? JSON.parse(r.stdout) : undefined; } catch { out = undefined; }
 		const specific = out?.hookSpecificOutput;
 		if (r.code === 2 || out?.decision === "block" || specific?.permissionDecision === "deny")
-			return out?.reason || specific?.permissionDecisionReason || r.stderr || "sem motivo";
+			return out?.reason || specific?.permissionDecisionReason || r.stderr || t("sem motivo", "sin motivo", "no reason");
 		return undefined;
 	};
 	const fire = async (event, ctx, payload, toolName, stopWhen) => {
@@ -95,8 +96,8 @@ export function hooksExtension(pi, deps = {}) {
 		for (const hook of hooks[event]) {
 			if (toolName !== undefined && hook.matcher && !hook.matcher.test(toolName)) continue;
 			const result = await run(hook, { hook_event_name: event, cwd, ...payload }, cwd, env);
-			if (result.timedOut) notify(ctx, `Hook ${event} passou de ${hook.timeout} s e foi parado: ${hook.command}`);
-			else if (result.error || (result.code !== 0 && result.code !== 2)) notify(ctx, `Hook ${event} falhou (${result.error ?? `saída ${result.code}`}): ${result.stderr || hook.command}`);
+			if (result.timedOut) notify(ctx, t(`Hook ${event} passou de ${hook.timeout} s e foi parado: ${hook.command}`, `El hook ${event} superó ${hook.timeout} s y se detuvo: ${hook.command}`, `Hook ${event} ran over ${hook.timeout} s and was stopped: ${hook.command}`));
+			else if (result.error || (result.code !== 0 && result.code !== 2)) notify(ctx, t(`Hook ${event} falhou (${result.error ?? `saída ${result.code}`}): ${result.stderr || hook.command}`, `El hook ${event} falló (${result.error ?? `salida ${result.code}`}): ${result.stderr || hook.command}`, `Hook ${event} failed (${result.error ?? `exit ${result.code}`}): ${result.stderr || hook.command}`));
 			results.push(result);
 			if (stopWhen?.(result)) break;
 		}
@@ -105,7 +106,7 @@ export function hooksExtension(pi, deps = {}) {
 	pi.on("tool_call", async (event, ctx) => {
 		const results = await fire("PreToolUse", ctx, { tool_name: event?.toolName, tool_input: event?.input }, event?.toolName, (r) => blockOf(r) !== undefined);
 		const reason = results.map(blockOf).find((r) => r !== undefined);
-		return reason === undefined ? undefined : { block: true, reason: `Bloqueado por hook: ${reason}` };
+		return reason === undefined ? undefined : { block: true, reason: t(`Bloqueado por hook: ${reason}`, `Bloqueado por el hook: ${reason}`, `Blocked by hook: ${reason}`) };
 	});
 	pi.on("tool_result", async (event, ctx) => {
 		const results = await fire("PostToolUse", ctx, { tool_name: event?.toolName, tool_input: event?.input, tool_response: textOf(event?.content), is_error: Boolean(event?.isError) }, event?.toolName);
@@ -130,11 +131,11 @@ export function hooksExtension(pi, deps = {}) {
 		await fire("Stop", ctx, { aborted: Boolean(event?.aborted) });
 	});
 	pi.registerCommand?.("hooks", {
-		description: "Mostra os hooks em uso (usuário e projeto confiável)",
+		description: t("Mostra os hooks em uso (usuário e projeto confiável)", "Muestra los hooks en uso (usuario y proyecto de confianza)", "Shows the hooks in use (user and trusted project)"),
 		handler: async (_args, ctx) => {
 			const files = filesFor(ctx);
 			const { hooks, errors } = loadHooks(files, read);
-			const lines = [`Arquivos: ${files.join(" · ")}`, ...EVENTS.map((e) => `${e}: ${hooks[e].map((h) => h.command).join(" | ") || "-"}`), ...errors.map((e) => `Erro: ${e}`)];
+			const lines = [`${t("Arquivos", "Archivos", "Files")}: ${files.join(" · ")}`, ...EVENTS.map((e) => `${e}: ${hooks[e].map((h) => h.command).join(" | ") || "-"}`), ...errors.map((e) => `${t("Erro", "Error", "Error")}: ${e}`)];
 			ctx.ui.notify?.(lines.join("\n"), errors.length ? "warning" : "info");
 		},
 	});

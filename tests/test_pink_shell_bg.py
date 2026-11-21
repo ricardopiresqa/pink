@@ -151,6 +151,7 @@ def shell_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPathF
     ext.mkdir(exist_ok=True)
     module = ext / "pink-shell-bg.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-shell-bg.ts", module)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", module.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     work = tmp_path_factory.mktemp("shell-work")
     trusted = tmp_path_factory.mktemp("shell-confiavel")
     untrusted = tmp_path_factory.mktemp("shell-nao-confiavel")

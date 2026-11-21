@@ -284,6 +284,7 @@ def loop_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPathFa
     ext.mkdir(exist_ok=True)
     module = ext / "pink-loop.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-loop.ts", module)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", module.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     home = tmp_path_factory.mktemp("loop-home")
     keep = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT", "APPDATA", "LOCALAPPDATA"}
     env = {name: value for name, value in os.environ.items() if name.upper() in keep}

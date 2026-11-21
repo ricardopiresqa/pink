@@ -33,9 +33,17 @@ export function detect(env = process.env, platform = process.platform, sync = sp
 	}
 }
 
-// uma vez por processo; o build e os testes podem trocar com setLang
+// uma vez por processo (sem troca ao vivo: constantes de módulo já usaram o idioma); o build e os testes trocam com setLang.
+// O detectado vai para PINK_LANG: subagentes e o mux herdam o mesmo idioma sem consultar o registro de novo.
+// O registro guarda a lista de idiomas preferidos (o primeiro quase sempre é o de exibição do Windows).
 let current: Lang | undefined;
-export const lang = (): Lang => (current ??= detect());
+export const lang = (): Lang => {
+	if (!current) {
+		current = detect();
+		process.env.PINK_LANG ||= current;
+	}
+	return current;
+};
 export const setLang = (value: Lang | undefined) => {
 	current = value;
 };

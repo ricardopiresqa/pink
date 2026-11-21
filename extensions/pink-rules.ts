@@ -2,6 +2,7 @@
 // com globs no frontmatter, em <pasta do agente>/rules (da pessoa) e em .pink/rules (do projeto, só em pasta confiável).
 // A regra entra no contexto uma vez por sessão, no resultado do read/write/edit de um arquivo que casa com o glob; assim o
 // AGENTS.md não cresce com instrução que só vale para um tipo de arquivo. /regras lista as regras e quais já entraram.
+import { t } from "./pink-i18n.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,7 +19,7 @@ const MAX_STARS = 8; // limita o backtracking de padrões como *a*a*a*a no camin
 // Sem diferenciar maiúsculas, também no Linux e no macOS. Glob torto (chave aberta, longo, * demais) lança erro.
 export function globToRegExp(raw: string): RegExp {
 	const glob = raw.replace(/(?:\*\*\/)+/g, "**/");
-	if (glob.length > MAX_GLOB || (glob.match(/\*/g) ?? []).length > MAX_STARS) throw new Error(`glob inválido: ${raw}`);
+	if (glob.length > MAX_GLOB || (glob.match(/\*/g) ?? []).length > MAX_STARS) throw new Error(t(`glob inválido: ${raw}`, `glob no válido: ${raw}`, `invalid glob: ${raw}`));
 	let out = "";
 	let depth = 0;
 	for (let i = 0; i < glob.length; i++) {
@@ -39,7 +40,7 @@ export function globToRegExp(raw: string): RegExp {
 		} else if (c === "," && depth > 0) out += "|";
 		else out += c.replace(/[.+^$()|[\]\\]/g, "\\$&");
 	}
-	if (depth) throw new Error(`glob inválido: ${raw}`);
+	if (depth) throw new Error(t(`glob inválido: ${raw}`, `glob no válido: ${raw}`, `invalid glob: ${raw}`));
 	return new RegExp(`^${out}$`, "i");
 }
 
@@ -173,13 +174,13 @@ export function createRules({ load = loadRules } = {}) {
 		const root = path.resolve(ctx?.cwd ?? process.cwd());
 		const trusted = ctx?.isProjectTrusted?.() === true;
 		const { rules, invalid } = load(root, trusted);
-		const lines = rules.length ? ["Regras por tipo de arquivo:"] : ["Nenhuma regra. Crie .md com globs no frontmatter em:", `  ${path.join(agentDir(), "rules")} (suas)`, "  .pink/rules (do projeto)"];
+		const lines = rules.length ? [t("Regras por tipo de arquivo:", "Reglas por tipo de archivo:", "Rules by file type:")] : [t("Nenhuma regra. Crie .md com globs no frontmatter em:", "Ninguna regla. Crea .md con globs en el frontmatter en:", "No rules. Create .md files with globs in the frontmatter in:"), `  ${path.join(agentDir(), "rules")} ${t("(suas)", "(las tuyas)", "(yours)")}`, t("  .pink/rules (do projeto)", "  .pink/rules (del proyecto)", "  .pink/rules (project)")];
 		for (const rule of rules) {
-			const state = rule.tooBig ? `grande demais (máx. ${MAX_RULE / 1024} KB), não entra` : shown.has(rule.id) ? "já no contexto" : "espera um arquivo que case";
+			const state = rule.tooBig ? t(`grande demais (máx. ${MAX_RULE / 1024} KB), não entra`, `demasiado grande (máx. ${MAX_RULE / 1024} KB), no entra`, `too large (max ${MAX_RULE / 1024} KB), not included`) : shown.has(rule.id) ? t("já no contexto", "ya en el contexto", "already in context") : t("espera um arquivo que case", "espera un archivo que coincida", "waiting for a matching file");
 			lines.push(`  ${rule.globs.join(", ")} · ${rule.origin} · ${state}${rule.description ? ` · ${rule.description}` : ""}`, `    ${rule.file}`);
 		}
-		for (const file of invalid) lines.push(`  sem globs/paths, glob inválido ou fora do projeto, ignorada: ${file}`);
-		if (!trusted) lines.push("Pasta não confiável: as regras do projeto (.pink/rules) ficam de fora.");
+		for (const file of invalid) lines.push(`  ${t("sem globs/paths, glob inválido ou fora do projeto, ignorada:", "sin globs/paths, glob no válido o fuera del proyecto, ignorada:", "no globs/paths, invalid glob or outside the project, skipped:")} ${file}`);
+		if (!trusted) lines.push(t("Pasta não confiável: as regras do projeto (.pink/rules) ficam de fora.", "Carpeta no confiable: las reglas del proyecto (.pink/rules) quedan fuera.", "Untrusted folder: project rules (.pink/rules) are left out."));
 		return lines.join("\n");
 	}
 	return { onResult, list, reset: () => shown.clear(), shown };
@@ -192,7 +193,7 @@ export default function (pi: any) {
 	// contexto novo (sessão, compactação, outro ramo): a regra precisa entrar de novo
 	for (const name of ["session_start", "session_compact", "session_tree"]) pi.on(name, async () => rules.reset());
 	pi.registerCommand("regras", {
-		description: "Lista as regras por tipo de arquivo (globs) e quais já entraram no contexto",
+		description: t("Lista as regras por tipo de arquivo (globs) e quais já entraram no contexto", "Lista las reglas por tipo de archivo (globs) y cuáles ya entraron en el contexto", "Lists the rules by file type (globs) and which ones are already in context"),
 		handler: async (_args: string, ctx: any) => ctx.ui.notify(rules.list(ctx), "info"),
 	});
 }

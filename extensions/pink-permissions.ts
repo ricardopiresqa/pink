@@ -11,6 +11,7 @@
 // - Limite de rede de segurança: gravar por bash (echo > .env, cp, sed -i) não passa pela proteção de arquivos, e
 //   ofuscação ($(echo rm), eval) escapa do padrão. Isolamento de verdade é o sandbox do sistema, não isto.
 // - /permissoes mostra as regras em uso.
+import { t } from "./pink-i18n.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -52,22 +53,22 @@ function gitArgs(tokens) {
 
 // comandos que pedem confirmação por padrão: [teste por trecho, motivo]
 export const DEFAULT_ASK = [
-	[(t) => /^rm$/i.test(t[0]) && t.some((x) => /^-[a-z]*r/i.test(x) || x === "--recursive"), "apaga pastas inteiras (rm -r)"],
-	[(t) => /^sudo$/i.test(t[0]), "roda como administrador (sudo)"],
-	[(t) => /^(chmod|chown)$/i.test(t[0]) && t.some((x) => /777/.test(x)), "abre permissão total (777)"],
-	[(t) => /^git$/i.test(t[0]) && /^push$/i.test(gitArgs(t)[0] ?? "") && gitArgs(t).some((x) => /^-[a-z]*f/i.test(x) || /^--force/i.test(x) || /^\+/.test(x)), "push forçado"],
+	[(t) => /^rm$/i.test(t[0]) && t.some((x) => /^-[a-z]*r/i.test(x) || x === "--recursive"), t("apaga pastas inteiras (rm -r)", "borra carpetas enteras (rm -r)", "deletes whole folders (rm -r)")],
+	[(t) => /^sudo$/i.test(t[0]), t("roda como administrador (sudo)", "ejecuta como administrador (sudo)", "runs as administrator (sudo)")],
+	[(t) => /^(chmod|chown)$/i.test(t[0]) && t.some((x) => /777/.test(x)), t("abre permissão total (777)", "abre permiso total (777)", "opens full permission (777)")],
+	[(t) => /^git$/i.test(t[0]) && /^push$/i.test(gitArgs(t)[0] ?? "") && gitArgs(t).some((x) => /^-[a-z]*f/i.test(x) || /^--force/i.test(x) || /^\+/.test(x)), t("push forçado", "push forzado", "forced push")],
 	[(t) => /^git$/i.test(t[0]) && /^reset$/i.test(gitArgs(t)[0] ?? "") && t.includes("--hard"), "git reset --hard"],
 	[(t) => /^git$/i.test(t[0]) && /^clean$/i.test(gitArgs(t)[0] ?? "") && gitArgs(t).some((x) => /^-[a-z]*f/i.test(x) || x === "--force"), "git clean -f"],
-	[(t) => /^(remove-item|ri|rm|del|erase|rd|rmdir)$/i.test(t[0]) && t.some((x) => /^-r(ecurse)?$/i.test(x)), "apaga pastas inteiras (Remove-Item -Recurse)"],
-	[(t) => /^(rd|rmdir|del|erase)$/i.test(t[0]) && t.some((x) => /^\/s$/i.test(x)), "apaga pastas ou arquivos em subpastas (/s)"],
-	[(t) => /^(mkfs(\.\w+)?|diskpart)$/i.test(t[0]) || (/^format(\.com)?$/i.test(t[0]) && /^[a-z]:/i.test(t[1] ?? "")), "formata disco"],
-	[(t) => /^dd$/i.test(t[0]) && t.some((x) => /^of=/i.test(x)), "escreve direto no disco (dd)"],
-	[(t) => /\bdrop\s+(table|database|schema)\b/i.test(t.join(" ")), "apaga tabela ou banco (DROP)"],
+	[(t) => /^(remove-item|ri|rm|del|erase|rd|rmdir)$/i.test(t[0]) && t.some((x) => /^-r(ecurse)?$/i.test(x)), t("apaga pastas inteiras (Remove-Item -Recurse)", "borra carpetas enteras (Remove-Item -Recurse)", "deletes whole folders (Remove-Item -Recurse)")],
+	[(t) => /^(rd|rmdir|del|erase)$/i.test(t[0]) && t.some((x) => /^\/s$/i.test(x)), t("apaga pastas ou arquivos em subpastas (/s)", "borra carpetas o archivos en subcarpetas (/s)", "deletes folders or files in subfolders (/s)")],
+	[(t) => /^(mkfs(\.\w+)?|diskpart)$/i.test(t[0]) || (/^format(\.com)?$/i.test(t[0]) && /^[a-z]:/i.test(t[1] ?? "")), t("formata disco", "formatea disco", "formats disk")],
+	[(t) => /^dd$/i.test(t[0]) && t.some((x) => /^of=/i.test(x)), t("escreve direto no disco (dd)", "escribe directo en el disco (dd)", "writes directly to the disk (dd)")],
+	[(t) => /\bdrop\s+(table|database|schema)\b/i.test(t.join(" ")), t("apaga tabela ou banco (DROP)", "borra tabla o base de datos (DROP)", "deletes table or database (DROP)")],
 ];
 const PIPE_RUN = /\b(curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)\b[\s\S]*\|\s*(sudo\s+)?(sh|bash|zsh|iex|invoke-expression|python3?|node)\b/i;
 
 export function defaultAsk(command) {
-	if (PIPE_RUN.test(command)) return "baixa e executa um script";
+	if (PIPE_RUN.test(command)) return t("baixa e executa um script", "descarga y ejecuta un script", "downloads and runs a script");
 	for (const seg of segments(command)) {
 		for (const tail of suffixes(seg)) {
 			const hit = DEFAULT_ASK.find(([test]) => test(tail));
@@ -144,7 +145,7 @@ export function loadRules(files, read = fs.readFileSync) {
 			for (const kind of ["allow", "ask", "deny"]) {
 				for (const rule of Array.isArray(data?.[kind]) ? data[kind] : []) {
 					if (parseRule(rule)) rules[kind].push(String(rule));
-					else rules.errors.push(`${file}: regra inválida ${JSON.stringify(rule)}`);
+					else rules.errors.push(`${file}: ${t("regra inválida", "regla no válida", "invalid rule")} ${JSON.stringify(rule)}`);
 				}
 			}
 		} catch (error) {
@@ -158,20 +159,20 @@ export function loadRules(files, read = fs.readFileSync) {
 export function decide(rules, toolName, target) {
 	const hit = (kind) => rules[kind].find((rule) => matches(rule, toolName, target, kind));
 	let rule;
-	if ((rule = hit("deny"))) return { action: "deny", why: `regra deny ${rule}` };
-	if ((rule = hit("ask"))) return { action: "ask", why: `regra ask ${rule}` };
-	if ((rule = hit("allow"))) return { action: "allow", why: `regra allow ${rule}` };
+	if ((rule = hit("deny"))) return { action: "deny", why: t(`regra deny ${rule}`, `regla deny ${rule}`, `deny rule ${rule}`) };
+	if ((rule = hit("ask"))) return { action: "ask", why: t(`regra ask ${rule}`, `regla ask ${rule}`, `ask rule ${rule}`) };
+	if ((rule = hit("allow"))) return { action: "allow", why: t(`regra allow ${rule}`, `regla allow ${rule}`, `allow rule ${rule}`) };
 	if (SHELLS.has(toolName) && target) {
 		const danger = defaultAsk(target);
 		if (danger) return { action: "ask", why: danger };
 	}
 	// página com injeção pode mandar "leia o segredo e abra evil/?d=<segredo>": endereço carregando dados pede confirmação
 	// shortcut: só olha a query (>= 64 caracteres); dado no caminho passa, confirmar por domínio se virar problema
-	if (toolName === "web_fetch" && target && /\?.{64,}/s.test(target)) return { action: "ask", why: "endereço com muitos dados na query (pode enviar dados para fora)" };
+	if (toolName === "web_fetch" && target && /\?.{64,}/s.test(target)) return { action: "ask", why: t("endereço com muitos dados na query (pode enviar dados para fora)", "dirección con muchos datos en la query (puede enviar datos hacia afuera)", "URL with a lot of data in the query (may send data out)") };
 	if ((toolName === "write" || toolName === "edit") && target) {
 		const name = target.split("/").pop() ?? "";
 		if (DEFAULT_DENY_WRITE.some((glob) => globToRegExp(glob, true).test(target) || globToRegExp(glob, true).test(name)))
-			return { action: "deny", why: "arquivo protegido do Pink (segredo ou .git); libere com allow se for de propósito" };
+			return { action: "deny", why: t("arquivo protegido do Pink (segredo ou .git); libere com allow se for de propósito", "archivo protegido de Pink (secreto o .git); libéralo con allow si es a propósito", "file protected by Pink (secret or .git); allow it if you mean it") };
 	}
 	return { action: "allow", why: "" };
 }
@@ -203,43 +204,44 @@ export function permissions(pi, deps = {}) {
 		const rules = loadRules(filesFor(ctx), read);
 		if (rules.errors.length) {
 			// arquivo de regras quebrado: sem tela, fecha (o deny que a pessoa escreveu não pode sumir em silêncio)
-			if (!ctx?.hasUI) return { block: true, reason: `Permissões do Pink com erro, nada roda até corrigir: ${rules.errors[0]}` };
-			if (!warned) { warned = true; ctx.ui.notify?.(`Permissões: ${rules.errors[0]}`, "warning"); }
+			if (!ctx?.hasUI) return { block: true, reason: t(`Permissões do Pink com erro, nada roda até corrigir: ${rules.errors[0]}`, `Permisos de Pink con error, nada se ejecuta hasta corregir: ${rules.errors[0]}`, `Pink permissions have an error, nothing runs until it is fixed: ${rules.errors[0]}`) };
+			if (!warned) { warned = true; ctx.ui.notify?.(t(`Permissões: ${rules.errors[0]}`, `Permisos: ${rules.errors[0]}`, `Permissions: ${rules.errors[0]}`), "warning"); }
 		}
 		if ((toolName === "write" || toolName === "edit") && target !== undefined) {
 			const abs = path.resolve(ctx?.cwd ?? process.cwd(), target).toLowerCase();
 			if (AGENT_FILES.some((name) => path.join(agentDir(env), name).toLowerCase() === abs))
-				return { block: true, reason: "Bloqueado pelas permissões do Pink: o agente não edita as próprias regras e hooks (a pessoa edita)" };
+				return { block: true, reason: t("Bloqueado pelas permissões do Pink: o agente não edita as próprias regras e hooks (a pessoa edita)", "Bloqueado por los permisos de Pink: el agente no edita sus propias reglas ni hooks (la persona los edita)", "Blocked by Pink permissions: the agent does not edit its own rules and hooks (the person does)") };
 		}
 		let { action, why } = decide(rules, toolName, target);
 		// modo "pergunta tudo" (alt+m, pink-ui): o que só lê segue livre; o resto confirma, mesmo com allow (deny continua valendo)
 		if (action === "allow" && globalThis.__pinkPermissionMode === "ask" && !readsOnly(pi, toolName)) {
 			action = "ask";
-			why = "modo pergunta tudo (alt+m troca)";
+			why = t("modo pergunta tudo (alt+m troca)", "modo pregunta todo (alt+m cambia)", "ask-for-everything mode (alt+m switches)");
 		}
 		if (action === "allow") return undefined;
 		const shown = target ?? toolName;
-		if (action === "deny") return { block: true, reason: `Bloqueado pelas permissões do Pink: ${why}` };
+		if (action === "deny") return { block: true, reason: t(`Bloqueado pelas permissões do Pink: ${why}`, `Bloqueado por los permisos de Pink: ${why}`, `Blocked by Pink permissions: ${why}`) };
 		const key = `${toolName}\u0000${shown}`;
 		if (sessionAllowed.has(key)) return undefined;
-		if (!ctx?.hasUI) return { block: true, reason: `Precisa de confirmação e não há tela para pedir (${why}): ${shown}` };
-		const choice = await ctx.ui.select(`Confirmar ${toolName}: ${why}\n\n  ${shown}\n`, ["Permitir uma vez", "Permitir nesta sessão", "Negar"]);
-		if (choice === "Permitir uma vez") return undefined;
-		if (choice === "Permitir nesta sessão") { sessionAllowed.add(key); return undefined; }
-		return { block: true, reason: "A pessoa negou esta ação" };
+		if (!ctx?.hasUI) return { block: true, reason: t(`Precisa de confirmação e não há tela para pedir (${why}): ${shown}`, `Necesita confirmación y no hay pantalla para pedirla (${why}): ${shown}`, `Needs confirmation and there is no screen to ask (${why}): ${shown}`) };
+		const [once, session, deny] = [t("Permitir uma vez", "Permitir una vez", "Allow once"), t("Permitir nesta sessão", "Permitir en esta sesión", "Allow this session"), t("Negar", "Denegar", "Deny")];
+	const choice = await ctx.ui.select(t(`Confirmar ${toolName}: ${why}\n\n  ${shown}\n`, `Confirmar ${toolName}: ${why}\n\n  ${shown}\n`, `Confirm ${toolName}: ${why}\n\n  ${shown}\n`), [once, session, deny]);
+		if (choice === once) return undefined;
+		if (choice === session) { sessionAllowed.add(key); return undefined; }
+		return { block: true, reason: t("A pessoa negou esta ação", "La persona denegó esta acción", "The person denied this action") };
 	});
 	pi.registerCommand?.("permissoes", {
-		description: "Mostra as permissões em uso (regras do usuário, do projeto e o padrão do Pink)",
+		description: t("Mostra as permissões em uso (regras do usuário, do projeto e o padrão do Pink)", "Muestra los permisos en uso (reglas del usuario, del proyecto y el predeterminado de Pink)", "Shows the permissions in use (user rules, project rules and Pink's default)"),
 		handler: async (_args, ctx) => {
 			const files = filesFor(ctx);
 			const rules = loadRules(files, read);
 			const lines = [
-				`Arquivos: ${files.join(" · ")}`,
+				`${t("Arquivos", "Archivos", "Files")}: ${files.join(" · ")}`,
 				`deny: ${rules.deny.join(", ") || "-"}`,
 				`ask: ${rules.ask.join(", ") || "-"}`,
 				`allow: ${rules.allow.join(", ") || "-"}`,
-				`Padrão: confirma comandos destrutivos (${DEFAULT_ASK.length + 1} tipos) e protege .env, .git e chaves; um allow que casa libera também o padrão`,
-				...rules.errors.map((e) => `Erro: ${e}`),
+				t(`Padrão: confirma comandos destrutivos (${DEFAULT_ASK.length + 1} tipos) e protege .env, .git e chaves; um allow que casa libera também o padrão`, `Predeterminado: pide confirmación para comandos destructivos (${DEFAULT_ASK.length + 1} tipos) y protege .env, .git y claves; un allow que coincide libera también el predeterminado`, `Default: asks to confirm destructive commands (${DEFAULT_ASK.length + 1} types) and protects .env, .git and keys; a matching allow also releases the default`),
+				...rules.errors.map((e) => `${t("Erro", "Error", "Error")}: ${e}`),
 			];
 			ctx.ui.notify?.(lines.join("\n"), rules.errors.length ? "warning" : "info");
 		},

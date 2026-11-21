@@ -4,6 +4,7 @@
 // a sessão (session_shutdown) os filhos são abortados e nada é entregue: o resultado nunca cai em outra conversa.
 // Copiado para examples/extensions/subagent/background.ts pelo build (rebrand.json); o index.ts do subagente o importa.
 
+import { t } from "./pink-i18n.ts";
 export const MAX_BACKGROUND = 4;
 const OUTPUT_CAP = 50 * 1024;
 const WIDGET = "pink-subagents";
@@ -37,7 +38,7 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 
 	const lines = () => [
 		...[...jobs.values()].map((job) => `⏳ #${job.id} ${job.agent} · ${oneLine(job.task, 60)} · ${clock(now() - job.started)} · ↓ ${tokens(job.tokens)} tokens`),
-		"   /subagentes para listar ou cancelar",
+		t("   /subagentes para listar ou cancelar", "   /subagentes para listar o cancelar", "   /subagentes to list or cancel"),
 	];
 	const refresh = () => {
 		try {
@@ -68,13 +69,13 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 		if (!jobs.delete(job.id) || closed) return; // sessão encerrada: nada é entregue
 		refresh();
 		const cancelled = job.controller.signal.aborted;
-		const verb = cancelled ? "foi cancelado" : outcome.failed ? "falhou" : "terminou";
-		const body = outcome.text.length > OUTPUT_CAP ? `${outcome.text.slice(0, OUTPUT_CAP)}\n\n[saída cortada em ${OUTPUT_CAP} caracteres]` : outcome.text;
+		const verb = cancelled ? t("foi cancelado", "fue cancelado", "was cancelled") : outcome.failed ? t("falhou", "falló", "failed") : t("terminou", "terminó", "finished");
+		const body = outcome.text.length > OUTPUT_CAP ? `${outcome.text.slice(0, OUTPUT_CAP)}\n\n${t(`[saída cortada em ${OUTPUT_CAP} caracteres]`, `[salida cortada en ${OUTPUT_CAP} caracteres]`, `[output cut at ${OUTPUT_CAP} characters]`)}` : outcome.text;
 		pi.sendMessage(
 			{
 				customType: "subagent-result",
 				display: true,
-				content: `Subagente em segundo plano #${job.id} (${job.agent}) ${verb}.\n\n${body || "(sem saída)"}`,
+				content: `${t("Subagente em segundo plano", "Subagente en segundo plano", "Background subagent")} #${job.id} (${job.agent}) ${verb}.\n\n${body || t("(sem saída)", "(sin salida)", "(no output)")}`,
 				details: { id: job.id, agent: job.agent, failed: outcome.failed, cancelled },
 			},
 			// cancelado pela pessoa: o modelo fica sabendo no próximo turno, sem abrir um sozinho
@@ -83,9 +84,9 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 	};
 
 	function start(items: Item[], chain: boolean, run: Run, ctx: any): { text: string; error: boolean } {
-		if (chain) return { text: "background não vale no modo chain (cada passo depende do anterior). Use single ou tasks.", error: true };
+		if (chain) return { text: t("background não vale no modo chain (cada passo depende do anterior). Use single ou tasks.", "background no sirve en modo chain (cada paso depende del anterior). Usa single o tasks.", "background does not work in chain mode (each step depends on the previous one). Use single or tasks."), error: true };
 		if (jobs.size + items.length > MAX_BACKGROUND)
-			return { text: `Limite de ${MAX_BACKGROUND} subagentes em segundo plano (rodando: ${jobs.size}). Espere um terminar ou rode sem background.`, error: true };
+			return { text: t(`Limite de ${MAX_BACKGROUND} subagentes em segundo plano (rodando: ${jobs.size}). Espere um terminar ou rode sem background.`, `Límite de ${MAX_BACKGROUND} subagentes en segundo plano (en ejecución: ${jobs.size}). Espera a que uno termine o ejecuta sin background.`, `Limit of ${MAX_BACKGROUND} background subagents (running: ${jobs.size}). Wait for one to finish or run without background.`), error: true };
 		ui = ctx.ui;
 		const started = items.map((item) => {
 			const job: Job = { id: next++, agent: item.agent, task: item.task, started: now(), controller: new AbortController(), tokens: 0 };
@@ -109,23 +110,23 @@ export function createBackground(pi: any, { now = Date.now, write = muxWrite } =
 	}
 
 	function cancel(which: string): number {
-		const targets = which === "todos" ? [...jobs.values()] : [jobs.get(Number(which.replace(/^#/, "")))].filter(Boolean) as Job[];
+		const targets = which === "todos" || which === "all" ? [...jobs.values()] : [jobs.get(Number(which.replace(/^#/, "")))].filter(Boolean) as Job[];
 		for (const job of targets) job.controller.abort();
 		return targets.length;
 	}
 
 	pi.registerCommand("subagentes", {
-		description: "Subagentes em segundo plano: lista; 'cancelar <n>' ou 'cancelar todos'",
+		description: t("Subagentes em segundo plano: lista; 'cancelar <n>' ou 'cancelar todos'", "Subagentes en segundo plano: lista; 'cancelar <n>' o 'cancelar todos'", "Background subagents: list; 'cancel <n>' or 'cancel all'"),
 		getArgumentCompletions: (prefix: string) =>
 			["cancelar todos", ...[...jobs.keys()].map((id) => `cancelar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
 		handler: async (args: string, ctx: any) => {
 			const [verb, target] = args.trim().split(/\s+/);
-			if (verb === "cancelar") {
+			if (verb === "cancelar" || verb === "cancel") {
 				const count = target ? cancel(target) : 0;
-				ctx.ui.notify(count ? `Cancelando ${count} subagente(s).` : "Use /subagentes cancelar <n> ou /subagentes cancelar todos.", count ? "info" : "warning");
+				ctx.ui.notify(count ? t(`Cancelando ${count} subagente(s).`, `Cancelando ${count} subagente(s).`, `Cancelling ${count} subagent(s).`) : t("Use /subagentes cancelar <n> ou /subagentes cancelar todos.", "Usa /subagentes cancelar <n> o /subagentes cancelar todos.", "Use /subagentes cancel <n> or /subagentes cancel all."), count ? "info" : "warning");
 				return;
 			}
-			ctx.ui.notify(jobs.size ? lines().slice(0, -1).join("\n") : "Nenhum subagente em segundo plano.", "info");
+			ctx.ui.notify(jobs.size ? lines().slice(0, -1).join("\n") : t("Nenhum subagente em segundo plano.", "No hay subagentes en segundo plano.", "No background subagents."), "info");
 		},
 	});
 

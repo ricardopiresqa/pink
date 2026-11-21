@@ -8,6 +8,7 @@
 // (pink -p) não se registram.
 // Risco aceito (Argus R1): mesmo usuário na mesma máquina; um processo que grave direto em bus/inbox pode alegar o id de
 // outra sessão. A confiança vem do registro, não de prova criptográfica; o aviso de "dado, não pedido" vale sempre.
+import { t } from "./pink-i18n.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -83,11 +84,11 @@ export function listSessions(env = process.env, alive = pidAlive, now = Date.now
 // destino pelo id curto, id completo ou nome (sem diferença de caixa); ambíguo ou inexistente vira erro
 export function resolveTarget(entries: Entry[], to: string): Entry | string {
 	const wanted = String(to ?? "").trim().toLowerCase();
-	if (!wanted) return "diga para qual sessão (id curto ou nome, veja sessions_list)";
+	if (!wanted) return t("diga para qual sessão (id curto ou nome, veja sessions_list)", "di a qué sesión (id corto o nombre, mira sessions_list)", "say which session (short id or name, see sessions_list)");
 	const hits = entries.filter((entry) => entry.short === wanted || entry.id.toLowerCase() === wanted || entry.name.toLowerCase() === wanted);
 	if (hits.length === 1) return hits[0];
-	if (hits.length > 1) return `"${clean(to, 60)}" casa com ${hits.length} sessões; use o id curto (${hits.map((entry) => entry.short).join(", ")})`;
-	return `nenhuma sessão aberta chamada "${clean(to, 60)}" (veja sessions_list)`;
+	if (hits.length > 1) return t(`"${clean(to, 60)}" casa com ${hits.length} sessões; use o id curto (${hits.map((entry) => entry.short).join(", ")})`, `"${clean(to, 60)}" coincide con ${hits.length} sesiones; usa el id corto (${hits.map((entry) => entry.short).join(", ")})`, `"${clean(to, 60)}" matches ${hits.length} sessions; use the short id (${hits.map((entry) => entry.short).join(", ")})`);
+	return t(`nenhuma sessão aberta chamada "${clean(to, 60)}" (veja sessions_list)`, `ninguna sesión abierta llamada "${clean(to, 60)}" (mira sessions_list)`, `no open session named "${clean(to, 60)}" (see sessions_list)`);
 }
 
 // só o id do remetente vai no arquivo: quem recebe resolve nome, pasta e confiança pelo registro, não pelo que veio
@@ -98,7 +99,7 @@ export function sendTo(target: Entry, fromId: string, message: string, env = pro
 	writeAtomic(file, JSON.stringify({ from: fromId, message, sent: Date.now() }));
 }
 
-const label = (entry: Entry) => `${entry.name} [${entry.short}] · ${entry.cwd}${entry.trusted ? "" : " · pasta não confiável"}`;
+const label = (entry: Entry) => `${entry.name} [${entry.short}] · ${entry.cwd}${entry.trusted ? "" : t(" · pasta não confiável", " · carpeta no confiable", " · untrusted folder")}`;
 // o conteúdo vai entre marcas: sem "<" literal nenhum texto fecha o bloco e escreve "como o sistema"
 const fence = (text: string) => String(text).replace(/</g, "&lt;");
 
@@ -265,22 +266,22 @@ export function createBus(pi: any, { env = process.env, now = Date.now, alive = 
 			message: Type.String({ description: "plain text; the receiver reads it literally" }),
 		}),
 		async execute(_id: string, params: any, _signal?: AbortSignal, _onUpdate?: any, ctx?: any) {
-			if (!me) return reply("Esta sessão não está no barramento (só sessões interativas conversam).", true);
-			if (!ctx?.isProjectTrusted?.()) return reply("Pasta não confiável: esta sessão não envia mensagens a outras. Confie na pasta para usar.", true);
+			if (!me) return reply(t("Esta sessão não está no barramento (só sessões interativas conversam).", "Esta sesión no está en el bus (solo conversan las sesiones interactivas).", "This session is not on the bus (only interactive sessions talk)."), true);
+			if (!ctx?.isProjectTrusted?.()) return reply(t("Pasta não confiável: esta sessão não envia mensagens a outras. Confie na pasta para usar.", "Carpeta no confiable: esta sesión no envía mensajes a otras. Confía en la carpeta para usarla.", "Untrusted folder: this session does not send messages to others. Trust the folder to use it."), true);
 			const message = String(params?.message ?? "");
-			if (!message.trim()) return reply("message vazia.", true);
-			if (message.length > MESSAGE_CAP) return reply(`message longa demais (máximo ${MESSAGE_CAP} caracteres).`, true);
+			if (!message.trim()) return reply(t("message vazia.", "message vacío.", "empty message."), true);
+			if (message.length > MESSAGE_CAP) return reply(t(`message longa demais (máximo ${MESSAGE_CAP} caracteres).`, `message demasiado largo (máximo ${MESSAGE_CAP} caracteres).`, `message too long (max ${MESSAGE_CAP} characters).`), true);
 			const target = resolveTarget(listSessions(env, alive, now).filter((entry) => entry.id !== me?.id), params?.to);
-			if (typeof target === "string") return reply(`Não enviei: ${target}.`, true);
+			if (typeof target === "string") return reply(t(`Não enviei: ${target}.`, `No envié: ${target}.`, `Not sent: ${target}.`), true);
 			sendTo(target, me.id, message, env);
 			return reply(`Colocada na caixa de ${label(target)}. Não quer dizer que já foi lida; a resposta, se vier, chega como mensagem.`);
 		},
 	});
 	pi.registerCommand("sessoes", {
-		description: "Outras sessões do Pink abertas nesta máquina (para o agente conversar com elas)",
+		description: t("Outras sessões do Pink abertas nesta máquina (para o agente conversar com elas)", "Otras sesiones de Pink abiertas en esta máquina (para que el agente hable con ellas)", "Other Pink sessions open on this machine (so the agent can talk to them)"),
 		handler: async (_args: string, ctx: any) => {
 			const others = listSessions(env, alive, now).filter((entry) => entry.id !== me?.id);
-			ctx.ui.notify(`${me ? `Esta sessão: ${label(me)}` : "Esta sessão não está no barramento."}\n\n${others.length ? others.map(label).join("\n") : "Nenhuma outra sessão aberta."}`, "info");
+			ctx.ui.notify(`${me ? `${t("Esta sessão", "Esta sesión", "This session")}: ${label(me)}` : t("Esta sessão não está no barramento.", "Esta sesión no está en el bus.", "This session is not on the bus.")}\n\n${others.length ? others.map(label).join("\n") : t("Nenhuma outra sessão aberta.", "Ninguna otra sesión abierta.", "No other open session.")}`, "info");
 		},
 	});
 

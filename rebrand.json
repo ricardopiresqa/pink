@@ -151,6 +151,10 @@
     {
       "from": "extensions/pink-i18n.ts",
       "to": "extensions/pink-i18n.ts"
+    },
+    {
+      "from": "extensions/pink-i18n.ts",
+      "to": "examples/extensions/subagent/pink-i18n.ts"
     }
   ],
   "env_rename": {
@@ -2123,84 +2127,84 @@
       "id": "questionnaire-pt-other",
       "file": "examples/extensions/questionnaire.ts",
       "find": "label: \"Type something.\"",
-      "replace": "label: \"Escrever outra resposta.\"",
+      "replace": "label: (globalThis.__pinkT?.(\"Escrever outra resposta.\", \"Escribir otra respuesta.\", \"Type something.\") ?? \"Escrever outra resposta.\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-submit-tab",
       "file": "examples/extensions/questionnaire.ts",
       "find": "const submitText = \" ✓ Submit \";",
-      "replace": "const submitText = \" ✓ Enviar \";",
+      "replace": "const submitText = (globalThis.__pinkT?.(\" ✓ Enviar \", \" ✓ Enviar \", \" ✓ Submit \") ?? \" ✓ Enviar \");",
       "count": 1
     },
     {
       "id": "questionnaire-pt-your-answer",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"Your answer:\"",
-      "replace": "\"Sua resposta:\"",
+      "replace": "(globalThis.__pinkT?.(\"Sua resposta:\", \"Tu respuesta:\", \"Your answer:\") ?? \"Sua resposta:\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-editor-help",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"Enter to submit • Esc to cancel\"",
-      "replace": "\"Enter envia • Esc volta\"",
+      "replace": "(globalThis.__pinkT?.(\"Enter envia • Esc volta\", \"Enter envía • Esc vuelve\", \"Enter to submit • Esc to cancel\") ?? \"Enter envia • Esc volta\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-ready",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"Ready to submit\"",
-      "replace": "\"Pronto para enviar\"",
+      "replace": "(globalThis.__pinkT?.(\"Pronto para enviar\", \"Listo para enviar\", \"Ready to submit\") ?? \"Pronto para enviar\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-wrote",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"(wrote) \"",
-      "replace": "\"(escreveu) \"",
+      "replace": "(globalThis.__pinkT?.(\"(escreveu) \", \"(escribió) \", \"(wrote) \") ?? \"(escreveu) \")",
       "count": 2
     },
     {
       "id": "questionnaire-pt-press-enter",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"Press Enter to submit\"",
-      "replace": "\"Enter para enviar\"",
+      "replace": "(globalThis.__pinkT?.(\"Enter para enviar\", \"Enter para enviar\", \"Press Enter to submit\") ?? \"Enter para enviar\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-unanswered",
       "file": "examples/extensions/questionnaire.ts",
       "find": "`Unanswered: ${missing}`",
-      "replace": "`Sem resposta: ${missing}`",
+      "replace": "(globalThis.__pinkT?.(`Sem resposta: ${missing}`, `Sin respuesta: ${missing}`, `Unanswered: ${missing}`) ?? `Sem resposta: ${missing}`)",
       "count": 1
     },
     {
       "id": "questionnaire-pt-help-multi",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel\"",
-      "replace": "\"Tab/←→ navegar • ↑↓ escolher • Enter confirmar • Esc cancelar\"",
+      "replace": "(globalThis.__pinkT?.(\"Tab/←→ navegar • ↑↓ escolher • Enter confirmar • Esc cancelar\", \"Tab/←→ navegar • ↑↓ elegir • Enter confirmar • Esc cancelar\", \"Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel\") ?? \"Tab/←→ navegar • ↑↓ escolher • Enter confirmar • Esc cancelar\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-help-single",
       "file": "examples/extensions/questionnaire.ts",
       "find": "\"↑↓ navigate • Enter select • Esc cancel\"",
-      "replace": "\"↑↓ navegar • Enter escolher • Esc cancelar\"",
+      "replace": "(globalThis.__pinkT?.(\"↑↓ navegar • Enter escolher • Esc cancelar\", \"↑↓ navegar • Enter elegir • Esc cancelar\", \"↑↓ navigate • Enter select • Esc cancel\") ?? \"↑↓ navegar • Enter escolher • Esc cancelar\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-cancelled-label",
       "file": "examples/extensions/questionnaire.ts",
       "find": "theme.fg(\"warning\", \"Cancelled\")",
-      "replace": "theme.fg(\"warning\", \"Cancelado\")",
+      "replace": "theme.fg(\"warning\", globalThis.__pinkT?.(\"Cancelado\", \"Cancelado\", \"Cancelled\") ?? \"Cancelado\")",
       "count": 1
     },
     {
       "id": "questionnaire-pt-count",
       "file": "examples/extensions/questionnaire.ts",
       "find": "`${count} question${count !== 1 ? \"s\" : \"\"}`",
-      "replace": "`${count} pergunta${count !== 1 ? \"s\" : \"\"}`",
+      "replace": "(globalThis.__pinkT?.(`${count} pergunta${count !== 1 ? \"s\" : \"\"}`, `${count} pregunta${count !== 1 ? \"s\" : \"\"}`, `${count} question${count !== 1 ? \"s\" : \"\"}`) ?? `${count} pergunta${count !== 1 ? \"s\" : \"\"}`)",
       "count": 1
     },
     {
@@ -2459,168 +2463,168 @@
       "id": "commands-pt",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Open settings menu\"",
-      "replace": "description:\"Abre as configurações\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Abre as configurações\",\"Abre la configuración\",\"Open settings menu\")??\"Abre as configurações\"}",
       "count": 1
     },
     {
       "id": "commands-pt-2",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Select model (opens selector UI)\"",
-      "replace": "description:\"Escolhe o modelo\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Escolhe o modelo\",\"Elige el modelo\",\"Select model (opens selector UI)\")??\"Escolhe o modelo\"}",
       "count": 1
     },
     {
       "id": "commands-pt-3",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Navigate session tree (switch branches)\"",
-      "replace": "description:\"Navega pela árvore da sessão (troca de ramo)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Navega pela árvore da sessão (troca de ramo)\",\"Navega por el árbol de la sesión (cambia de rama)\",\"Navigate session tree (switch branches)\")??\"Navega pela árvore da sessão (troca de ramo)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-4",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Set thinking level\"",
-      "replace": "description:\"Define o nível de pensamento\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Define o nível de pensamento\",\"Define el nivel de razonamiento\",\"Set thinking level\")??\"Define o nível de pensamento\"}",
       "count": 1
     },
     {
       "id": "commands-pt-5",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Enable/disable models for Ctrl+P cycling\"",
-      "replace": "description:\"Escolhe os modelos do ciclo do F2\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Escolhe os modelos do ciclo do F2\",\"Elige los modelos del ciclo de F2\",\"Enable/disable models for Ctrl+P cycling\")??\"Escolhe os modelos do ciclo do F2\"}",
       "count": 1
     },
     {
       "id": "commands-pt-6",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Export session (HTML default, or specify path: .html/.jsonl)\"",
-      "replace": "description:\"Exporta a sessão (HTML, ou informe o caminho .html/.jsonl)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Exporta a sessão (HTML, ou informe o caminho .html/.jsonl)\",\"Exporta la sesión (HTML, o indica la ruta .html/.jsonl)\",\"Export session (HTML default, or specify path: .html/.jsonl)\")??\"Exporta a sessão (HTML, ou informe o caminho .html/.jsonl)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-7",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Import and resume a session from a JSONL file\"",
-      "replace": "description:\"Importa e retoma uma sessão de um arquivo JSONL\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Importa e retoma uma sessão de um arquivo JSONL\",\"Importa y retoma una sesión desde un archivo JSONL\",\"Import and resume a session from a JSONL file\")??\"Importa e retoma uma sessão de um arquivo JSONL\"}",
       "count": 1
     },
     {
       "id": "commands-pt-8",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Share session via a GitHub gist\"",
-      "replace": "description:\"Compartilha a sessão num gist secreto do GitHub (quem tiver o link vê)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Compartilha a sessão num gist secreto do GitHub (quem tiver o link vê)\",\"Comparte la sesión en un gist secreto de GitHub (quien tenga el enlace la ve)\",\"Share session via a GitHub gist\")??\"Compartilha a sessão num gist secreto do GitHub (quem tiver o link vê)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-9",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Copy last agent message to clipboard\"",
-      "replace": "description:\"Copia a última resposta do agente\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Copia a última resposta do agente\",\"Copia la última respuesta del agente\",\"Copy last agent message to clipboard\")??\"Copia a última resposta do agente\"}",
       "count": 1
     },
     {
       "id": "commands-pt-10",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Set session display name\"",
-      "replace": "description:\"Dá um nome à sessão\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Dá um nome à sessão\",\"Da un nombre a la sesión\",\"Set session display name\")??\"Dá um nome à sessão\"}",
       "count": 1
     },
     {
       "id": "commands-pt-11",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Show session info and stats\"",
-      "replace": "description:\"Mostra os dados e números da sessão\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Mostra os dados e números da sessão\",\"Muestra los datos y números de la sesión\",\"Show session info and stats\")??\"Mostra os dados e números da sessão\"}",
       "count": 1
     },
     {
       "id": "commands-pt-12",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Show all keyboard shortcuts\"",
-      "replace": "description:\"Mostra todos os atalhos de teclado\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Mostra todos os atalhos de teclado\",\"Muestra todos los atajos de teclado\",\"Show all keyboard shortcuts\")??\"Mostra todos os atalhos de teclado\"}",
       "count": 1
     },
     {
       "id": "commands-pt-13",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Create a new fork from a previous user message\"",
-      "replace": "description:\"Cria uma sessão nova a partir de uma mensagem anterior\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Cria uma sessão nova a partir de uma mensagem anterior\",\"Crea una sesión nueva a partir de un mensaje anterior\",\"Create a new fork from a previous user message\")??\"Cria uma sessão nova a partir de uma mensagem anterior\"}",
       "count": 1
     },
     {
       "id": "commands-pt-14",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Duplicate the current session at the current position\"",
-      "replace": "description:\"Duplica a sessão até aqui numa sessão nova\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Duplica a sessão até aqui numa sessão nova\",\"Duplica la sesión hasta aquí en una sesión nueva\",\"Duplicate the current session at the current position\")??\"Duplica a sessão até aqui numa sessão nova\"}",
       "count": 1
     },
     {
       "id": "commands-pt-15",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Save project trust decision for future sessions\"",
-      "replace": "description:\"Decide se confia neste projeto (vale nas próximas sessões)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Decide se confia neste projeto (vale nas próximas sessões)\",\"Decide si confías en este proyecto (vale en las próximas sesiones)\",\"Save project trust decision for future sessions\")??\"Decide se confia neste projeto (vale nas próximas sessões)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-16",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Configure provider authentication\"",
-      "replace": "description:\"Entra num provedor (login)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Entra num provedor (login)\",\"Inicia sesión en un proveedor (login)\",\"Configure provider authentication\")??\"Entra num provedor (login)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-17",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Remove provider authentication\"",
-      "replace": "description:\"Sai de um provedor (logout)\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Sai de um provedor (logout)\",\"Cierra sesión en un proveedor (logout)\",\"Remove provider authentication\")??\"Sai de um provedor (logout)\"}",
       "count": 1
     },
     {
       "id": "commands-pt-18",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "{name:\"new\",description:\"Start a new session\"",
-      "replace": "{name:\"new\",description:\"Começa uma sessão nova\"",
+      "replace": "{name:\"new\",get description(){return globalThis.__pinkT?.(\"Começa uma sessão nova\",\"Empieza una sesión nueva\",\"Start a new session\")??\"Começa uma sessão nova\"}",
       "count": 1
     },
     {
       "id": "commands-pt-19",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Manually compact the session context\"",
-      "replace": "description:\"Compacta o contexto da sessão agora\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Compacta o contexto da sessão agora\",\"Compacta el contexto de la sesión ahora\",\"Manually compact the session context\")??\"Compacta o contexto da sessão agora\"}",
       "count": 1
     },
     {
       "id": "commands-pt-20",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Resume a different session\"",
-      "replace": "description:\"Retoma outra sessão\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Retoma outra sessão\",\"Retoma otra sesión\",\"Resume a different session\")??\"Retoma outra sessão\"}",
       "count": 1
     },
     {
       "id": "commands-pt-21",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Reload keybindings, extensions, skills, prompts, themes, and context files\"",
-      "replace": "description:\"Recarrega atalhos, extensões, skills, prompts, temas e arquivos de contexto\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Recarrega atalhos, extensões, skills, prompts, temas e arquivos de contexto\",\"Recarga atajos, extensiones, skills, prompts, temas y archivos de contexto\",\"Reload keybindings, extensions, skills, prompts, themes, and context files\")??\"Recarrega atalhos, extensões, skills, prompts, temas e arquivos de contexto\"}",
       "count": 1
     },
     {
       "id": "commands-pt-quit",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:`Quit ${APP_NAME}`",
-      "replace": "description:`Sai do ${APP_NAME}`",
+      "replace": "get description(){return globalThis.__pinkT?.(`Sai do ${APP_NAME}`,`Sale de ${APP_NAME}`,`Quit ${APP_NAME}`)??`Sai do ${APP_NAME}`}",
       "count": 1
     },
     {
       "id": "commands-pt-mcp",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\"",
-      "replace": "description:\"Servidores MCP: entrar, reconectar, ligar ou desligar e mudar a exposição\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Servidores MCP: entrar, reconectar, ligar ou desligar e mudar a exposição\",\"Servidores MCP: iniciar sesión, reconectar, activar o desactivar y cambiar la exposición\",\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\")??\"Servidores MCP: entrar, reconectar, ligar ou desligar e mudar a exposição\"}",
       "count": 1
     },
     {
       "id": "commands-pt-llama",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "description:\"Manage llama.cpp router models\"",
-      "replace": "description:\"Modelos do roteador llama.cpp\"",
+      "replace": "get description(){return globalThis.__pinkT?.(\"Modelos do roteador llama.cpp\",\"Modelos del enrutador llama.cpp\",\"Manage llama.cpp router models\")??\"Modelos do roteador llama.cpp\"}",
       "count": 1
     },
     {

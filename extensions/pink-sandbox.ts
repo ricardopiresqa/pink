@@ -4,6 +4,7 @@
 // processo só grava onde o SID do Pink tem permissão (a pasta do projeto e um temporário próprio) ou onde Todos já gravam
 // (limite conhecido). Leitura e rede não mudam. O Job Object do helper mata a árvore inteira junto com ele.
 // Os comandos que a pessoa roda com ! não passam pelo sandbox: são dela. Linux e macOS ficam para depois.
+import { t } from "./pink-i18n.ts";
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -43,15 +44,15 @@ export function ensureHelper(dir: string, source = path.join(here(), "pink-sandb
 	try {
 		text = fs.readFileSync(source, "utf8");
 	} catch {
-		return { error: `fonte do sandbox não encontrada: ${source}` };
+		return { error: t(`fonte do sandbox não encontrada: ${source}`, `fuente del sandbox no encontrada: ${source}`, `sandbox source not found: ${source}`) };
 	}
 	const exe = path.join(dir, `pink-sandbox-${crypto.createHash("sha256").update(text).digest("hex").slice(0, 12)}.exe`);
 	if (fs.existsSync(exe)) return { exe };
-	if (!fs.existsSync(compiler)) return { error: `compilador do Windows não encontrado: ${compiler}` };
+	if (!fs.existsSync(compiler)) return { error: t(`compilador do Windows não encontrado: ${compiler}`, `compilador de Windows no encontrado: ${compiler}`, `Windows compiler not found: ${compiler}`) };
 	fs.mkdirSync(dir, { recursive: true });
 	// csc lê "/..." como opção: o caminho vai resolvido, com barras do Windows
 	const built = run(compiler, ["/nologo", "/optimize", `/out:${exe}`, path.resolve(source)], { encoding: "utf8", windowsHide: true });
-	if (built.status !== 0 || !fs.existsSync(exe)) return { error: `não consegui compilar o sandbox: ${String(built.stdout || built.stderr || built.error?.message || "").trim().slice(0, 400)}` };
+	if (built.status !== 0 || !fs.existsSync(exe)) return { error: `${t("não consegui compilar o sandbox", "no pude compilar el sandbox", "could not compile the sandbox")}: ${String(built.stdout || built.stderr || built.error?.message || "").trim().slice(0, 400)}` };
 	return { exe };
 }
 
@@ -81,10 +82,18 @@ export function absoluteProgram(program: string, env = process.env): string | un
 
 const DENIED = /access (to the path .{0,300} )?(is )?denied|acesso .{0,300}negado|permission denied|operation not permitted|EACCES|EPERM|UnauthorizedAccess/i;
 const MSYS = /CreateFileMapping.*(error 5|erro 5)/i;
-export const BASH_OFF = "[sandbox] Com o sandbox ligado, o bash do Git não roda (o MSYS não abre com o token restrito). Use a ferramenta powershell, que roda isolada, ou peça à pessoa /sandbox desligar.\n";
+export const BASH_OFF = t(
+	"[sandbox] Com o sandbox ligado, o bash do Git não roda (o MSYS não abre com o token restrito). Use a ferramenta powershell, que roda isolada, ou peça à pessoa /sandbox desligar.\n",
+	"[sandbox] Con el sandbox activado, el bash de Git no se ejecuta (MSYS no abre con el token restringido). Usa la herramienta powershell, que se ejecuta aislada, o pide a la persona /sandbox desactivar.\n",
+	"[sandbox] With the sandbox on, Git's bash does not run (MSYS does not start with the restricted token). Use the powershell tool, which runs isolated, or ask the person for /sandbox off.\n",
+);
 export function hintFor(tail: string): string | undefined {
 	if (MSYS.test(tail))
-		return "\n[sandbox] O bash do Git (MSYS) não roda com o token restrito do sandbox. Use a ferramenta powershell, ou peça à pessoa /sandbox desligar.\n";
+		return t(
+			"\n[sandbox] O bash do Git (MSYS) não roda com o token restrito do sandbox. Use a ferramenta powershell, ou peça à pessoa /sandbox desligar.\n",
+			"\n[sandbox] El bash de Git (MSYS) no se ejecuta con el token restringido del sandbox. Usa la herramienta powershell, o pide a la persona /sandbox desactivar.\n",
+			"\n[sandbox] Git's bash (MSYS) does not run with the sandbox's restricted token. Use the powershell tool, or ask the person for /sandbox off.\n",
+		);
 	if (DENIED.test(tail) && /[\\/]\.git\b|\.git[\\/]|index\.lock/i.test(tail))
 		return "\n[sandbox] A pasta .git é só leitura no sandbox (hooks e config rodam depois fora dele): git add, commit e checkout a pessoa roda, ou /sandbox desligar.\n";
 	if (DENIED.test(tail))
@@ -94,7 +103,7 @@ export function hintFor(tail: string): string | undefined {
 
 // pastas cujo conteúdo roda depois fora do sandbox (hooks do git, extensões e skills do projeto, tarefas do editor)
 export const PROTECTED = [".git", ".pink", ".husky", ".vscode"];
-const SCOPE = "Vale para o powershell do agente (o bash do Git fica indisponível enquanto ligado); edit e write seguem as permissões do Pink, e os comandos com ! são seus. Git que grava em .git (add, commit, checkout) fica para você.";
+const SCOPE = t("Vale para o powershell do agente (o bash do Git fica indisponível enquanto ligado); edit e write seguem as permissões do Pink, e os comandos com ! são seus. Git que grava em .git (add, commit, checkout) fica para você.", "Aplica al powershell del agente (bash de Git no está disponible mientras está activado); edit y write siguen los permisos de Pink, y los comandos con ! son tuyos. Git que escribe en .git (add, commit, checkout) queda para ti.", "Applies to the agent's powershell (Git's bash is unavailable while on); edit and write follow Pink's permissions, and commands with ! are yours. Git writes to .git (add, commit, checkout) are for you to run.");
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const contains = (outer: string, inner: string) => {
@@ -107,14 +116,14 @@ export function rootProblem(root: string, env = process.env): string | undefined
 	try {
 		real = fs.realpathSync(root);
 	} catch {
-		return `pasta não encontrada: ${root}`;
+		return t(`pasta não encontrada: ${root}`, `carpeta no encontrada: ${root}`, `folder not found: ${root}`);
 	}
-	if (path.dirname(real) === real) return "a raiz de um disco não pode ser a pasta do sandbox";
+	if (path.dirname(real) === real) return t("a raiz de um disco não pode ser a pasta do sandbox", "la raíz de un disco no puede ser la carpeta del sandbox", "a disk root cannot be the sandbox folder");
 	const home = os.homedir();
-	if (same(path.resolve(real), path.resolve(home))) return "a pasta pessoal inteira não pode ser a pasta do sandbox: abra o Pink na pasta do projeto";
-	if (contains(real.toLowerCase(), path.resolve(agentDir(env)).toLowerCase())) return "esta pasta contém a pasta do Pink (sandbox, sessões, memória): abra o Pink na pasta do projeto";
+	if (same(path.resolve(real), path.resolve(home))) return t("a pasta pessoal inteira não pode ser a pasta do sandbox: abra o Pink na pasta do projeto", "la carpeta personal completa no puede ser la carpeta del sandbox: abre Pink en la carpeta del proyecto", "the whole home folder cannot be the sandbox folder: open Pink in the project folder");
+	if (contains(real.toLowerCase(), path.resolve(agentDir(env)).toLowerCase())) return t("esta pasta contém a pasta do Pink (sandbox, sessões, memória): abra o Pink na pasta do projeto", "esta carpeta contiene la carpeta de Pink (sandbox, sesiones, memoria): abre Pink en la carpeta del proyecto", "this folder contains Pink's folder (sandbox, sessions, memory): open Pink in the project folder");
 	for (const system of [env.SystemRoot, env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramData].filter(Boolean) as string[])
-		if (contains(path.resolve(system).toLowerCase(), real.toLowerCase()) || contains(real.toLowerCase(), path.resolve(system).toLowerCase())) return `pasta do sistema (${system}) não pode ser a pasta do sandbox`;
+		if (contains(path.resolve(system).toLowerCase(), real.toLowerCase()) || contains(real.toLowerCase(), path.resolve(system).toLowerCase())) return t(`pasta do sistema (${system}) não pode ser a pasta do sandbox`, `carpeta del sistema (${system}) no puede ser la carpeta del sandbox`, `system folder (${system}) cannot be the sandbox folder`);
 	return undefined;
 }
 
@@ -139,7 +148,7 @@ export async function lockNew(state: State, grant = acl) {
 		const target = path.join(state.root, name);
 		if (!fs.existsSync(target)) continue;
 		if ((await grant(state.helper, "--deny", state.sid, target)).code === 0) state.locked.add(name);
-		else throw new Error(`[sandbox] não consegui proteger ${target}; o comando não rodou`);
+		else throw new Error(t(`[sandbox] não consegui proteger ${target}; o comando não rodou`, `[sandbox] no pude proteger ${target}; el comando no se ejecutó`, `[sandbox] could not protect ${target}; the command did not run`));
 	}
 }
 const killTree = (pid?: number) => pid && spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }).on("error", () => {});
@@ -156,7 +165,7 @@ export function makeOperations(state: State, kind: "bash" | "powershell", shellP
 			await lockNew(state);
 			const config = kind === "bash" ? getShellConfig(shellPath) : getPowerShellConfig();
 			const program = absoluteProgram(config.shell, env ?? process.env);
-			if (!program) throw new Error(`[sandbox] não achei o executável ${config.shell} fora da pasta do projeto`);
+			if (!program) throw new Error(t(`[sandbox] não achei o executável ${config.shell} fora da pasta do projeto`, `[sandbox] no encontré el ejecutable ${config.shell} fuera de la carpeta del proyecto`, `[sandbox] could not find the ${config.shell} executable outside the project folder`));
 			const viaStdin = config.commandTransport === "stdin";
 			const child = start(state.helper, [state.sid, "--", program, ...config.args, ...(viaStdin ? [] : [command])], {
 				cwd,
@@ -205,57 +214,57 @@ export function createSandbox({ env = process.env, platform = process.platform, 
 		if (value) Object.assign(env, { PINK_SANDBOX_SID: value.sid, PINK_SANDBOX_HELPER: value.helper, PINK_SANDBOX_TMP: value.tmp, PINK_SANDBOX_ROOT: value.root });
 	};
 	async function on(root: string, notify: (text: string) => void): Promise<string> {
-		if (platform !== "win32") return "O sandbox por enquanto só existe no Windows (Linux e macOS vêm depois).";
+		if (platform !== "win32") return t("O sandbox por enquanto só existe no Windows (Linux e macOS vêm depois).", "El sandbox por ahora solo existe en Windows (Linux y macOS vienen después).", "The sandbox currently exists only on Windows (Linux and macOS come later).");
 		const problem = rootProblem(root, env);
-		if (problem) return `Não liguei o sandbox: ${problem}.`;
+		if (problem) return t(`Não liguei o sandbox: ${problem}.`, `No activé el sandbox: ${problem}.`, `Could not turn on the sandbox: ${problem}.`);
 		const dir = sandboxDir(env);
 		const built = helper(dir);
-		if (!built.exe) return built.error ?? "não consegui preparar o sandbox";
+		if (!built.exe) return built.error ?? t("não consegui preparar o sandbox", "no pude preparar el sandbox", "could not prepare the sandbox");
 		const sid = ensureSid(dir);
 		const tmp = path.join(dir, "tmp");
 		fs.mkdirSync(tmp, { recursive: true });
 		for (const target of [tmp, root]) {
 			if ((await grant(built.exe, "--has", sid, target)).code === 0) continue;
-			if (target === root) notify(`Preparando ${root} para o sandbox (só na primeira vez; em projeto grande demora)…`);
+			if (target === root) notify(t(`Preparando ${root} para o sandbox (só na primeira vez; em projeto grande demora)…`, `Preparando ${root} para el sandbox (solo la primera vez; en un proyecto grande tarda)…`, `Preparing ${root} for the sandbox (first time only; large projects take a while)…`));
 			const done = await grant(built.exe, "--grant", sid, target);
-			if (done.code !== 0) return `Não consegui dar a permissão em ${target}: ${done.err}`;
+			if (done.code !== 0) return t(`Não consegui dar a permissão em ${target}: ${done.err}`, `No pude dar el permiso en ${target}: ${done.err}`, `Could not grant permission on ${target}: ${done.err}`);
 		}
 		const locked: string[] = [];
 		for (const name of PROTECTED) {
 			const target = path.join(root, name);
 			if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) continue;
 			const done = await grant(built.exe, "--deny", sid, target);
-			if (done.code !== 0) return `Não consegui proteger ${target}: ${done.err}`;
+			if (done.code !== 0) return t(`Não consegui proteger ${target}: ${done.err}`, `No pude proteger ${target}: ${done.err}`, `Could not protect ${target}: ${done.err}`);
 			locked.push(name);
 		}
 		state = { sid, helper: built.exe, tmp, root, locked: new Set(locked) };
 		exportEnv(state);
-		return `Sandbox ligado: os comandos do agente só gravam em ${root} e em ${tmp}${locked.length ? `, menos ${locked.join(", ")} (só leitura)` : ""}. Leitura e rede seguem abertas. ${SCOPE} /sandbox desligar para voltar.`;
+		return t(`Sandbox ligado: os comandos do agente só gravam em ${root} e em ${tmp}${locked.length ? `, menos ${locked.join(", ")} (só leitura)` : ""}. Leitura e rede seguem abertas. ${SCOPE} /sandbox desligar para voltar.`, `Sandbox activado: los comandos del agente solo escriben en ${root} y en ${tmp}${locked.length ? `, menos ${locked.join(", ")} (solo lectura)` : ""}. La lectura y la red siguen abiertas. ${SCOPE} /sandbox desactivar para volver.`, `Sandbox on: the agent's commands only write to ${root} and ${tmp}${locked.length ? `, except ${locked.join(", ")} (read-only)` : ""}. Reading and network stay open. ${SCOPE} /sandbox off to go back.`);
 	}
 	function off() {
 		const was = Boolean(state);
 		state = undefined;
 		exportEnv(undefined);
-		return was ? "Sandbox desligado: os comandos do agente voltam a rodar com as suas permissões." : "O sandbox já estava desligado.";
+		return was ? t("Sandbox desligado: os comandos do agente voltam a rodar com as suas permissões.", "Sandbox desactivado: los comandos del agente vuelven a ejecutarse con tus permisos.", "Sandbox off: the agent's commands run with your permissions again.") : t("O sandbox já estava desligado.", "El sandbox ya estaba desactivado.", "The sandbox was already off.");
 	}
 	async function remove(root: string) {
 		off();
 		const dir = sandboxDir(env);
 		const built = helper(dir);
-		if (!built.exe) return built.error ?? "não consegui achar o sandbox";
+		if (!built.exe) return built.error ?? t("não consegui achar o sandbox", "no pude encontrar el sandbox", "could not find the sandbox");
 		const sid = ensureSid(dir);
 		for (const target of [root, ...PROTECTED.map((name) => path.join(root, name)).filter((target) => fs.existsSync(target))]) {
 			const done = await grant(built.exe, "--revoke", sid, target);
-			if (done.code !== 0) return `Não consegui remover a permissão de ${target}: ${done.err}`;
+			if (done.code !== 0) return t(`Não consegui remover a permissão de ${target}: ${done.err}`, `No pude quitar el permiso de ${target}: ${done.err}`, `Could not remove the permission from ${target}: ${done.err}`);
 		}
-		return `Sandbox desligado e permissão do Pink removida de ${root}.`;
+		return t(`Sandbox desligado e permissão do Pink removida de ${root}.`, `Sandbox desactivado y permiso de Pink quitado de ${root}.`, `Sandbox off and Pink's permission removed from ${root}.`);
 	}
 	const status = () =>
 		state
-			? `Sandbox ligado: grava só em ${state.root} (menos ${PROTECTED.join(", ")}) e em ${state.tmp}; leitura e rede abertas. ${SCOPE} Limites: pastas onde Todos já gravam continuam graváveis; serviços que aceitam pedidos de qualquer processo seu (Docker, agente do ssh) seguem alcançáveis; npm/pip com cache global falham; o bash do Git fica indisponível (use o powershell); pastas com permissão privada (só o dono) não são lidas; o que fica rodando em segundo plano morre quando o comando acaba.`
+			? t(`Sandbox ligado: grava só em ${state.root} (menos ${PROTECTED.join(", ")}) e em ${state.tmp}; leitura e rede abertas. ${SCOPE} Limites: pastas onde Todos já gravam continuam graváveis; serviços que aceitam pedidos de qualquer processo seu (Docker, agente do ssh) seguem alcançáveis; npm/pip com cache global falham; o bash do Git fica indisponível (use o powershell); pastas com permissão privada (só o dono) não são lidas; o que fica rodando em segundo plano morre quando o comando acaba.`, `Sandbox activado: escribe solo en ${state.root} (menos ${PROTECTED.join(", ")}) y en ${state.tmp}; lectura y red abiertas. ${SCOPE} Límites: las carpetas donde Todos ya escriben siguen escribibles; los servicios que aceptan pedidos de cualquier proceso tuyo (Docker, agente de ssh) siguen alcanzables; npm/pip con caché global fallan; el bash de Git no está disponible (usa powershell); las carpetas con permiso privado (solo el dueño) no se leen; lo que queda corriendo en segundo plano muere cuando termina el comando.`, `Sandbox on: writes only to ${state.root} (except ${PROTECTED.join(", ")}) and ${state.tmp}; reading and network open. ${SCOPE} Limits: folders where Everyone already has write access stay writable; services that accept requests from any of your processes (Docker, ssh agent) stay reachable; npm/pip with a global cache fail; Git's bash is unavailable (use powershell); folders with private permissions (owner only) cannot be read; anything running in the background dies when the command ends.`)
 			: platform === "win32"
-				? "Sandbox desligado. /sandbox ligar isola os comandos do agente (só gravam na pasta do projeto)."
-				: "O sandbox por enquanto só existe no Windows.";
+				? t("Sandbox desligado. /sandbox ligar isola os comandos do agente (só gravam na pasta do projeto).", "Sandbox desactivado. /sandbox activar aísla los comandos del agente (solo escriben en la carpeta del proyecto).", "Sandbox off. /sandbox on isolates the agent's commands (they only write to the project folder).")
+				: t("O sandbox por enquanto só existe no Windows.", "El sandbox por ahora solo existe en Windows.", "The sandbox currently exists only on Windows.");
 	return { on, off, remove, status, active: () => Boolean(state), operations: (kind: "bash" | "powershell", shellPath?: string) => (state ? makeOperations(state, kind, shellPath) : undefined) };
 }
 
@@ -271,17 +280,17 @@ export default function (pi: any) {
 	}
 	const label = (ctx: any) => ctx?.ui?.setStatus?.("pink-sandbox", sandbox.active() ? "sandbox" : undefined);
 	pi.registerCommand("sandbox", {
-		description: "Isola os comandos do agente (só gravam na pasta do projeto): /sandbox ligar | desligar | status | remover",
+		description: t("Isola os comandos do agente (só gravam na pasta do projeto): /sandbox ligar | desligar | status | remover", "Aísla los comandos del agente (solo escriben en la carpeta del proyecto): /sandbox activar | desactivar | status | quitar", "Isolates the agent's commands (they only write to the project folder): /sandbox on | off | status | remove"),
 		handler: async (args: string, ctx: any) => {
 			const verb = String(args ?? "").trim().toLowerCase();
 			const root = path.resolve(ctx?.cwd ?? process.cwd());
 			let text: string;
-			if (verb === "ligar" || verb === "on") text = await sandbox.on(root, (note) => ctx.ui.notify(note, "info"));
-			else if (verb === "desligar" || verb === "off") text = sandbox.off();
-			else if (verb === "remover") text = await sandbox.remove(root);
+			if (["ligar", "on", "activar"].includes(verb)) text = await sandbox.on(root, (note) => ctx.ui.notify(note, "info"));
+			else if (["desligar", "off", "desactivar"].includes(verb)) text = sandbox.off();
+			else if (["remover", "remove", "quitar"].includes(verb)) text = await sandbox.remove(root);
 			else text = sandbox.status();
 			label(ctx);
-			ctx.ui.notify(text, /^Não|não consegui|não encontrad/.test(text) ? "error" : "info");
+			ctx.ui.notify(text, /^(Não|No |Could not|Did not)|não consegui|não encontrad|no pude|no encontr|could not|not found/i.test(text) ? "error" : "info");
 		},
 	});
 	pi.on("session_start", async (_event: any, ctx: any) => label(ctx));

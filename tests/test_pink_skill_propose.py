@@ -201,6 +201,7 @@ def skills_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPath
     propose = ext / "pink-skill-propose.ts"
     rules = ext / "pink-skills.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-skill-propose.ts", propose)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", propose.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     shutil.copyfile(package_dir / "extensions" / "pink-skills.ts", rules)
     base_skills = cli.parents[1] / "core" / "skills.js"  # dist/core/skills.js do pacote instalado
     assert base_skills.is_file()

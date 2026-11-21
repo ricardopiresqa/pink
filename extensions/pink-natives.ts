@@ -5,6 +5,7 @@
 // - Headroom: o MCP da máquina (127.0.0.1:8789), só se ele se apresentar como headroom;
 // - graphify: o MCP do grafo do projeto (graphify-out/graph.json), só em pasta confiável.
 // Tudo falha aberto: sem a ferramenta, o Pink segue igual.
+import { t } from "./pink-i18n.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,10 +13,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const HEADROOM_MCP = "http://127.0.0.1:8789/mcp";
 export const TOOLS = [
-	{ id: "ponytail", label: "Ponytail", what: "modo lazy senior dev: a menor mudança que resolve (vale depois do /reload)" },
-	{ id: "rtk", label: "RTK", what: "resume a saída dos comandos do bash para gastar menos tokens (precisa do rtk instalado)" },
-	{ id: "headroom", label: "Headroom", what: "MCP de compressão de contexto da máquina (precisa do Headroom no ar)" },
-	{ id: "graphify", label: "graphify", what: "MCP do grafo do projeto (precisa de graphify-out/graph.json e do graphify-mcp)" },
+	{ id: "ponytail", label: "Ponytail", what: t("modo lazy senior dev: a menor mudança que resolve (vale depois do /reload)", "modo lazy senior dev: el menor cambio que resuelve (vale después del /reload)", "lazy senior dev mode: the smallest change that solves it (takes effect after /reload)") },
+	{ id: "rtk", label: "RTK", what: t("resume a saída dos comandos do bash para gastar menos tokens (precisa do rtk instalado)", "resume la salida de los comandos de bash para gastar menos tokens (necesita rtk instalado)", "summarizes bash command output to spend fewer tokens (needs rtk installed)") },
+	{ id: "headroom", label: "Headroom", what: t("MCP de compressão de contexto da máquina (precisa do Headroom no ar)", "MCP de compresión de contexto de la máquina (necesita Headroom en marcha)", "machine-wide context compression MCP (needs Headroom running)") },
+	{ id: "graphify", label: "graphify", what: t("MCP do grafo do projeto (precisa de graphify-out/graph.json e do graphify-mcp)", "MCP del grafo del proyecto (necesita graphify-out/graph.json y graphify-mcp)", "project graph MCP (needs graphify-out/graph.json and graphify-mcp)") },
 ];
 const RTK_TIMEOUT_MS = 2000;
 
@@ -63,7 +64,7 @@ export async function rtkRewrite(exec, command, signal, bin = "rtk") {
 	try {
 		const result = await exec(bin, ["rewrite", command], { timeout: RTK_TIMEOUT_MS, signal });
 		if (result?.killed) return { command };
-		if (result?.code === 2) return { command, block: (result.stdout || result.stderr || "").trim() || "o rtk negou este comando" };
+		if (result?.code === 2) return { command, block: (result.stdout || result.stderr || "").trim() || t("o rtk negou este comando", "rtk negó este comando", "rtk denied this command") };
 		if (result?.code !== 0 && result?.code !== 3) return { command };
 		return { command: result.stdout?.trim() || command };
 	} catch {
@@ -165,18 +166,18 @@ export async function natives(pi, deps) {
 	pi.on("session_start", async (_event, ctx) => {
 		report.rtk = findRtk();
 		syncGraphify(ctx);
-		if (!choices.exists && ctx?.mode === "tui") ctx.ui?.notify?.("O Pink tem ferramentas opcionais (Ponytail, RTK, Headroom, graphify): /ferramentas", "info");
+		if (!choices.exists && ctx?.mode === "tui") ctx.ui?.notify?.(t("O Pink tem ferramentas opcionais (Ponytail, RTK, Headroom, graphify): /ferramentas", "Pink tiene herramientas opcionales (Ponytail, RTK, Headroom, graphify): /ferramentas", "Pink has optional tools (Ponytail, RTK, Headroom, graphify): /ferramentas"), "info");
 	});
 
 	pi.registerCommand?.("ferramentas", {
-		description: "Liga ou desliga as ferramentas opcionais (Ponytail, RTK, Headroom, graphify)",
+		description: t("Liga ou desliga as ferramentas opcionais (Ponytail, RTK, Headroom, graphify)", "Activa o desactiva las herramientas opcionales (Ponytail, RTK, Headroom, graphify)", "Turns the optional tools on or off (Ponytail, RTK, Headroom, graphify)"),
 		handler: async (_args, ctx) => {
 			// a sonda do Headroom (até 1,5 s) roda uma vez por abertura do menu, não a cada Enter
 			const headroomOnline = await installed.headroom();
 			for (;;) {
-				const state = (t) => (t.id === "headroom" ? (headroomOnline ? "no ar" : "fora do ar") : installed[t.id]() ? "instalado" : "não instalado");
+				const state = (tool) => (tool.id === "headroom" ? (headroomOnline ? t("no ar", "en marcha", "running") : t("fora do ar", "fuera de línea", "offline")) : installed[tool.id]() ? t("instalado", "instalado", "installed") : t("não instalado", "no instalado", "not installed"));
 				const rows = TOOLS.map((t) => `${on[t.id] ? "●" : "○"} ${t.label}  ${state(t)} · ${t.what}`);
-				const picked = await ctx.ui.select("Ferramentas do Pink (Enter liga/desliga; Esc sai)", [...rows, "Pronto"]);
+				const picked = await ctx.ui.select(t("Ferramentas do Pink (Enter liga/desliga; Esc sai)", "Herramientas de Pink (Enter activa/desactiva; Esc sale)", "Pink tools (Enter turns on/off; Esc exits)"), [...rows, t("Pronto", "Listo", "Done")]);
 				const index = rows.indexOf(picked);
 				if (index < 0) break;
 				const id = TOOLS[index].id;
@@ -186,15 +187,15 @@ export async function natives(pi, deps) {
 					write(file, `${JSON.stringify(on, null, 2)}\n`);
 					choices.exists = true;
 				} catch (error) {
-					ctx.ui.notify?.(`Não deu para salvar ${file}: ${error?.message ?? error}`, "error");
+					ctx.ui.notify?.(t(`Não deu para salvar ${file}: ${error?.message ?? error}`, `No se pudo guardar ${file}: ${error?.message ?? error}`, `Could not save ${file}: ${error?.message ?? error}`), "error");
 				}
 				if (id === "rtk") findRtk();
 				if (id === "headroom") {
 					if (!on.headroom) { unregister("headroom"); report.headroom = false; }
-					else if (!(await startHeadroom())) ctx.ui.notify?.("Headroom ligado, mas fora do ar: o MCP entra quando ele estiver rodando (abra o Pink de novo)", "warning");
+					else if (!(await startHeadroom())) ctx.ui.notify?.(t("Headroom ligado, mas fora do ar: o MCP entra quando ele estiver rodando (abra o Pink de novo)", "Headroom activado, pero fuera de línea: el MCP entra cuando esté en marcha (vuelve a abrir Pink)", "Headroom is on but offline: the MCP joins once it is running (reopen Pink)"), "warning");
 				}
 				if (id === "graphify") syncGraphify(ctx);
-				if (id === "ponytail") ctx.ui.notify?.("O Ponytail liga ou desliga depois do /reload", "info");
+				if (id === "ponytail") ctx.ui.notify?.(t("O Ponytail liga ou desliga depois do /reload", "Ponytail se activa o desactiva después de /reload", "Ponytail turns on or off after /reload"), "info");
 			}
 		},
 	});

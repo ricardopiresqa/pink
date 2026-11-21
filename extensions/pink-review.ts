@@ -3,6 +3,7 @@
 // branch (commits e o que não foi commitado). O primeiro termo é sempre o branch. O diff vai para um arquivo temporário e o
 // agente principal chama o subagente "revisor", que só lê (read, grep, find, ls, sem MCP) e não vê a conversa.
 // Só em pasta confiável: o git lê a configuração do repositório e ela pode rodar programas (textconv, fsmonitor).
+import { t } from "./pink-i18n.ts";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -39,26 +40,26 @@ export const cleanName = (name: string) => {
 	return clean.length > MAX_NAME ? `${clean.slice(0, MAX_NAME)}…` : clean;
 };
 
-type Found = { error?: string; diff?: string; files?: string[]; extra?: number; label?: string; root?: string };
+type Found = { error?: string; empty?: boolean; diff?: string; files?: string[]; extra?: number; label?: string; root?: string };
 
 export function collect(cwd: string, base: string | undefined, run: Git = git): Found {
 	const top = run(["rev-parse", "--show-toplevel"], cwd);
-	if (!top.ok) return { error: "Esta pasta não é um repositório git." };
+	if (!top.ok) return { error: t("Esta pasta não é um repositório git.", "Esta carpeta no es un repositorio git.", "This folder is not a git repository.") };
 	const root = path.resolve(top.out.trim()); // caminhos do diff e do ls-files ficam relativos à raiz
 	let from = "HEAD";
-	let label = "mudanças não commitadas";
+	let label = t("mudanças não commitadas", "cambios sin commit", "uncommitted changes");
 	if (base) {
-		if (!validRef(base)) return { error: `Referência inválida: ${base}` };
+		if (!validRef(base)) return { error: t(`Referência inválida: ${base}`, `Referencia no válida: ${base}`, `Invalid reference: ${base}`) };
 		const mergeBase = run(["merge-base", base, "HEAD"], root);
-		if (!mergeBase.ok) return { error: `Não achei a base com ${base}: ${mergeBase.err || "referência desconhecida"}` };
+		if (!mergeBase.ok) return { error: t(`Não achei a base com ${base}: ${mergeBase.err || "referência desconhecida"}`, `No encontré la base con ${base}: ${mergeBase.err || "referencia desconocida"}`, `Could not find the base with ${base}: ${mergeBase.err || "unknown reference"}`) };
 		from = mergeBase.out.trim();
-		label = `mudanças desde ${base}`;
+		label = t(`mudanças desde ${base}`, `cambios desde ${base}`, `changes since ${base}`);
 	} else if (!run(["rev-parse", "--verify", "--quiet", "HEAD"], root).ok) from = EMPTY_TREE;
 	const diff = run(["diff", "--no-color", "--no-ext-diff", "--no-textconv", from, "--"], root);
-	if (!diff.ok) return { error: `git diff falhou: ${diff.err}` };
+	if (!diff.ok) return { error: t(`git diff falhou: ${diff.err}`, `git diff falló: ${diff.err}`, `git diff failed: ${diff.err}`) };
 	const names = run(["diff", "--name-only", "--no-textconv", from, "--"], root).out.split(/\r?\n/).filter(Boolean);
 	const untracked = run(["ls-files", "--others", "--exclude-standard"], root).out.split(/\r?\n/).filter(Boolean);
-	if (!diff.out.trim() && !untracked.length) return { error: `Nada para revisar (${label}).` };
+	if (!diff.out.trim() && !untracked.length) return { error: t(`Nada para revisar (${label}).`, `Nada que revisar (${label}).`, `Nothing to review (${label}).`), empty: true };
 	const files = [...names.map(cleanName), ...untracked.slice(0, MAX_UNTRACKED).map((file) => `${cleanName(file)} [novo, fora do git]`)];
 	let text = diff.out;
 	if (text.length > MAX_DIFF) text = `${text.slice(0, MAX_DIFF)}\n[diff cortado em ${MAX_DIFF / 1024 / 1024} MB: leia os arquivos da lista para o resto]\n`;
@@ -100,12 +101,12 @@ export default function (pi: any) {
 	const dirs: string[] = [];
 	pi.on("session_start", async () => sweepStale());
 	pi.registerCommand("review", {
-		description: "Revisão independente (subagente só leitura) do que não foi commitado, ou de tudo desde um branch: /review [branch] [foco]",
+		description: t("Revisão independente (subagente só leitura) do que não foi commitado, ou de tudo desde um branch: /review [branch] [foco]", "Revisión independiente (subagente solo lectura) de lo no confirmado, o de todo desde una rama: /review [rama] [foco]", "Independent review (read-only subagent) of uncommitted changes, or of everything since a branch: /review [branch] [focus]"),
 		handler: async (args: string, ctx: any) => {
-			if (ctx?.isProjectTrusted?.() !== true) return ctx.ui.notify("Pasta não confiável: o /review fica desligado (o git do projeto poderia rodar programas dele). Confie na pasta para usar.", "error");
+			if (ctx?.isProjectTrusted?.() !== true) return ctx.ui.notify(t("Pasta não confiável: o /review fica desligado (o git do projeto poderia rodar programas dele). Confie na pasta para usar.", "Carpeta no confiable: /review está desactivado (el git del proyecto podría ejecutar programas suyos). Confía en la carpeta para usarlo.", "Untrusted folder: /review is disabled (the project's git could run its programs). Trust the folder to use it."), "error");
 			const [base, ...rest] = String(args ?? "").trim().split(/\s+/).filter(Boolean);
 			const found = collect(ctx?.cwd ?? process.cwd(), base);
-			if (found.error) return ctx.ui.notify(found.error, found.error.startsWith("Nada") ? "info" : "error");
+			if (found.error) return ctx.ui.notify(found.error, found.empty ? "info" : "error");
 			let file: string;
 			try {
 				const dir = fs.mkdtempSync(path.join(os.tmpdir(), PREFIX));
@@ -113,7 +114,7 @@ export default function (pi: any) {
 				file = path.join(dir, "diff.patch");
 				fs.writeFileSync(file, found.diff ?? "");
 			} catch (error) {
-				return ctx.ui.notify(`Não consegui gravar o diff no temporário: ${(error as Error)?.message ?? error}`, "error");
+				return ctx.ui.notify(t(`Não consegui gravar o diff no temporário: ${(error as Error)?.message ?? error}`, `No pude guardar el diff en el temporal: ${(error as Error)?.message ?? error}`, `Could not write the diff to the temp folder: ${(error as Error)?.message ?? error}`), "error");
 			}
 			ctx.ui.notify(`Revisando ${found.label}: ${(found.files?.length ?? 0) + (found.extra ?? 0)} arquivo(s).`, "info");
 			const prompt = reviewPrompt(file, found, rest.join(" "));

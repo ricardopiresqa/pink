@@ -113,7 +113,7 @@ def test_the_pi_licence_and_the_notice_travel_with_the_fork() -> None:
 def test_the_fork_is_the_patch_and_the_pi_code_is_not_in_the_repository() -> None:
     tracked_or_present = [path for path in PINK.rglob("*") if path.is_file() and not {".cache", "out", "tests", ".git", "node_modules"} & set(path.relative_to(PINK).parts)]
     own_code = [path for path in tracked_or_present if path.suffix in {".js", ".mjs", ".ts"}]
-    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-context.ts", "extensions/pink-hooks.ts", "extensions/pink-loop.ts", "extensions/pink-lsp.ts", "extensions/pink-memory.ts", "extensions/pink-natives.ts", "extensions/pink-notify.ts", "extensions/pink-permissions.ts", "extensions/pink-review.ts", "extensions/pink-rules.ts", "extensions/pink-sandbox.ts", "extensions/pink-sessions-bus.ts", "extensions/pink-shell-bg.ts", "extensions/pink-skill-propose.ts", "extensions/pink-skills.ts", "extensions/pink-subagent-bg.ts", "extensions/pink-ui.ts", "extensions/pink-web.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu), the theme converter and the cards 1dfwh7kfzfa-g (extensoes embutidas); nothing of Pi's
+    assert sorted(path.relative_to(PINK).as_posix() for path in own_code) == ["extensions/pink-context.ts", "extensions/pink-hooks.ts", "extensions/pink-i18n.ts", "extensions/pink-loop.ts", "extensions/pink-lsp.ts", "extensions/pink-memory.ts", "extensions/pink-natives.ts", "extensions/pink-notify.ts", "extensions/pink-permissions.ts", "extensions/pink-review.ts", "extensions/pink-rules.ts", "extensions/pink-sandbox.ts", "extensions/pink-sessions-bus.ts", "extensions/pink-shell-bg.ts", "extensions/pink-skill-propose.ts", "extensions/pink-skills.ts", "extensions/pink-subagent-bg.ts", "extensions/pink-tela.ts", "extensions/pink-ui.ts", "extensions/pink-web.ts", "mux/pink.mjs", "theme/make_themes.mjs"]  # Pink's own interface, the natives (card 1dfwh7kffk2), the multi-session sidebar (card 1dfwh7kffcu), the theme converter and the cards 1dfwh7kfzfa-g (extensoes embutidas); nothing of Pi's
     assert "earendil" not in (PINK / "extensions" / "pink-ui.ts").read_text(encoding="utf-8").replace("@earendil-works/pi-coding-agent", "").replace("@earendil-works/pi-tui", "")  # it imports the engine, it does not copy it
     assert (PINK / "build_pink.py").is_file() and (PINK / "rebrand.json").is_file()
 
@@ -664,7 +664,7 @@ def test_notification_when_done_out_of_focus_and_undo_survives_reopening_the_ses
     assert n["mac"] == "osascript" and n["linux"] == "notify-send" and n["osc"] == "\x1b]777;notify;Pink;a b\x07" and n["injection"] and n["oscControls"] == "\x1b]777;notify;Pink;a b  c\x07"  # Argus N1
     assert ui_facts["saved"] == {"found": True, "storeFromHere": True, "otherId": True, "gone": True, "otherRepo": True, "badTree": True}  # Argus S1
     chunk = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
-    assert '"pink-ui.ts"),path5.join(getPackageDir(),"extensions","pink-notify.ts"),path5.join(getPackageDir(),"extensions","pink-natives.ts"),path5.join(getPackageDir(),"extensions","pink-web.ts"),path5.join(getPackageDir(),"extensions","pink-shell-bg.ts"),path5.join(getPackageDir(),"extensions","pink-memory.ts"),path5.join(getPackageDir(),"extensions","pink-sessions-bus.ts"),path5.join(getPackageDir(),"extensions","pink-loop.ts"),path5.join(getPackageDir(),"extensions","pink-skills.ts"),path5.join(getPackageDir(),"extensions","pink-context.ts"),path5.join(getPackageDir(),"extensions","pink-lsp.ts"),path5.join(getPackageDir(),"extensions","pink-rules.ts"),path5.join(getPackageDir(),"extensions","pink-review.ts"),path5.join(getPackageDir(),"extensions","pink-skill-propose.ts"),path5.join(getPackageDir(),"extensions","pink-sandbox.ts")]' in chunk  # cards 1dfwh7kfzfa-g, 1dfwh7kfzxt e 1dfwh7kfzxv: as extensões embutidas, na ordem do pacote
+    assert '"pink-ui.ts"),path5.join(getPackageDir(),"extensions","pink-notify.ts"),path5.join(getPackageDir(),"extensions","pink-natives.ts"),path5.join(getPackageDir(),"extensions","pink-web.ts"),path5.join(getPackageDir(),"extensions","pink-shell-bg.ts"),path5.join(getPackageDir(),"extensions","pink-memory.ts"),path5.join(getPackageDir(),"extensions","pink-sessions-bus.ts"),path5.join(getPackageDir(),"extensions","pink-loop.ts"),path5.join(getPackageDir(),"extensions","pink-skills.ts"),path5.join(getPackageDir(),"extensions","pink-context.ts"),path5.join(getPackageDir(),"extensions","pink-lsp.ts"),path5.join(getPackageDir(),"extensions","pink-rules.ts"),path5.join(getPackageDir(),"extensions","pink-review.ts"),path5.join(getPackageDir(),"extensions","pink-skill-propose.ts"),path5.join(getPackageDir(),"extensions","pink-sandbox.ts"),path5.join(getPackageDir(),"extensions","pink-tela.ts")]' in chunk  # card 1dfwh7kg5bv: /tela; cards 1dfwh7kfzfa-g, 1dfwh7kfzxt e 1dfwh7kfzxv: as extensões embutidas, na ordem do pacote
 
 
 def test_web_search_and_page_reading_are_native_hosted_on_openai_local_elsewhere(ui_facts: dict, package_dir: Path) -> None:
@@ -832,8 +832,8 @@ def test_subagents_are_native_the_pi_example_loaded_always(package_dir: Path) ->
     loader = 'path5.join(getPackageDir(),"examples","extensions","subagent","index.ts")'
     assert loader + ',path5.join(getPackageDir(),"examples","extensions","questionnaire.ts"),' in chunk  # card 1dfwh7kfmqn: pergunta com opções
     questionnaire = (package_dir / "examples" / "extensions" / "questionnaire.ts").read_text(encoding="utf-8")
-    assert 'if (ctx.mode !== "tui")' in questionnaire and 'label: "Escrever outra resposta."' in questionnaire  # sem tela não trava; tela em português
-    assert chunk.count(loader) == 1 and '"pink-sandbox.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface; /review, /skill-nova e /sandbox (1dfwh7kfzxu) entram antes do subagente
+    assert 'if (ctx.mode !== "tui")' in questionnaire and 'label: (globalThis.__pinkT?.("Escrever outra resposta.", "Escribir otra respuesta.", "Type something.")' in questionnaire  # sem tela não trava; tela em português
+    assert chunk.count(loader) == 1 and '"pink-tela.ts")],' + loader in chunk  # depois do ternário: fora do interruptor da interface; /review, /skill-nova e /sandbox (1dfwh7kfzxu) entram antes do subagente
     example = package_dir / "examples" / "extensions" / "subagent"
     index, agents = (example / "index.ts").read_text(encoding="utf-8"), (example / "agents.ts").read_text(encoding="utf-8")
     assert 'new Map<string, AgentConfig>([["general", { name: "general"' in agents  # o general existe sem nenhum .md
@@ -973,7 +973,8 @@ def test_the_slash_commands_are_described_in_portuguese_and_changelog_is_gone(pa
     builtin = chunk[start:chunk.index("];", start)]
     names = re.findall(r'name:"([\w-]+)"', builtin)
     assert len(names) == 22 and "changelog" not in names and "bug" not in names
-    described = dict(re.findall(r'name:"([\w-]+)",description:["`]([^"`]*)["`]', builtin))
+    # card 1dfwh7kg5cg: a descrição virou getter com o idioma do Windows (pt, es, en); o primeiro texto é o português
+    described = dict(re.findall(r'name:"([\w-]+)",get description\(\)\{return globalThis\.__pinkT\?\.\(["`]([^"`]*)["`]', builtin))
     # texto exato (Argus: lista de verbos não pega descrição nova do upstream); conferido contra o que cada comando faz
     assert described == {
         "settings": "Abre as configurações", "model": "Escolhe o modelo", "tree": "Navega pela árvore da sessão (troca de ramo)",
@@ -987,8 +988,9 @@ def test_the_slash_commands_are_described_in_portuguese_and_changelog_is_gone(pa
         "resume": "Retoma outra sessão", "reload": "Recarrega atalhos, extensões, skills, prompts, temas e arquivos de contexto", "quit": "Sai do ${APP_NAME}",
     }
     assert 'text==="/changelog"' not in chunk and "this.changelogMarkdown=this." not in chunk  # o aviso "Use /changelog" fica inalcançável
-    assert 'registerCommand("mcp",{description:"Servidores MCP' in chunk and 'registerCommand("llama",{description:"Modelos do roteador' in chunk
-    assert "Ctrl+P cycling" not in chunk
+    assert 'registerCommand("mcp",{get description(){return globalThis.__pinkT?.("Servidores MCP' in chunk and 'registerCommand("llama",{get description(){return globalThis.__pinkT?.("Modelos do roteador' in chunk
+    # o inglês do upstream agora é a versão "en" (card 1dfwh7kg5cg); o que não pode é sobrar descrição fora do getter de idioma
+    assert 'description:"Select models for Ctrl+P cycling"' not in chunk
     assert "/changelog" not in (package_dir / "docs" / "slash-commands.md").read_text(encoding="utf-8")
 
 

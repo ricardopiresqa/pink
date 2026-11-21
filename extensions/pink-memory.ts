@@ -5,6 +5,7 @@
 // atualiza, lê, lista e apaga; texto com cara de segredo é recusado. O AGENTS.md é da pessoa e fica de fora.
 // Pasta não confiável: nem entra no prompt nem grava (Argus A1: repositório estranho induziria o agente a guardar
 // instruções que voltariam no prompt de sistema de toda sessão). Subagente não lê nem grava.
+import { t } from "./pink-i18n.ts";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -127,7 +128,7 @@ export const MEMORY_PROMPT = (dir: string, index: string) =>
 		index.trim() ? `\n<memory-index>\n${index.trim()}\n</memory-index>` : "\n(Ainda não há memórias neste projeto.)",
 	].join("\n");
 
-const UNTRUSTED = "Pasta não confiável: a memória do projeto fica desligada (nem grava nem entra no prompt). Confie na pasta para usar.";
+const UNTRUSTED = t("Pasta não confiável: a memória do projeto fica desligada (nem grava nem entra no prompt). Confie na pasta para usar.", "Carpeta no confiable: la memoria del proyecto queda desactivada (ni guarda ni entra en el prompt). Confía en la carpeta para usarla.", "Untrusted folder: project memory is off (it neither saves nor enters the prompt). Trust the folder to use it.");
 
 export function memoryTool(cwdOf: (ctx?: any) => string, env = process.env) {
 	const reply = (text: string, isError = false) => ({ content: [{ type: "text", text }], details: undefined, isError });
@@ -150,20 +151,20 @@ export function memoryTool(cwdOf: (ctx?: any) => string, env = process.env) {
 			const trusted = isTrusted(ctx);
 			if (action === "list") return reply(readIndex(cwd, env) || "Nenhuma memória neste projeto.");
 			const name = String(params?.name ?? "");
-			if (!NAME.test(name)) return reply("name inválido: use kebab-case com letras minúsculas, números e hífen (até 64).", true);
-			if (RESERVED.test(name)) return reply(`name reservado (${name}): escolha outro.`, true);
+			if (!NAME.test(name)) return reply(t("name inválido: use kebab-case com letras minúsculas, números e hífen (até 64).", "name no válido: usa kebab-case con letras minúsculas, números y guion (hasta 64).", "invalid name: use kebab-case with lowercase letters, numbers and hyphens (up to 64)."), true);
+			if (RESERVED.test(name)) return reply(t(`name reservado (${name}): escolha outro.`, `name reservado (${name}): elige otro.`, `reserved name (${name}): choose another.`), true);
 			const file = path.join(dir, `${name}.md`);
 			if (action === "read") {
 				try {
 					return reply(fs.readFileSync(file, "utf8"));
 				} catch {
-					return reply(`Não há memória ${name}.`, true);
+					return reply(t(`Não há memória ${name}.`, `No hay memoria ${name}.`, `There is no memory ${name}.`), true);
 				}
 			}
 			if (action !== "save" && action !== "delete") return reply("action deve ser save, read, list ou delete.", true);
 			if (!trusted) return reply(UNTRUSTED, true);
 			if (action === "delete") {
-				if (!fs.existsSync(file)) return reply(`Não há memória ${name}.`, true);
+				if (!fs.existsSync(file)) return reply(t(`Não há memória ${name}.`, `No hay memoria ${name}.`, `There is no memory ${name}.`), true);
 				fs.unlinkSync(file);
 				rebuildIndex(dir);
 				return reply(`Memória ${name} apagada.`);
@@ -171,9 +172,9 @@ export function memoryTool(cwdOf: (ctx?: any) => string, env = process.env) {
 			const description = oneLine(params?.description);
 			const content = String(params?.content ?? "").trim();
 			if (!TYPES.includes(params?.type)) return reply(`type deve ser ${TYPES.join(", ")}.`, true);
-			if (!description || !content) return reply("save precisa de description e content.", true);
-			if (description.length > DESCRIPTION_CAP) return reply(`description longa demais (máximo ${DESCRIPTION_CAP} caracteres): o detalhe vai em content.`, true);
-			if (content.length > BODY_CAP) return reply(`content longo demais (máximo ${BODY_CAP} caracteres): uma memória é um fato.`, true);
+			if (!description || !content) return reply(t("save precisa de description e content.", "save necesita description y content.", "save needs description and content."), true);
+			if (description.length > DESCRIPTION_CAP) return reply(t(`description longa demais (máximo ${DESCRIPTION_CAP} caracteres): o detalhe vai em content.`, `description demasiado larga (máximo ${DESCRIPTION_CAP} caracteres): el detalle va en content.`, `description too long (max ${DESCRIPTION_CAP} characters): put the detail in content.`), true);
+			if (content.length > BODY_CAP) return reply(t(`content longo demais (máximo ${BODY_CAP} caracteres): uma memória é um fato.`, `content demasiado largo (máximo ${BODY_CAP} caracteres): una memoria es un hecho.`, `content too long (max ${BODY_CAP} characters): a memory is one fact.`), true);
 			if (looksSecret(`${description}\n${content}`)) return reply("Recusado: o texto parece ter um segredo (chave, token, senha ou URL com senha). Guarde onde ele fica, nunca o valor.", true);
 			fs.mkdirSync(dir, { recursive: true });
 			const existed = fs.existsSync(file);
@@ -212,21 +213,21 @@ export default function (pi: any) {
 		else return { systemPrompt: `${event?.systemPrompt ?? ""}\n\n${section}` };
 	});
 	pi.registerCommand("memoria", {
-		description: "Memória deste projeto: mostra a pasta e o índice (MEMORY.md); 'abrir' abre a pasta",
+		description: t("Memória deste projeto: mostra a pasta e o índice (MEMORY.md); 'abrir' abre a pasta", "Memoria de este proyecto: muestra la carpeta y el índice (MEMORY.md); 'abrir' abre la carpeta", "This project's memory: shows the folder and the index (MEMORY.md); 'open' opens the folder"),
 		getArgumentCompletions: (prefix: string) => ("abrir".startsWith(prefix) ? [{ value: "abrir", label: "abrir" }] : null),
 		handler: async (args: string, ctx: any) => {
 			const here = ctx?.cwd ?? cwd;
-			if (args.trim() === "abrir") {
+			if (["abrir", "open"].includes(args.trim())) {
 				const dir = memoryDir(here);
 				fs.mkdirSync(dir, { recursive: true });
 				const opener = process.platform === "win32" ? "explorer" : process.platform === "darwin" ? "open" : "xdg-open";
 				// pasta como argumento, sem shell: o caminho não vira comando
-				spawn(opener, [dir], { detached: true, stdio: "ignore", shell: false }).on("error", () => ctx.ui.notify(`Não consegui abrir; a pasta é ${dir}`, "warning")).unref();
-				ctx.ui.notify(`Abrindo ${dir}`, "info");
+				spawn(opener, [dir], { detached: true, stdio: "ignore", shell: false }).on("error", () => ctx.ui.notify(t(`Não consegui abrir; a pasta é ${dir}`, `No pude abrir; la carpeta es ${dir}`, `Could not open it; the folder is ${dir}`), "warning")).unref();
+				ctx.ui.notify(t(`Abrindo ${dir}`, `Abriendo ${dir}`, `Opening ${dir}`), "info");
 				return;
 			}
 			const off = isTrusted(ctx) ? "" : `\n\n${UNTRUSTED}`;
-			ctx.ui.notify(`Pasta: ${memoryDir(here)}${off}\n\n${readIndex(here) || "Nenhuma memória neste projeto."}`, "info");
+			ctx.ui.notify(`${t("Pasta", "Carpeta", "Folder")}: ${memoryDir(here)}${off}\n\n${readIndex(here) || t("Nenhuma memória neste projeto.", "Ninguna memoria en este proyecto.", "No memories in this project.")}`, "info");
 		},
 	});
 }

@@ -3,6 +3,7 @@
 //   /loop confere o deploy      sem intervalo: o agente escolhe o ritmo chamando schedule_wakeup ao fim de cada rodada
 //   /loop parar  ou  Esc        encerra; /loop sozinho mostra o loop ativo
 // Tudo vive em timers desta sessão: fechar, trocar ou recarregar (session_shutdown) cancela; nada fica agendado fora dela.
+import { t } from "./pink-i18n.ts";
 import { Type } from "typebox";
 
 export const MIN_SECONDS = 60;
@@ -52,9 +53,9 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 	const clockAt = (at: number) => new Date(at).toTimeString().slice(0, 8);
 	const show = () => {
 		if (!loop) return ui((u) => u.setWidget(WIDGET, undefined));
-		const pace = loop.every ? `a cada ${human(loop.every)}` : "ritmo do agente";
-		const when = loop.running ? "rodando" : loop.pending ? "esperando o agente ficar livre" : loop.next ? `próxima às ${clockAt(loop.next)}` : "";
-		const lines = [`🔁 /loop ${pace} · rodada ${loop.round}/${MAX_ROUNDS} · ${when} · ${oneLine(loop.task, 50)}`, "   /loop parar (ou Esc durante a rodada) para encerrar"];
+		const pace = loop.every ? t(`a cada ${human(loop.every)}`, `cada ${human(loop.every)}`, `every ${human(loop.every)}`) : t("ritmo do agente", "ritmo del agente", "agent's pace");
+		const when = loop.running ? t("rodando", "ejecutando", "running") : loop.pending ? t("esperando o agente ficar livre", "esperando a que el agente quede libre", "waiting for the agent to be free") : loop.next ? t(`próxima às ${clockAt(loop.next)}`, `próxima a las ${clockAt(loop.next)}`, `next at ${clockAt(loop.next)}`) : "";
+		const lines = [`🔁 /loop ${pace} · ${t("rodada", "ronda", "round")} ${loop.round}/${MAX_ROUNDS} · ${when} · ${oneLine(loop.task, 50)}`, t("   /loop parar (ou Esc durante a rodada) para encerrar", "   /loop parar (o Esc durante la ronda) para terminar", "   /loop stop (or Esc during the round) to end")];
 		ui((u) => u.setWidget(WIDGET, lines));
 	};
 	const stop = (why?: string) => {
@@ -64,7 +65,7 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 		const had = loop;
 		loop = undefined;
 		show();
-		if (had && why) ui((u) => u.notify(`/loop encerrado: ${why}`, "info"));
+		if (had && why) ui((u) => u.notify(t(`/loop encerrado: ${why}`, `/loop terminado: ${why}`, `/loop ended: ${why}`), "info"));
 		return had;
 	};
 	const fire = () => {
@@ -78,17 +79,17 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 			timer = later(fire, PENDING_RETRY_MS);
 			return show();
 		}
-		if (loop.round >= MAX_ROUNDS) return void stop(`limite de ${MAX_ROUNDS} rodadas; use /loop de novo para continuar`);
+		if (loop.round >= MAX_ROUNDS) return void stop(t(`limite de ${MAX_ROUNDS} rodadas; use /loop de novo para continuar`, `límite de ${MAX_ROUNDS} rondas; usa /loop otra vez para continuar`, `limit of ${MAX_ROUNDS} rounds; use /loop again to continue`));
 		loop.pending = false;
 		loop.running = true;
 		loop.wake = undefined;
 		loop.round += 1;
 		const how = loop.every
-			? `Repete a cada ${human(loop.every)}; não precisa agendar nada.`
-			: `Ao terminar, chame schedule_wakeup com delaySeconds (${MIN_SECONDS} a ${MAX_WAKE_SECONDS}) para a próxima rodada, ou stop:true se a tarefa acabou. Sem essa chamada o loop termina.`;
+			? t(`Repete a cada ${human(loop.every)}; não precisa agendar nada.`, `Se repite cada ${human(loop.every)}; no hace falta programar nada.`, `Repeats every ${human(loop.every)}; nothing to schedule.`)
+			: t(`Ao terminar, chame schedule_wakeup com delaySeconds (${MIN_SECONDS} a ${MAX_WAKE_SECONDS}) para a próxima rodada, ou stop:true se a tarefa acabou. Sem essa chamada o loop termina.`, `Al terminar, llama a schedule_wakeup con delaySeconds (${MIN_SECONDS} a ${MAX_WAKE_SECONDS}) para la próxima ronda, o stop:true si la tarea terminó. Sin esa llamada el loop termina.`, `When finished, call schedule_wakeup with delaySeconds (${MIN_SECONDS} to ${MAX_WAKE_SECONDS}) for the next round, or stop:true if the task is done. Without that call the loop ends.`);
 		show();
 		pi.sendMessage(
-			{ customType: "pink-loop", content: `Rodada ${loop.round} do /loop. Tarefa: ${loop.task}\n\n${how}`, display: true },
+			{ customType: "pink-loop", content: t(`Rodada ${loop.round} do /loop. Tarefa: ${loop.task}\n\n${how}`, `Ronda ${loop.round} del /loop. Tarea: ${loop.task}\n\n${how}`, `Round ${loop.round} of /loop. Task: ${loop.task}\n\n${how}`), display: true },
 			{ triggerTurn: true },
 		);
 		// sem modelo ou sem chave o sendMessage não lança nem emite agent_settled: o loop ficaria preso em "rodando"
@@ -96,7 +97,7 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 		if (watchdog) clearTimer(watchdog);
 		watchdog = later(() => {
 			watchdog = undefined;
-			if (loop?.running && loop.round === round && ctx?.isIdle?.() && !ctx?.hasPendingMessages?.()) stop("a rodada não começou (modelo ou chave?)");
+			if (loop?.running && loop.round === round && ctx?.isIdle?.() && !ctx?.hasPendingMessages?.()) stop(t("a rodada não começou (modelo ou chave?)", "la ronda no empezó (¿modelo o clave?)", "the round did not start (model or key?)"));
 		}, START_CHECK_MS);
 	};
 	const schedule = (seconds: number) => {
@@ -116,32 +117,32 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 		if (!loop.running) return;
 		loop.running = false;
 		if (loop.every) return schedule(loop.every);
-		if (loop.wake === undefined) return void stop("o agente não agendou a próxima rodada");
+		if (loop.wake === undefined) return void stop(t("o agente não agendou a próxima rodada", "el agente no programó la próxima ronda", "the agent did not schedule the next round"));
 		schedule(loop.wake);
 	};
 	const start = (args: string, context: any) => {
 		ctx = context;
 		const text = args.trim();
 		if (!text) {
-			if (!loop) return context.ui.notify("Nenhum /loop ativo. Use /loop 5m <tarefa> ou /loop <tarefa>.", "info");
+			if (!loop) return context.ui.notify(t("Nenhum /loop ativo. Use /loop 5m <tarefa> ou /loop <tarefa>.", "No hay /loop activo. Usa /loop 5m <tarea> o /loop <tarea>.", "No active /loop. Use /loop 5m <task> or /loop <task>."), "info");
 			return show();
 		}
 		if (/^(parar|stop|cancelar)$/i.test(text)) {
-			if (!stop()) return context.ui.notify("Nenhum /loop ativo.", "info");
-			return context.ui.notify("/loop encerrado.", "info");
+			if (!stop()) return context.ui.notify(t("Nenhum /loop ativo.", "No hay /loop activo.", "No active /loop."), "info");
+			return context.ui.notify(t("/loop encerrado.", "/loop terminado.", "/loop ended."), "info");
 		}
-		if (loop) return context.ui.notify("Já há um /loop ativo; use /loop parar antes de começar outro.", "warning");
+		if (loop) return context.ui.notify(t("Já há um /loop ativo; use /loop parar antes de começar outro.", "Ya hay un /loop activo; usa /loop parar antes de empezar otro.", "A /loop is already active; use /loop stop before starting another."), "warning");
 		const [first, ...rest] = text.split(/\s+/);
 		let every: number | undefined;
 		let task = text;
 		// só "número+unidade" é intervalo; "/loop 3 coisas" é tarefa
 		if (/^\d+(\.\d+)?[a-z]+$/i.test(first)) {
 			every = parseInterval(first);
-			if (every === undefined) return context.ui.notify(`Intervalo inválido: ${first}. Use números com s, m ou h (ex.: 90s, 5m, 2h).`, "warning");
+			if (every === undefined) return context.ui.notify(t(`Intervalo inválido: ${first}. Use números com s, m ou h (ex.: 90s, 5m, 2h).`, `Intervalo no válido: ${first}. Usa números con s, m o h (ej.: 90s, 5m, 2h).`, `Invalid interval: ${first}. Use numbers with s, m or h (e.g. 90s, 5m, 2h).`), "warning");
 			if (every < MIN_SECONDS || every > MAX_FIXED_SECONDS)
-				return context.ui.notify(`Intervalo fora do limite: de ${human(MIN_SECONDS)} a ${human(MAX_FIXED_SECONDS)}.`, "warning");
+				return context.ui.notify(t(`Intervalo fora do limite: de ${human(MIN_SECONDS)} a ${human(MAX_FIXED_SECONDS)}.`, `Intervalo fuera del límite: de ${human(MIN_SECONDS)} a ${human(MAX_FIXED_SECONDS)}.`, `Interval out of range: ${human(MIN_SECONDS)} to ${human(MAX_FIXED_SECONDS)}.`), "warning");
 			task = rest.join(" ").trim();
-			if (!task) return context.ui.notify("Falta a tarefa: /loop 5m <tarefa>.", "warning");
+			if (!task) return context.ui.notify(t("Falta a tarefa: /loop 5m <tarefa>.", "Falta la tarea: /loop 5m <tarea>.", "Missing the task: /loop 5m <task>."), "warning");
 		}
 		loop = { task, every, round: 0, running: false, pending: false };
 		fire();
@@ -157,14 +158,14 @@ export function createLoop(pi: any, { now = Date.now, setTimer = setTimeout, cle
 		}),
 		annotations: { readOnlyHint: true },
 		async execute(_id: string, params: any) {
-			if (!loop) return reply("Nenhum /loop ativo nesta sessão: nada para agendar.", true);
-			if (loop.every) return reply(`Este /loop já repete a cada ${human(loop.every)}; não precisa agendar.`, true);
+			if (!loop) return reply(t("Nenhum /loop ativo nesta sessão: nada para agendar.", "No hay /loop activo en esta sesión: nada que programar.", "No active /loop in this session: nothing to schedule."), true);
+			if (loop.every) return reply(t(`Este /loop já repete a cada ${human(loop.every)}; não precisa agendar.`, `Este /loop ya se repite cada ${human(loop.every)}; no hace falta programar.`, `This /loop already repeats every ${human(loop.every)}; no need to schedule.`), true);
 			if (params?.stop === true) {
-				stop("o agente concluiu a tarefa");
+				stop(t("o agente concluiu a tarefa", "el agente terminó la tarea", "the agent finished the task"));
 				return reply("/loop encerrado.");
 			}
 			const asked = Number(params?.delaySeconds);
-			if (!Number.isFinite(asked)) return reply("Informe delaySeconds ou stop:true.", true);
+			if (!Number.isFinite(asked)) return reply(t("Informe delaySeconds ou stop:true.", "Indica delaySeconds o stop:true.", "Provide delaySeconds or stop:true."), true);
 			loop.wake = Math.min(MAX_WAKE_SECONDS, Math.max(MIN_SECONDS, Math.round(asked)));
 			return reply(`Próxima rodada em ${human(loop.wake)}, depois que esta terminar.`);
 		},
@@ -184,7 +185,7 @@ export default function (pi: any) {
 	pi.on("agent_settled", (event: any) => loop.settled(event?.aborted === true));
 	pi.on("session_shutdown", () => loop.shutdown());
 	pi.registerCommand("loop", {
-		description: "Repete uma tarefa: /loop 5m <tarefa> (intervalo fixo), /loop <tarefa> (o agente escolhe o ritmo), /loop parar",
+		description: t("Repete uma tarefa: /loop 5m <tarefa> (intervalo fixo), /loop <tarefa> (o agente escolhe o ritmo), /loop parar", "Repite una tarea: /loop 5m <tarea> (intervalo fijo), /loop <tarea> (el agente elige el ritmo), /loop parar", "Repeats a task: /loop 5m <task> (fixed interval), /loop <task> (the agent picks the pace), /loop stop"),
 		getArgumentCompletions: (prefix: string) => ("parar".startsWith(prefix) ? [{ value: "parar", label: "parar" }] : null),
 		handler: async (args: string, ctx: any) => loop.start(args ?? "", ctx),
 	});

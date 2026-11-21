@@ -6,6 +6,7 @@
 // O evento input roda depois dos comandos de extensão e antes da expansão de skills e templates (agent-session.prompt);
 // os comandos nativos (/model, /new...) são tratados pela interface antes de chegar aqui. Template com o mesmo nome vence.
 
+import { t } from "./pink-i18n.ts";
 const NAME = /^\/([a-z0-9][a-z0-9._-]*)(?=\s|$)/i;
 
 type Command = { name: string; description?: string; source: string; sourceInfo?: { scope?: string; path?: string } };
@@ -30,7 +31,7 @@ export function rewrite(text: string, commands: Command[]): string | undefined {
 	return `/skill:${skill.name}${rest ? ` ${rest}` : ""}`;
 }
 
-const SCOPE: Record<string, string> = { user: "usuário", project: "projeto" };
+const SCOPE: Record<string, string> = { user: t("usuário", "usuario", "user"), project: t("projeto", "proyecto", "project") };
 
 export default function (pi: any) {
 	if (process.env.PINK_SUBAGENT) return;
@@ -49,14 +50,14 @@ export default function (pi: any) {
 		return text === undefined ? { action: "continue" } : { action: "transform", text };
 	});
 	pi.registerCommand("skills", {
-		description: "Lista as skills (SKILL.md) desta sessão; chame uma com /nome",
+		description: t("Lista as skills (SKILL.md) desta sessão; chame uma com /nome", "Lista las skills (SKILL.md) de esta sesión; llama una con /nombre", "Lists this session's skills (SKILL.md); call one with /name"),
 		handler: async (_args: string, ctx: any) => {
 			const skills = skillsOf(commands());
 			if (!skills.length) {
-				const off = ctx?.isProjectTrusted?.() === false ? " As skills do projeto só carregam em pasta confiável." : "";
-				return ctx.ui.notify(`Nenhuma skill. Crie <pasta>/SKILL.md em ~/.pink/agent/skills ou em .pink/skills do projeto.${off}`, "info");
+				const off = ctx?.isProjectTrusted?.() === false ? t(" As skills do projeto só carregam em pasta confiável.", " Las skills del proyecto solo se cargan en una carpeta de confianza.", " Project skills only load in a trusted folder.") : "";
+				return ctx.ui.notify(t(`Nenhuma skill. Crie <pasta>/SKILL.md em ~/.pink/agent/skills ou em .pink/skills do projeto.${off}`, `Ninguna skill. Crea <carpeta>/SKILL.md en ~/.pink/agent/skills o en .pink/skills del proyecto.${off}`, `No skills. Create <folder>/SKILL.md in ~/.pink/agent/skills or in the project's .pink/skills.${off}`), "info");
 			}
-			const lines = skills.map((skill) => `/${skill.name} (${SCOPE[skill.scope] ?? (skill.scope || "pacote")}) · ${skill.description}`);
+			const lines = skills.map((skill) => `/${skill.name} (${SCOPE[skill.scope] ?? (skill.scope || t("pacote", "paquete", "package"))}) · ${skill.description}`);
 			ctx.ui.notify(`Skills:\n${lines.join("\n")}`, "info");
 		},
 	});

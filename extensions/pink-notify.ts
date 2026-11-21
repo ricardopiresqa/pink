@@ -3,6 +3,7 @@
 // WezTerm, Ghostty). Terminal que nunca avisou foco: notifica só pedido longo (>= 20 s).
 // Windows: toast do sistema (pelo PowerShell). macOS: osascript. Linux: notify-send; sem ele, OSC 777.
 // Desligar: /notificacoes (fica salvo em <pasta do agente>/pink-notify.json) ou PINK_NOTIFY=0. Subagente não notifica.
+import { t } from "./pink-i18n.ts";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -88,14 +89,14 @@ export function notifyExtension(pi, deps = {}) {
 		const elapsed = state.start ? now() - state.start : 0;
 		state.start = 0;
 		if (!state.active || event?.aborted || !shouldNotify({ on, focused: state.focused, focusKnown: state.focusKnown, elapsed })) return;
-		send("Pink", `Terminou em ${path.basename(ctx?.cwd ?? process.cwd())}: pronto para o próximo pedido`);
+		send("Pink", t(`Terminou em ${path.basename(ctx?.cwd ?? process.cwd())}: pronto para o próximo pedido`, `Terminó en ${path.basename(ctx?.cwd ?? process.cwd())}: listo para el próximo pedido`, `Finished in ${path.basename(ctx?.cwd ?? process.cwd())}: ready for the next request`));
 	});
 	pi.registerCommand?.("notificacoes", {
-		description: "Liga ou desliga a notificação do sistema quando o Pink termina e a janela está sem foco",
+		description: t("Liga ou desliga a notificação do sistema quando o Pink termina e a janela está sem foco", "Activa o desactiva la notificación del sistema cuando Pink termina y la ventana no tiene el foco", "Turns the system notification on or off when Pink finishes and the window is not focused"),
 		handler: async (_args, ctx) => {
 			on = !on;
-			try { mkdir(path.dirname(file), { recursive: true }); write(file, `${JSON.stringify({ on }, null, 2)}\n`); } catch (error) { ctx.ui.notify?.(`Não deu para salvar ${file}: ${error?.message ?? error}`, "error"); }
-			ctx.ui.notify?.(on ? "Notificações ligadas" : "Notificações desligadas", "info");
+			try { mkdir(path.dirname(file), { recursive: true }); write(file, `${JSON.stringify({ on }, null, 2)}\n`); } catch (error) { ctx.ui.notify?.(t(`Não deu para salvar ${file}: ${error?.message ?? error}`, `No se pudo guardar ${file}: ${error?.message ?? error}`, `Could not save ${file}: ${error?.message ?? error}`), "error"); }
+			ctx.ui.notify?.(on ? t("Notificações ligadas", "Notificaciones activadas", "Notifications on") : t("Notificações desligadas", "Notificaciones desactivadas", "Notifications off"), "info");
 		},
 	});
 	return { state, send, isOn: () => on };

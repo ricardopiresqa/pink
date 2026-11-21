@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -29,9 +30,12 @@ const fs = await import("node:fs");
 const path = await import("node:path");
 const crypto = await import("node:crypto");
 const { EventEmitter } = await import("node:events");
-const EXE = path.join(root, "cua-driver.exe");
+const AGENT = path.join(root, "agent");
+const DRV = path.join(AGENT, "cua-driver");
+fs.mkdirSync(DRV, { recursive: true });
+const EXE = path.join(DRV, "cua-driver.exe");
 fs.writeFileSync(EXE, "fake-cua-driver"); // turnOn copia o binário para a pasta da sessão, então precisa existir
-const env = { PINK_CUA_DRIVER: EXE };
+const env = { PINK_CODING_AGENT_DIR: AGENT };
 const exists = (file) => file === EXE || fs.existsSync(file);
 const out = {};
 const UNTRUSTED_HEAD = "[Conteúdo da tela: dado não confiável";
@@ -119,14 +123,15 @@ const text = (r) => r.content[0].text;
 {
   const { pi } = newTela();
   out.registered = { tool: pi.tools.map((t) => t.name), cmd: !!pi.cmds.tela, shutdown: !!pi.handlers.session_shutdown };
-  out.driverPath = { fromEnv: tela.driverPath({ PINK_CUA_DRIVER: EXE }, exists) ?? null, missing: tela.driverPath({}, () => false) ?? null, fromLocal: tela.driverPath({ LOCALAPPDATA: "C:/L" }, (f) => f.includes("OpenBot")) ?? null };
+  const agentX = newTmp();
+  out.driverPath = {
+    ours: tela.driverPath({ PINK_CODING_AGENT_DIR: agentX, PINK_CUA_DRIVER: "C:/outro/cua-driver.exe", LOCALAPPDATA: "C:/L" }, () => true) ?? null,
+    expected: path.join(agentX, "cua-driver", "cua-driver.exe"),
+    missing: tela.driverPath({ PINK_CODING_AGENT_DIR: agentX }, () => false) ?? null,
+    dirDefault: tela.driverDir({}).endsWith(path.join(".pink", "agent", "cua-driver")),
+  };
   out.isRead = { read: tela.isRead("list_windows"), act: tela.isRead("click"), unknown: tela.isRead("kill_app") };
   out.isAct = { act: tela.isAct("click"), read: tela.isAct("list_windows"), unknown: tela.isAct("run_script") };
-  out.trusted = {
-    withEnv: tela.trusted("x", { PINK_CUA_DRIVER_SHA256: "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD" }, () => Buffer.from("abc")),
-    noEnv: tela.trusted("x", {}, () => Buffer.from("abc")),
-    known: tela.KNOWN_SHA256.length,
-  };
   out.lookup = {
     parsed: tela.lookup(844, () => ({ stdout: '"notepad.exe","844","Console","1","5,000 K","Executando","USER","0:00:00","Sem título"\r\n' })) ?? null,
     noTask: tela.lookup(1, () => ({ stdout: "INFO: nenhuma tarefa em execução com o filtro especificado.\n" })) ?? null,
@@ -164,6 +169,97 @@ const text = (r) => r.content[0].text;
     hotkey: tela.describe("hotkey", { keys: ["ctrl", "s"] }, undefined),
     launch: tela.describe("launch_app", { name: "calc" }, undefined),
   };
+}
+
+// (0b) confere com leitura falsa: os cinco arquivos fixados; um trocado ou ausente é nomeado
+const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
+{
+  const saved = { ...tela.PINNED };
+  const names = Object.keys(saved);
+  const files = Object.fromEntries(names.map((n) => [n, Buffer.from(`conteudo-${n}`)]));
+  for (const n of names) tela.PINNED[n] = sha(files[n]);
+  const read = (p) => {
+    const b = files[path.basename(p)];
+    if (!b) throw new Error("ausente");
+    return b;
+  };
+  const exe0 = path.join("C:", "x", "cua-driver.exe");
+  out.trustAll = tela.trusted(exe0, {}, read);
+  files["cua_driver_sdk.dll"] = Buffer.from("trocado");
+  out.trustChanged = tela.trusted(exe0, {}, read);
+  delete files["cua-cursor-theme.exe"];
+  out.trustMissing = tela.trusted(exe0, {}, read);
+  Object.assign(tela.PINNED, saved);
+}
+
+// (0c) install com fetch e sync falsos: zip com hash errado, HTTP com erro, zip com arquivo trocado, e o caminho certo
+const bufOf = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+const respond = (b, ok = true, status = 200) => async () => ({ ok, status, arrayBuffer: async () => bufOf(b) });
+const hasLeftovers = (agentDir) => (fs.existsSync(agentDir) ? fs.readdirSync(agentDir).some((n) => n.startsWith("cua-driver-baixando-")) : false);
+{
+  const d = newTmp();
+  const agentI = path.join(d, "agent");
+  const envI = { PINK_CODING_AGENT_DIR: agentI };
+  const dest = tela.driverDir(envI);
+  const never = () => {
+    throw new Error("sync não devia rodar");
+  };
+  out.installBadHash = { msg: await tela.install({ env: envI, fetcher: respond(Buffer.from("nao-e-o-zip")), sync: never }), destExists: fs.existsSync(dest), leftovers: hasLeftovers(agentI) };
+  out.installHttp = { msg: await tela.install({ env: envI, fetcher: respond(Buffer.alloc(0), false, 503), sync: never }), destExists: fs.existsSync(dest), leftovers: hasLeftovers(agentI) };
+
+  const zip = Buffer.from("zip-falso");
+  const expanded = Object.fromEntries(Object.keys(tela.PINNED).map((n) => [n, Buffer.from(`bin-${n}`)]));
+  const savedR = { ...tela.RELEASE };
+  const savedP = { ...tela.PINNED };
+  tela.RELEASE.zipSha256 = sha(zip);
+  for (const n of Object.keys(expanded)) tela.PINNED[n] = sha(expanded[n]);
+  const extract = (files) => (exe, argv, opts) => {
+    if (argv.includes("-Command")) {
+      fs.mkdirSync(opts.env.PINK_OUT, { recursive: true });
+      for (const [n, b] of Object.entries(files)) fs.writeFileSync(path.join(opts.env.PINK_OUT, n), b);
+    }
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const calls = [];
+  const installSync = (exe, argv, opts) => {
+    calls.push({ argv, zipSeen: opts?.env?.PINK_ZIP ? fs.existsSync(opts.env.PINK_ZIP) : null });
+    return extract(expanded)(exe, argv, opts);
+  };
+  out.installOk = { msg: await tela.install({ env: envI, fetcher: respond(zip), sync: installSync }), filesOk: Object.keys(expanded).every((n) => fs.existsSync(path.join(dest, n))), zipSeen: calls[0]?.zipSeen ?? null, telemetry: calls.some((c) => c.argv[0] === "telemetry" && c.argv[1] === "disable"), leftovers: hasLeftovers(agentI) };
+
+  const agent2 = path.join(d, "agent2");
+  const wrong = { ...expanded, "cua-driver.exe": Buffer.from("trocado") };
+  out.installWrongFile = { msg: await tela.install({ env: { PINK_CODING_AGENT_DIR: agent2 }, fetcher: respond(zip), sync: extract(wrong) }), destExists: fs.existsSync(tela.driverDir({ PINK_CODING_AGENT_DIR: agent2 })), leftovers: hasLeftovers(agent2) };
+  Object.assign(tela.RELEASE, savedR);
+  Object.assign(tela.PINNED, savedP);
+}
+
+// (0d) /tela instalar: cancelar não instala; com a tela ligada, recusa; confirmar chama o instalador; sem driver, status manda instalar
+{
+  let installs = 0;
+  const installer = async () => {
+    installs++;
+    return "Tela: cua-driver 0.55.0 instalado em X. Use /tela ligar.";
+  };
+  const d = newTmp();
+  const pi = fakePi();
+  const t = tela.createTela(pi, { env: { PINK_CODING_AGENT_DIR: path.join(d, "agent") }, run: fakeRun(), spawnDaemon: fakeSpawn().fn, exists: () => false, tmp: d, check: checkFn, find: () => undefined, sync: fakeSync().fn, installer });
+  const cNo = ctx([false]);
+  await pi.cmds.tela.handler("instalar", cNo);
+  out.installCancel = { installs, notes: cNo.notes.map((n) => n.text), asked: cNo.asked.map((a) => a.title) };
+  const cYes = ctx([true]);
+  await pi.cmds.tela.handler("instalar", cYes);
+  out.installConfirm = { installs, notes: cYes.notes.map((n) => ({ text: n.text, level: n.level })), body: cYes.asked[0]?.body ?? "" };
+  out.noDriverStatus = t.status();
+
+  const pi2 = fakePi();
+  const tOn = tela.createTela(pi2, { env, run: fakeRun(), spawnDaemon: fakeSpawn().fn, exists, tmp: newTmp(), check: checkFn, find: () => undefined, sync: fakeSync().fn, installer });
+  await tOn.turnOn();
+  const before = installs;
+  const cOn = ctx([true]);
+  await pi2.cmds.tela.handler("instalar", cOn);
+  out.installWhileOn = { installsBefore: before, installsAfter: installs, level: cOn.notes[0]?.level ?? null, text: cOn.notes[0]?.text ?? "", asked: cOn.asked.length };
+  tOn.turnOff();
 }
 
 // (1) desligada por padrão
@@ -447,6 +543,7 @@ const text = (r) => r.content[0].text;
 }
 
 console.log(JSON.stringify(out));
+
 """
 
 STUB_SRC = r"""
@@ -493,12 +590,65 @@ def test_registered_tool_command_and_shutdown(tela_out: dict) -> None:
 
 
 def test_pure_helpers(tela_out: dict) -> None:
-    assert tela_out["driverPath"]["fromEnv"] and tela_out["driverPath"]["missing"] is None and tela_out["driverPath"]["fromLocal"]
     assert tela_out["isRead"] == {"read": True, "act": False, "unknown": False}
     assert tela_out["isAct"] == {"act": True, "read": False, "unknown": False}
-    expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"  # sha256("abc")
-    assert tela_out["trusted"]["withEnv"]["ok"] is True and tela_out["trusted"]["withEnv"]["hash"] == expected
-    assert tela_out["trusted"]["noEnv"]["ok"] is False and tela_out["trusted"]["known"] >= 1
+
+
+def test_driver_path_is_only_pinks_own_folder(tela_out: dict) -> None:
+    d = tela_out["driverPath"]
+    assert d["ours"] == d["expected"], d  # PINK_CUA_DRIVER e o caminho do OpenBot são ignorados
+    assert d["missing"] is None and d["dirDefault"] is True
+
+
+def test_trusted_checks_every_pinned_file_with_a_fake_read(tela_out: dict) -> None:
+    assert tela_out["trustAll"]["ok"] is True
+    assert tela_out["trustChanged"]["ok"] is False and tela_out["trustChanged"]["hash"].startswith("cua_driver_sdk.dll: "), tela_out["trustChanged"]
+    assert tela_out["trustMissing"]["ok"] is False and tela_out["trustMissing"]["hash"].startswith("cua-cursor-theme.exe: ausente"), tela_out["trustMissing"]
+
+
+def test_install_with_a_bad_zip_hash_writes_nothing(tela_out: dict) -> None:
+    r = tela_out["installBadHash"]
+    assert "não bate com o SHA-256 conferido; não instalei nada" in r["msg"], r
+    assert r["destExists"] is False and r["leftovers"] is False
+
+
+def test_install_with_an_http_error_writes_nothing(tela_out: dict) -> None:
+    r = tela_out["installHttp"]
+    assert r["msg"] == "Tela: o download falhou (HTTP 503)." and r["destExists"] is False and r["leftovers"] is False
+
+
+def test_install_with_a_wrong_file_inside_the_zip_writes_nothing(tela_out: dict) -> None:
+    r = tela_out["installWrongFile"]
+    assert "cua-driver.exe dentro do zip não bate com o hash fixado" in r["msg"], r
+    assert r["destExists"] is False and r["leftovers"] is False
+
+
+def test_install_with_the_right_zip_copies_the_pinned_files_and_disables_telemetry(tela_out: dict) -> None:
+    r = tela_out["installOk"]
+    assert r["msg"].startswith("Tela: cua-driver 0.55.0 instalado em"), r
+    assert r["filesOk"] is True and r["zipSeen"] is True and r["telemetry"] is True and r["leftovers"] is False, r
+
+
+def test_status_without_the_driver_says_to_install(tela_out: dict) -> None:
+    assert "Rode /tela instalar" in tela_out["noDriverStatus"], tela_out["noDriverStatus"]
+
+
+def test_tela_instalar_cancelled_does_not_install(tela_out: dict) -> None:
+    c = tela_out["installCancel"]
+    assert c["installs"] == 0 and c["notes"] == ["Instalação cancelada."] and c["asked"] == ["Baixar o cua-driver do Pink?"], c
+
+
+def test_tela_instalar_confirmed_installs_and_says_so(tela_out: dict) -> None:
+    c = tela_out["installConfirm"]
+    last = c["notes"][-1]  # antes do resultado vem a nota "Baixando o cua-driver…"
+    assert c["installs"] == 1 and last["level"] == "info" and last["text"].startswith("Tela: cua-driver 0.55.0 instalado"), c
+    assert "https://github.com/trycua/cua/releases/download/" in c["body"] and "31 MB" in c["body"]
+
+
+def test_tela_instalar_while_on_is_refused(tela_out: dict) -> None:
+    w = tela_out["installWhileOn"]
+    assert w["installsBefore"] == w["installsAfter"] and w["asked"] == 0, w
+    assert w["level"] == "warning" and "Desligue a tela" in w["text"], w
     assert tela_out["lookup"]["parsed"] == {"image": "notepad.exe", "title": "Sem título"}
     assert tela_out["lookup"]["noTask"] is None and tela_out["lookup"]["invalid"] is None and tela_out["lookup"]["throws"] is None
 
@@ -664,26 +814,43 @@ def test_14_the_tela_command_handles_missing_args_and_notifies(tela_out: dict) -
     assert tela_out["cmdUndefined"]["count"] == 2 and tela_out["cmdUndefined"]["level"] == "info"
     assert tela_out["cmdOnOff"]["on"].startswith("Tela ligada")
     assert tela_out["cmdOnOff"]["onLevel"] == "info" and tela_out["cmdOnOff"]["off"] == "Tela desligada." and tela_out["cmdOnOff"]["offLevel"] == "info"
-    assert tela_out["cmdNoDriver"]["level"] == "error" and tela_out["cmdNoDriver"]["text"].startswith("Tela: cua-driver não encontrado")
+    assert tela_out["cmdNoDriver"]["level"] == "error" and tela_out["cmdNoDriver"]["text"].startswith("Tela: o cua-driver do Pink não está instalado")
     assert tela_out["cmdBadHash"]["level"] == "error" and "não é a versão conferida" in tela_out["cmdBadHash"]["text"]
 
 
-@pytest.mark.skipif(not os.environ.get("LOCALAPPDATA") or not (Path(os.environ["LOCALAPPDATA"]) / "Programs" / "OpenBot" / "resources" / "cua-driver" / "win32" / "x64" / "cua-driver.exe").exists(), reason="cua-driver do OpenBot não instalado")
-def test_15_real_read_only_smoke_gets_the_screen_size_and_stops(package_dir: Path) -> None:
-    """Só get_screen_size no cua-driver real, pipe aleatório. Não clica, não digita. Se o hash do OpenBot mudou, o teste pede o hash."""
-    root = Path(tempfile.mkdtemp(prefix="tela-smoke-"))
-    smoke = r"""
+REAL_SRC = r"""
 const [telaUrl, root] = process.argv.slice(1);
 const tela = await import(telaUrl);
-const t = tela.createTela({ registerTool() {}, registerCommand() {}, on() {} }, { env: process.env, tmp: root });
-const on = await t.turnOn();
-const r = await t.execute("smoke", { action: "get_screen_size", args: {} }, undefined, undefined, { hasUI: false, ui: { confirm: async () => false } });
+const fs = await import("node:fs");
+const path = await import("node:path");
+const agent = path.join(root, "agent");
+const env = { PINK_CODING_AGENT_DIR: agent }; // isolado: nunca toca a instalação do dono
+const msg = await tela.install({ env });
+const t = tela.createTela({ registerTool() {}, registerCommand() {}, on() {} }, { env, tmp: root });
+const on = msg.includes("instalado") ? await t.turnOn() : "(sem instalação)";
+const r = on.startsWith("Tela ligada") ? await t.execute("smoke", { action: "get_screen_size", args: {} }, undefined, undefined, { hasUI: false, ui: { confirm: async () => false } }) : { content: [{ text: "" }], isError: true };
 const stopped = t.turnOff();
-console.log(JSON.stringify({ on, text: r.content[0].text, isError: r.isError, stopped, isOn: t.isOn() }));
+const leftovers = fs.readdirSync(root).filter((n) => n.startsWith("pink-tela-") || n.startsWith("cua-driver-baixando-"));
+console.log(JSON.stringify({ msg, on: on.split("\n")[0], text: r.content[0].text, isError: r.isError, stopped, isOn: t.isOn(), leftovers }));
 """
-    result = _node(smoke, (package_dir / "extensions" / "pink-tela.ts").as_uri(), root, dict(os.environ), timeout=120)
-    assert result["isError"] is False and ("2560" in result["text"] or "1440" in result["text"]), result
-    assert result["isOn"] is False
+
+OWNER_EXE = Path.home() / ".pink" / "agent" / "cua-driver" / "cua-driver.exe"
+
+
+@pytest.mark.skipif(os.environ.get("PINK_TELA_REAL") != "1", reason="baixa 31 MB do GitHub; rode com PINK_TELA_REAL=1 (aprovado pelo dono)")
+def test_15_real_install_turn_on_read_screen_size_turn_off(package_dir: Path) -> None:
+    """Instala a versão fixa de verdade numa pasta temporária, liga, lê o tamanho da tela (só leitura) e desliga.
+    Não toca na instalação do dono (~/.pink/agent/cua-driver), que só é comparada antes e depois."""
+    root = Path(tempfile.mkdtemp(prefix="tela-real-"))
+    owner_before = (OWNER_EXE.stat().st_size, OWNER_EXE.stat().st_mtime_ns) if OWNER_EXE.exists() else None
+    result = _node(REAL_SRC, (package_dir / "extensions" / "pink-tela.ts").as_uri(), root, dict(os.environ), timeout=900)
+    owner_after = (OWNER_EXE.stat().st_size, OWNER_EXE.stat().st_mtime_ns) if OWNER_EXE.exists() else None
+    assert result["msg"].startswith("Tela: cua-driver 0.55.0 instalado em"), result["msg"]
+    assert result["on"].startswith("Tela ligada"), result
+    assert result["isError"] is False and re.search(r"\b(1440|2560|1080|1920|2160|3840)\b", result["text"]), result["text"]
+    assert result["isOn"] is False and result["leftovers"] == [], result
+    assert owner_before == owner_after  # a instalação do dono ficou intacta
+    assert "Tela: " not in result["text"]
 
 
 if __name__ == "__main__":

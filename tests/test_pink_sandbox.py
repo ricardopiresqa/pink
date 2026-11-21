@@ -297,6 +297,7 @@ def sandbox_facts(cli: Path, package_dir: Path, sandbox_base: Path) -> dict:
     ext.mkdir(exist_ok=True)
     sandbox = ext / "pink-sandbox.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-sandbox.ts", sandbox)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", sandbox.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     shutil.copyfile(package_dir / "extensions" / "pink-sandbox.cs", ext / "pink-sandbox.cs")  # o helper compila a partir da pasta do modulo
     shellbg = ext / "pink-shell-bg.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-shell-bg.ts", shellbg)

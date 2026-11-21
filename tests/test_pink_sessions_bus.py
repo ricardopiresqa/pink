@@ -168,6 +168,7 @@ def bus_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPathFac
     ext.mkdir(exist_ok=True)
     module = ext / "pink-sessions-bus.ts"
     shutil.copyfile(package_dir / "extensions" / "pink-sessions-bus.ts", module)
+    shutil.copyfile(package_dir / "extensions" / "pink-i18n.ts", module.parent / "pink-i18n.ts")  # as extensoes importam o t() (card 1dfwh7kg5cg)
     root = tmp_path_factory.mktemp("bus-agente")  # PINK_CODING_AGENT_DIR: nunca ~/.pink
     dirs = [tmp_path_factory.mktemp(name) for name in ("bus-alfa", "bus-beta", "bus-gama", "bus-epsilon", "bus-x")]
     home = tmp_path_factory.mktemp("bus-home")

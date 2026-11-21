@@ -5,6 +5,7 @@
 // A ferramenta continua se chamando bash/powershell e a execução é a original (createBashToolDefinition), então
 // permissões, hooks, RTK e modo plano valem igual. Ao fechar, trocar ou recarregar a sessão os processos são encerrados.
 // Sem tela (pink -p, subagente) o processo acabaria antes do resultado: o comando espera como antes.
+import { t } from "./pink-i18n.ts";
 import { createBashToolDefinition, createPowerShellToolDefinition, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -16,12 +17,12 @@ const LINE_CAP = 2000;
 // o padrão vem do modelo (ou de texto injetado na saída) e roda na linha principal: sem limite um (a+)+$ trava o Pink
 // inteiro (Argus M2). shortcut: barra só quantificador aninhado e padrão longo, não todo regex lento; RE2 se virar problema
 export function safeRegex(pattern: string): RegExp | string {
-	if (pattern.length > 200) return "padrão longo demais (máximo 200 caracteres)";
-	if (/\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*[+*{]/.test(pattern)) return "quantificador aninhado como (a+)+ pode travar o Pink; simplifique o padrão";
+	if (pattern.length > 200) return t("padrão longo demais (máximo 200 caracteres)", "patrón demasiado largo (máximo 200 caracteres)", "pattern too long (max 200 characters)");
+	if (/\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*[+*{]/.test(pattern)) return t("quantificador aninhado como (a+)+ pode travar o Pink; simplifique o padrão", "un cuantificador anidado como (a+)+ puede trabar Pink; simplifica el patrón", "a nested quantifier like (a+)+ can freeze Pink; simplify the pattern");
 	try {
 		return new RegExp(pattern);
 	} catch (error: any) {
-		return `padrão inválido: ${error?.message ?? error}`;
+		return t(`padrão inválido: ${error?.message ?? error}`, `patrón no válido: ${error?.message ?? error}`, `invalid pattern: ${error?.message ?? error}`);
 	}
 }
 
@@ -60,8 +61,8 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 			// embaixo da caixa de texto, junto dos subagentes (owner 2026-11-20, card 1dfwh7kg4g2)
 			// teto de 4 linhas: mais que isso empurrava o rodapé para fora em tela baixa
 			const all = lines();
-			const shownLines = all.length > 4 ? [...all.slice(0, 3), `   … +${all.length - 3} processos`] : all;
-			ui?.setWidget(WIDGET, jobs.size && !closed ? [...shownLines, "   /processos para listar ou encerrar"] : undefined, { placement: "belowEditor" });
+			const shownLines = all.length > 4 ? [...all.slice(0, 3), `   … +${all.length - 3} ${t("processos", "procesos", "processes")}`] : all;
+			ui?.setWidget(WIDGET, jobs.size && !closed ? [...shownLines, t("   /processos para listar ou encerrar", "   /processos para listar o terminar", "   /processos to list or stop")] : undefined, { placement: "belowEditor" });
 		} catch {
 			/* tela já fechada */
 		}
@@ -98,7 +99,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 			if (line === undefined) continue;
 			if (watch.timer) clearTimeout(watch.timer);
 			job.watches.splice(job.watches.indexOf(watch), 1);
-			deliver(`Vigia do processo %${job.id}: apareceu /${watch.pattern}/.\n\n${oneLine(line, 500)}`, { id: job.id, pattern: watch.pattern, matched: true }, true);
+			deliver(`${t("Vigia do processo", "Vigilante del proceso", "Watch on process")} %${job.id}: ${t("apareceu", "apareció", "matched")} /${watch.pattern}/.\n\n${oneLine(line, 500)}`, { id: job.id, pattern: watch.pattern, matched: true }, true);
 		}
 	};
 	const finish = (job: Job, text: string, failed: boolean) => {
@@ -106,12 +107,12 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		clearWatches(job);
 		refresh();
 		const cancelled = job.controller.signal.aborted;
-		const verb = cancelled ? "foi encerrado" : failed ? "terminou com erro" : "terminou";
-		deliver(`Processo em segundo plano %${job.id} (${job.shell}: ${oneLine(job.command, 120)}) ${verb}.\n\n${cap(text) || "(sem saída)"}`, { id: job.id, failed, cancelled }, !cancelled);
+		const verb = cancelled ? t("foi encerrado", "fue detenido", "was stopped") : failed ? t("terminou com erro", "terminó con error", "finished with an error") : t("terminou", "terminó", "finished");
+		deliver(`${t("Processo em segundo plano", "Proceso en segundo plano", "Background process")} %${job.id} (${job.shell}: ${oneLine(job.command, 120)}) ${verb}.\n\n${cap(text) || t("(sem saída)", "(sin salida)", "(no output)")}`, { id: job.id, failed, cancelled }, !cancelled);
 	};
 
 	function start(shell: string, tool: any, toolCallId: string, params: any, ctx: any): { text: string; error: boolean } {
-		if (jobs.size >= MAX_JOBS) return { text: `Limite de ${MAX_JOBS} processos em segundo plano. Encerre um com background_stop ou rode sem run_in_background.`, error: true };
+		if (jobs.size >= MAX_JOBS) return { text: t(`Limite de ${MAX_JOBS} processos em segundo plano. Encerre um com background_stop ou rode sem run_in_background.`, `Límite de ${MAX_JOBS} procesos en segundo plano. Detén uno con background_stop o ejecuta sin run_in_background.`, `Limit of ${MAX_JOBS} background processes. Stop one with background_stop or run without run_in_background.`), error: true };
 		ui = ctx.ui;
 		const job: Job = { id: next++, shell, command: String(params.command ?? ""), started: now(), controller: new AbortController(), output: "", watches: [] };
 		jobs.set(job.id, job);
@@ -149,7 +150,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		parameters: Type.Object({ id: Type.Union([Type.Number(), Type.String()], { description: "Job id returned when the command started (%n)" }) }),
 		async execute(_id: string, params: any) {
 			const job = find(params.id);
-			if (!job) return reply(`Nenhum processo %${params.id} rodando (se já terminou, o resultado veio como mensagem).`, true);
+			if (!job) return reply(t(`Nenhum processo %${params.id} rodando (se já terminou, o resultado veio como mensagem).`, `Ningún proceso %${params.id} en ejecución (si ya terminó, el resultado llegó como mensaje).`, `No process %${params.id} running (if it already finished, the result came as a message).`), true);
 			return reply(`%${job.id} rodando há ${clock(now() - job.started)}.\n\n${cap(job.output) || "(sem saída ainda)"}`);
 		},
 	});
@@ -160,7 +161,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		parameters: Type.Object({ id: Type.Union([Type.Number(), Type.String()], { description: "Job id (%n)" }) }),
 		async execute(_id: string, params: any) {
 			const job = find(params.id);
-			if (!job) return reply(`Nenhum processo %${params.id} rodando.`, true);
+			if (!job) return reply(t(`Nenhum processo %${params.id} rodando.`, `Ningún proceso %${params.id} en ejecución.`, `No process %${params.id} running.`), true);
 			job.controller.abort();
 			return reply(`Encerrando %${job.id}.`);
 		},
@@ -176,9 +177,9 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 		}),
 		async execute(_id: string, params: any) {
 			const job = find(params.id);
-			if (!job) return reply(`Nenhum processo %${params.id} rodando.`, true);
+			if (!job) return reply(t(`Nenhum processo %${params.id} rodando.`, `Ningún proceso %${params.id} en ejecución.`, `No process %${params.id} running.`), true);
 			const regex = safeRegex(String(params.pattern));
-			if (typeof regex === "string") return reply(`Não vigiei: ${regex}.`, true);
+			if (typeof regex === "string") return reply(t(`Não vigiei: ${regex}.`, `No vigilé: ${regex}.`, `Not watching: ${regex}.`), true);
 			const watch: Watch = { regex, pattern: String(params.pattern) };
 			const seconds = Number(params.timeout_seconds);
 			if (seconds > 0) {
@@ -186,7 +187,7 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 					const index = job.watches.indexOf(watch);
 					if (index < 0) return;
 					job.watches.splice(index, 1);
-					deliver(`Vigia do processo %${job.id}: /${watch.pattern}/ não apareceu em ${seconds} s.`, { id: job.id, pattern: watch.pattern, matched: false }, true);
+					deliver(t(`Vigia do processo %${job.id}: /${watch.pattern}/ não apareceu em ${seconds} s.`, `Vigilante del proceso %${job.id}: /${watch.pattern}/ no apareció en ${seconds} s.`, `Watch on process %${job.id}: /${watch.pattern}/ did not appear in ${seconds} s.`), { id: job.id, pattern: watch.pattern, matched: false }, true);
 				}, seconds * 1000);
 				watch.timer.unref?.();
 			}
@@ -197,18 +198,18 @@ export function createShellJobs(pi: any, { now = Date.now, write = muxWrite } = 
 	});
 
 	pi.registerCommand("processos", {
-		description: "Comandos em segundo plano: lista; 'encerrar <n>' ou 'encerrar todos'",
+		description: t("Comandos em segundo plano: lista; 'encerrar <n>' ou 'encerrar todos'", "Comandos en segundo plano: lista; 'encerrar <n>' o 'encerrar todos'", "Background commands: list; 'stop <n>' or 'stop all'"),
 		getArgumentCompletions: (prefix: string) =>
 			["encerrar todos", ...[...jobs.keys()].map((id) => `encerrar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
 		handler: async (args: string, ctx: any) => {
 			const [verb, target] = args.trim().split(/\s+/);
-			if (verb === "encerrar") {
-				const targets = target === "todos" ? [...jobs.values()] : ([find(target)].filter(Boolean) as Job[]);
+			if (verb === "encerrar" || verb === "stop") {
+				const targets = target === "todos" || target === "all" ? [...jobs.values()] : ([find(target)].filter(Boolean) as Job[]);
 				for (const job of targets) job.controller.abort();
-				ctx.ui.notify(targets.length ? `Encerrando ${targets.length} processo(s).` : "Use /processos encerrar <n> ou /processos encerrar todos.", targets.length ? "info" : "warning");
+				ctx.ui.notify(targets.length ? t(`Encerrando ${targets.length} processo(s).`, `Deteniendo ${targets.length} proceso(s).`, `Stopping ${targets.length} process(es).`) : t("Use /processos encerrar <n> ou /processos encerrar todos.", "Usa /processos encerrar <n> o /processos encerrar todos.", "Use /processos stop <n> or /processos stop all."), targets.length ? "info" : "warning");
 				return;
 			}
-			ctx.ui.notify(jobs.size ? lines().join("\n") : "Nenhum processo em segundo plano.", "info");
+			ctx.ui.notify(jobs.size ? lines().join("\n") : t("Nenhum processo em segundo plano.", "Ningún proceso en segundo plano.", "No background processes."), "info");
 		},
 	});
 
@@ -240,7 +241,7 @@ export function withBackground(base: any, make: (cwd: string, trusted: boolean) 
 			if (!run_in_background) return tool.execute(toolCallId, rest, signal, onUpdate, ctx);
 			// sem tela (pink -p) não há quem receba o aviso depois: recusa em vez de rodar na frente um servidor que nunca acaba
 			if (!ctx?.hasUI)
-				return { content: [{ type: "text", text: "run_in_background só funciona na sessão interativa. Rode sem ele apenas se o comando terminar sozinho." }], details: undefined, isError: true };
+				return { content: [{ type: "text", text: t("run_in_background só funciona na sessão interativa. Rode sem ele apenas se o comando terminar sozinho.", "run_in_background solo funciona en la sesión interactiva. Ejecútalo sin él solo si el comando termina solo.", "run_in_background only works in the interactive session. Run without it only if the command ends by itself.") }], details: undefined, isError: true };
 			const started = jobs.start(shell, tool, toolCallId, rest, ctx);
 			return { content: [{ type: "text", text: started.text }], details: undefined, isError: started.error };
 		},
