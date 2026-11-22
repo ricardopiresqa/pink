@@ -688,7 +688,7 @@ export function live(fn, fallback) {
 	};
 }
 
-export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel"];
+export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel", "__pinkSkipThinking"];
 
 export function install(pink, ctx, { CustomEditor, SessionManager, version = "", matchesKey, onPalette, onAgent }) {
 	const state = { home: !hasMessages(ctx), tui: undefined, branch: "", sessions: [] };
@@ -818,8 +818,8 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 		const line = assistantFooter({ theme: ctx.ui.theme, model: message?.model, agent: PINK.agentOf.get(message?.timestamp), ms: timing.ms, output: message?.usage?.output, run: PINK.runOf.get(message?.timestamp) });
 		return [fit(" ".repeat(outputPad) + line, width)];
 	}, []);
-	// barra rosa cheia à esquerda da mensagem do usuário (patch user-bar), a mesma da caixa de envio
-	globalThis.__pinkUserBar = live((line) => `${ctx.ui.theme.fg("accent", BAR)}${line}`, (line) => line);
+	globalThis.__pinkUserBar = live((lines) => userLines(lines, ctx.ui.theme.fg("muted", ">")), (lines) => lines);
+	globalThis.__pinkSkipThinking = skipThinking;
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	const project = (() => {
 		try {
@@ -1058,7 +1058,7 @@ export function toolSummary(name, args = {}, result) {
 		const stats = patch ? diffStats(patch) : undefined;
 		return `${t("Editou", "Editó", "Edited")} ${file(args.path)}${stats ? ` +${stats.add} −${stats.del}` : ""}`;
 	}
-	if (name === "bash") return `${t("Rodou", "Ejecutó", "Ran")}: ${shorten(args.command, 60)}`;
+	if (name === "bash" || name === "powershell") return `${t("Rodou", "Ejecutó", "Ran")}: ${shorten(args.command, 60)}`;
 	if (name === "grep") return `${t("Buscou", "Buscó", "Searched")} "${shorten(args.pattern, 40)}"`;
 	if (name === "find") return `${t("Procurou", "Buscó", "Looked for")} ${shorten(args.pattern ?? args.path, 40)}`;
 	if (name === "ls") return `${t("Listou", "Listó", "Listed")} ${file(args.path ?? ".")}`;
@@ -1069,10 +1069,82 @@ export function toolSummary(name, args = {}, result) {
 	return name;
 }
 
+// chamadas seguidas sem texto do modelo no meio viram uma linha só, como no Claude Code ("Rodou 3 comandos, leu 2 arquivos");
+// edit, write e o plano ficam de fora: cada um tem a própria linha (e o diff)
+const GROUP_SKIP = new Set(["edit", "write", "todowrite"]);
+export function toolGroups(entries) {
+	const groups = new Map();
+	let group;
+	for (const entry of entries ?? []) {
+		const message = entry?.type === "message" ? entry.message : undefined;
+		if (!message) continue;
+		if (message.role === "toolResult") {
+			const call = groups.get(message.toolCallId)?.calls.find((item) => item.id === message.toolCallId);
+			if (call) Object.assign(call, { done: true, isError: Boolean(message.isError) });
+			continue;
+		}
+		if (message.role !== "assistant") {
+			group = undefined;
+			continue;
+		}
+		for (const part of Array.isArray(message.content) ? message.content : []) {
+			if (part?.type === "text" && part.text?.trim()) group = undefined;
+			else if (part?.type === "toolCall") {
+				if (GROUP_SKIP.has(part.name)) {
+					group = undefined;
+					continue;
+				}
+				group ??= { calls: [] };
+				group.calls.push({ id: part.id, name: part.name, done: false, isError: false });
+				groups.set(part.id, group);
+			}
+		}
+	}
+	return groups;
+}
+
+const groupKind = (name) => (name === "bash" || name === "powershell" ? "cmd" : name === "read" ? "read" : name === "grep" || name === "find" ? "search" : name === "ls" ? "ls" : String(name).startsWith("web") ? "web" : "tool");
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const GROUP_LABEL = {
+	cmd: (n) => t(`rodou ${plural(n, "comando", "comandos")}`, `ejecutó ${plural(n, "comando", "comandos")}`, `ran ${plural(n, "shell command", "shell commands")}`),
+	read: (n) => t(`leu ${plural(n, "arquivo", "arquivos")}`, `leyó ${plural(n, "archivo", "archivos")}`, `read ${plural(n, "file", "files")}`),
+	search: (n) => t(`buscou ${plural(n, "padrão", "padrões")}`, `buscó ${plural(n, "patrón", "patrones")}`, `searched for ${plural(n, "pattern", "patterns")}`),
+	ls: (n) => t(`listou ${plural(n, "pasta", "pastas")}`, `listó ${plural(n, "carpeta", "carpetas")}`, `listed ${plural(n, "folder", "folders")}`),
+	web: (n) => t(`consultou ${plural(n, "página", "páginas")}`, `consultó ${plural(n, "página", "páginas")}`, `fetched ${plural(n, "page", "pages")}`),
+	tool: (n) => t(`usou ${plural(n, "ferramenta", "ferramentas")}`, `usó ${plural(n, "herramienta", "herramientas")}`, `used ${plural(n, "tool", "tools")}`),
+};
+export function groupSummary(calls) {
+	const counts = new Map();
+	for (const call of calls) counts.set(groupKind(call.name), (counts.get(groupKind(call.name)) ?? 0) + 1);
+	const text = [...counts].map(([kind, n]) => GROUP_LABEL[kind](n)).join(", ");
+	const failed = calls.filter((call) => call.isError).length;
+	return { text: text.charAt(0).toUpperCase() + text.slice(1), failed: failed ? ` · ${failed} ${failed === 1 ? t("falhou", "falló", "failed") : t("falharam", "fallaron", "failed")}` : "", running: calls.some((call) => !call.done) };
+}
+
+// o grupo da chamada, recalculado só quando a sessão cresce (o desenho pede a cada quadro)
+function groupOf(id) {
+	const session = PINK.session;
+	if (!id || !session?.getBranch) return undefined;
+	const key = `${session.getLeafId?.()}:${session.getEntryCount?.()}`;
+	if (PINK.groups?.session !== session || PINK.groups.key !== key) PINK.groups = { session, key, map: toolGroups(session.getBranch()) };
+	return PINK.groups.map.get(id);
+}
+
 export function compactToolRenderer(toolName, next) {
 	const base = next?.();
 	const empty = { render: () => [], invalidate() {} };
 	const line = (theme, pad, text, extra = "") => ({ render: (width) => [fit(`${" ".repeat(pad)}${theme.fg("muted", `→ ${text}`)}${extra}`, width)], invalidate() {} });
+	// em grupo, só a primeira chamada desenha (a linha do grupo); as outras somem; sozinha, a linha detalhada de sempre
+	const grouped = (theme, pad, id, single) => (GROUP_SKIP.has(toolName) ? single : {
+		render: (width) => {
+			const group = groupOf(id);
+			if (!group || group.calls.length < 2) return single.render(width);
+			if (group.calls[0].id !== id) return [];
+			const sum = groupSummary(group.calls);
+			return [fit(`${" ".repeat(pad)}${theme.fg("muted", `→ ${sum.text}`)}${sum.running ? theme.fg("dim", " …") : ""}${sum.failed ? theme.fg("error", sum.failed) : ""}`, width)];
+		},
+		invalidate: () => single.invalidate?.(),
+	});
 	// expandido: a visão do Pink; as do Pink com moldura própria ("default") ganham só o recuo, já que esta é "self"
 	const wrap = (component, pad) => (!component || base?.renderShell === "self" ? component : {
 		render: (width) => component.render(Math.max(1, width - 2 * pad)).map((row) => " ".repeat(pad) + row),
@@ -1087,7 +1159,7 @@ export function compactToolRenderer(toolName, next) {
 		renderShell: "self",
 		renderCall(args, theme, context) {
 			if (context.expanded) return wrap(base?.renderCall?.(args, theme, context) ?? line(theme, 0, `${toolName} ${shorten(JSON.stringify(args ?? {}), 80)}`), context.outputPad);
-			return context.isPartial ? line(theme, context.outputPad, toolSummary(toolName, args ?? {}), theme.fg("dim", " …")) : empty;
+			return context.isPartial ? grouped(theme, context.outputPad, context.toolCallId, line(theme, context.outputPad, toolSummary(toolName, args ?? {}), theme.fg("dim", " …"))) : empty;
 		},
 		renderResult(result, options, theme, context) {
 			if (options.expanded) return wrap(base?.renderResult?.(result, options, theme, context) ?? output(result, theme, 0), context.outputPad);
@@ -1096,7 +1168,7 @@ export function compactToolRenderer(toolName, next) {
 			const summary = line(theme, context.outputPad, toolSummary(toolName, context.args ?? {}, result), `${time}${context.isError ? theme.fg("error", " · erro") : ""}`);
 			// edit e write: o diff fica aberto sob a linha (como no Claude Code); o write mostra as primeiras 40 linhas
 			const diff = context.isError ? "" : toolName === "edit" ? result?.details?.diff : toolName === "write" ? writeDiff(context.args?.content) : "";
-			if (!diff) return summary;
+			if (!diff) return grouped(theme, context.outputPad, context.toolCallId, summary);
 			const cache = new Map();
 			const pad2 = context.outputPad + 2;
 			return {
@@ -1186,9 +1258,18 @@ export function assistantFooter({ theme, model, agent, ms, output, run }) {
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
 export const PINK = { agent: "build", permission: globalThis.__pinkPermissionSaved === "ask" ? "ask" : "edits", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), runOf: new Map(), run: undefined, runTimer: undefined, lastRun: undefined, lastRunEnd: 0, thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
 
-// "Você" sobre a mensagem do usuário, pela API pública de transformar o markdown antes de desenhar
-export function labelUserMarkdown(markdown, context) {
-	return context?.messageType === "user" ? `**${t("Você", "Tú", "You")}**\n\n${markdown}` : markdown;
+// mensagem do usuário como no Claude Code (patch user-bar): ">" na primeira linha, sem caixa nem fundo; o recuo de 1 do
+// Markdown vira o espaço depois do ">"
+const BG = /\x1b\[(?:48;(?:2;\d+;\d+;\d+|5;\d+)|49)m/g;
+export function userLines(lines, mark = ">") {
+	const first = lines.findIndex((row) => String(row).replace(/\x1b\[[0-9;]*m/g, "").trim());
+	return lines.map((row, index) => `${index === first ? mark : " "}${String(row).replace(BG, "")}`);
+}
+
+// "+ Pensou" some na resposta que só chama ferramenta (sem texto): a linha do grupo já diz o que aconteceu
+export function skipThinking(message) {
+	const content = Array.isArray(message?.content) ? message.content : [];
+	return content.some((part) => part?.type === "toolCall") && !content.some((part) => part?.type === "text" && part.text?.trim());
 }
 
 function userText(entry) {
@@ -1446,10 +1527,10 @@ export default function (pink) {
 		},
 	});
 	registerOpenCodeFunctions(pink);
-	pink.registerMarkdownTransformer?.(labelUserMarkdown);
 	pink.registerToolRenderer?.(compactToolRenderer);
 	pink.on("session_start", async (_event, ctx) => {
 		await registerTodoTool(pink);
+		PINK.session = ctx.sessionManager;
 		PINK.todos = todosFromBranch(ctx.sessionManager?.getBranch?.());
 		if (ctx.mode !== "tui") return;
 		const { CustomEditor, SessionManager, VERSION } = await import("@earendil-works/pi-coding-agent");

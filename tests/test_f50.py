@@ -414,7 +414,9 @@ def test_the_frame_picks_the_columns_by_width_and_the_bars_by_height(ui_facts: d
 
 
 def test_messages_are_labelled_and_the_empty_box_shows_the_placeholder(ui_facts: dict) -> None:
-    assert ui_facts["messageLabels"] == {"user": "**Você**\n\noi", "assistant": "oi"}
+    # mensagem do usuário como no Claude Code (card 1dfwh7kg7r1): "> " na primeira linha com texto, sem fundo nem caixa
+    assert ui_facts["userLines"] == ["    ", ">oi", " tudo"]  # o Markdown real traz 1 de recuo: "> oi"
+    assert ui_facts["skipThinking"] == [True, False, False]
     # rodapé da resposta como o do OpenCode (pink.3): modelo curto, tempo e velocidade só quando medidos
     assert ui_facts["footers"] == {"full": "Pink · claude-sonnet-4-5 · 20.5s · 45.6 tok/s", "plan": "Pink · Plano · thoth · 4.1s", "fast": "Pink · thoth · 0.0s", "history": "Pink · thoth"}
 
@@ -591,7 +593,7 @@ def test_in_a_real_terminal_the_frame_shows_three_two_or_one_column_by_width(cli
     (tmp_path / ".pink" / "agent" / "settings.json").write_text(json.dumps({"defaultProvider": "fake", "defaultModel": "ok"}), encoding="utf-8")
     steps = [(None, 6.0), ("\r", 6.0), ("oi pink", 1.0), ("\r", 10.0), ((170, 40), 3.0), ((130, 40), 3.0), ((100, 30), 3.0), ((170, 16), 3.0)]
     wide, middle, narrow, low = ("\n".join(screen) for screen in run_tui(cli, tmp_path, steps, columns=170, rows=40)[4:])
-    assert "SESSÕES" in wide and "CONTEXTO" in wide and "pong" in wide and "Você" in wide and "Pink · ok · " in wide and "THOTH · BUILD" in wide and "▌" in wide
+    assert "SESSÕES" in wide and "CONTEXTO" in wide and "pong" in wide and "> oi pink" in wide and "Pink · ok · " in wide and "THOTH · BUILD" in wide and "▌" in wide
     assert "SESSÕES" not in middle and "CONTEXTO" in middle and "pong" in middle
     assert "SESSÕES" not in narrow and "CONTEXTO" not in narrow and "pong" in narrow and "ctrl+p comandos" in narrow
     assert "SESSÕES" in low and "pong" in low and len(low.splitlines()) <= 16  # altura pequena: a moldura encolhe, não quebra
@@ -695,8 +697,24 @@ def test_tools_and_thinking_collapse_to_one_grey_line_and_expand_to_the_pi_view(
     assert c["done"] == " → Editou src/x.ts +2 −1 · 1.2s" and c["error"] == " → Editou src/x.ts +2 −1 · erro"
     assert c["expanded"] == ["BASE CALL", "BASE DIFF"] and c["noBase"] == [" a", " b"]
     assert c["summaries"][:2] == ["Leu a.ts", "Escreveu b.ts · 3 linhas"] and c["summaries"][2].startswith("Rodou: npm test -- --watch=false") and c["summaries"][2].endswith("…")
-    assert c["summaries"][3:] == ['Buscou "TODO"', "Listou .", "Plano · 1/2", "mcp_x"]
+    assert c["summaries"][3:] == ['Buscou "TODO"', "Listou .", "Plano · 1/2", "mcp_x", "Rodou: dir"]
     assert ui_facts["pink3"]["thinking"] == ["+ Pensou · 6.3s", "+ Pensou"]
+
+
+def test_consecutive_tool_calls_collapse_into_one_group_line(ui_facts: dict) -> None:
+    """Owner 2026-11-22 (card 1dfwh7kg7r1): chamadas seguidas viram uma linha, como no Claude Code; texto do modelo, edit e write quebram o grupo."""
+    g = ui_facts["groups"]
+    assert g["sameGroup"] == [True, True, True] and g["eAlone"] == 1 and g["fSkipped"] is False and g["gAlone"] == 1
+    assert g["summary"] == {"text": "Rodou 2 comandos, leu 1 arquivo, buscou 1 padrão", "failed": " · 1 falhou", "running": True}
+    rows = g["rows"]
+    assert rows["a"] == [" → Rodou 2 comandos, leu 1 arquivo, buscou 1 padrão … · 1 falhou"] and rows["b"] == [] and rows["running"] == rows["a"]
+    assert rows["e"] == rows["g"] == [" → Rodou: ls"]  # sozinha: a linha detalhada de sempre
+
+
+def test_a_crash_leaves_its_cause_in_crash_log(ui_facts: dict) -> None:
+    """Owner 2026-11-22 (card 1dfwh7kg7r1): o Pink fechava sem rastro; agora a exceção e o código de saída ficam no crash.log."""
+    c = ui_facts["hooks"]["crashLog"]
+    assert c["boom"] and c["code"] and c["once"] and c["report"]["reportOnFatalError"] is True and c["report"]["directory"].endswith("pink-crash-agent")
 
 
 def test_a_stale_context_after_switching_sessions_draws_nothing_instead_of_crashing(ui_facts: dict) -> None:

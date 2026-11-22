@@ -2624,7 +2624,7 @@
       "id": "user-bar",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "render(width){let lines=super.render(width);return lines.length===0||(lines[0]=OSC133_ZONE_START2+lines[0]",
-      "replace": "render(width){let lines=globalThis.__pinkUserBar?super.render(Math.max(1,width-1)).map(line=>globalThis.__pinkUserBar(line)):super.render(width);return lines.length===0||(lines[0]=OSC133_ZONE_START2+lines[0]",
+      "replace": "render(width){let lines=globalThis.__pinkUserBar?globalThis.__pinkUserBar(super.render(Math.max(1,width-1))):super.render(width);return lines.length===0||(lines[0]=OSC133_ZONE_START2+lines[0]",
       "count": 1
     },
     {
@@ -2632,6 +2632,20 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "thinkingComponent=hidden?new Text(theme.italic(theme.fg(\"thinkingText\",this.hiddenThinkingLabel)),this.outputPad,0)",
       "replace": "thinkingComponent=hidden?new Text(globalThis.__pinkThinkingLabel?theme.fg(\"thinkingText\",globalThis.__pinkThinkingLabel(message,runIndex)):theme.italic(theme.fg(\"thinkingText\",this.hiddenThinkingLabel)),this.outputPad,0)",
+      "count": 1
+    },
+    {
+      "id": "thinking-skip-tool-only",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "hidden=this.thinkingVisibilityOverrides.get(runIndex)??this.hideThinkingBlock,",
+      "replace": "hidden=this.thinkingVisibilityOverrides.get(runIndex)??this.hideThinkingBlock;if(hidden&&globalThis.__pinkSkipThinking?.(message))continue;let ",
+      "count": 1
+    },
+    {
+      "id": "thinking-skip-spacer",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "&&this.contentContainer.addChild(new Spacer(1));let thinkingRunIndex=0;",
+      "replace": "&&!(this.hideThinkingBlock&&globalThis.__pinkSkipThinking?.(message))&&this.contentContainer.addChild(new Spacer(1));let thinkingRunIndex=0;",
       "count": 1
     },
     {

@@ -141,6 +141,30 @@ export function hooksExtension(pink, deps = {}) {
 	});
 }
 
+// Pink fechava sem deixar rastro: grava a causa da queda em ~/.pink/agent/crash.log (e relatório de erro fatal do Node).
+export function installCrashLog(env = process.env, proc = process) {
+	if (proc.__pinkCrashLog) return proc.__pinkCrashLog;
+	const dir = agentDir(env);
+	const file = path.join(dir, "crash.log");
+	const write = (text) => {
+		try {
+			fs.mkdirSync(dir, { recursive: true });
+			fs.appendFileSync(file, `${new Date().toISOString()} pid=${proc.pid} ${text}\n`);
+		} catch {}
+	};
+	proc.on("uncaughtExceptionMonitor", (err, origin) => write(`${origin}: ${err?.stack || err}`));
+	proc.on("exit", (code) => {
+		if (code) write(`exit code=${code}`);
+	});
+	try {
+		proc.report.reportOnFatalError = true;
+		proc.report.directory = dir;
+	} catch {}
+	proc.__pinkCrashLog = file;
+	return file;
+}
+
 export default function (pink) {
+	installCrashLog();
 	hooksExtension(pink);
 }

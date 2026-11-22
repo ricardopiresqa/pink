@@ -111,8 +111,34 @@ out.trash = (() => {
 	fs.rmSync(dir, { recursive: true, force: true });
 	return result;
 })();
-out.messageLabels = {
-	user: ui.labelUserMarkdown("oi", { messageType: "user" }), assistant: ui.labelUserMarkdown("oi", { messageType: "assistant" }) };
+out.userLines = ui.userLines(["\x1b[48;2;1;2;3m   \x1b[49m", "\x1b[48;5;236moi\x1b[49m", "tudo"]);
+out.skipThinking = [
+	ui.skipThinking({ content: [{ type: "thinking", thinking: "x" }, { type: "toolCall", name: "bash" }] }),
+	ui.skipThinking({ content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "pronto" }, { type: "toolCall", name: "bash" }] }),
+	ui.skipThinking({ content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "só texto" }] }),
+];
+out.groups = (() => {
+	const call = (id, name) => ({ type: "toolCall", id, name, arguments: { command: "ls", path: "a" } });
+	const msg = (role, content, extra = {}) => ({ type: "message", message: { role, content, ...extra } });
+	const done = (id, isError = false) => msg("toolResult", [], { toolCallId: id, isError });
+	const entries = [
+		msg("user", "oi"),
+		msg("assistant", [{ type: "thinking", thinking: "x" }, call("a", "bash"), call("b", "powershell")]), done("a"), done("b", true),
+		msg("assistant", [call("c", "read"), call("d", "grep")]), done("c"),
+		msg("assistant", [{ type: "text", text: "achei" }, call("e", "bash")]), done("e"),
+		msg("assistant", [call("f", "edit"), call("g", "read")]), done("f"), done("g"),
+	];
+	const groups = ui.toolGroups(entries);
+	const first = groups.get("a");
+	const session = { getBranch: () => entries, getLeafId: () => "z", getEntryCount: () => entries.length };
+	ui.PINK.session = session;
+	const renderer = ui.compactToolRenderer("bash", () => undefined);
+	const ctx = (id, extra) => ({ outputPad: 1, toolCallId: id, args: { command: "ls" }, durationMs: 5, isError: false, isPartial: false, expanded: false, ...extra });
+	const row = (id) => renderer.renderResult({}, { expanded: false, isPartial: false }, plain, ctx(id)).render(80);
+	const rows = { a: row("a"), b: row("b"), e: row("e"), g: row("g"), running: renderer.renderCall({ command: "ls" }, plain, ctx("a", { isPartial: true })).render(80) };
+	ui.PINK.session = undefined;
+	return { sameGroup: ["b", "c", "d"].map((id) => groups.get(id) === first), eAlone: groups.get("e") !== first && groups.get("e").calls.length, fSkipped: groups.has("f"), gAlone: groups.get("g").calls.length, summary: ui.groupSummary(first.calls), rows };
+})();
 const cursorBox = ui.inputBox({ theme: plain, content: ["ab\x1b_pi:c\x07\x1b[7m \x1b[0mcd"], width: 30, label: "m" });
 out.cursorBoxWidths = cursorBox.map(ui.visible);  // o marcador de cursor do Pi não ocupa coluna
 out.fitKeepsMarker = ui.fit("ab\x1b_pi:c\x07cdef", 4).includes("\x1b_pi:c\x07");
@@ -290,7 +316,7 @@ out.compact = (() => {
 		error: renderer.renderResult(result, { expanded: false, isPartial: false }, plain, ctx({ isError: true, durationMs: 5 })).render(80)[0],
 		expanded: [renderer.renderCall({}, plain, ctx({ expanded: true })).render(80)[0], renderer.renderResult(result, { expanded: true, isPartial: false }, plain, ctx({ expanded: true })).render(80)[0]],
 		noBase: plainRun.renderResult({ content: [{ type: "text", text: "a\nb" }] }, { expanded: true, isPartial: false }, plain, ctx({ expanded: true, args: { command: "ls" } })).render(80),
-		summaries: [["read", { path: "a.ts" }], ["write", { path: "b.ts", content: "1\n2\n3" }], ["bash", { command: "npm   test -- --watch=false " + "x".repeat(80) }], ["grep", { pattern: "TODO" }], ["ls", {}], ["todowrite", { todos: [{ content: "a", status: "completed" }, { content: "b" }] }], ["mcp_x", {}]].map(([name, args]) => ui.toolSummary(name, args)),
+		summaries: [["read", { path: "a.ts" }], ["write", { path: "b.ts", content: "1\n2\n3" }], ["bash", { command: "npm   test -- --watch=false " + "x".repeat(80) }], ["grep", { pattern: "TODO" }], ["ls", {}], ["todowrite", { todos: [{ content: "a", status: "completed" }, { content: "b" }] }], ["mcp_x", {}], ["powershell", { command: "dir" }]].map(([name, args]) => ui.toolSummary(name, args)),
 	};
 })();
 out.thinking = [ui.thinkingLabel(6300), ui.thinkingLabel(undefined)];
@@ -639,6 +665,17 @@ out.hooks = await (async () => {
 	fs.copyFileSync(hooksFile, hooksCopy);
 	const h = await import(pathToFileURL(hooksCopy).href);
 	fs.unlinkSync(hooksCopy);
+	// card 1dfwh7kg7r1: a queda deixa a causa em crash.log; saída normal (código 0) não escreve nada
+	const crashDir = path.join(os.tmpdir(), "pink-crash-agent");
+	fs.rmSync(crashDir, { recursive: true, force: true });
+	const on = {}, proc = { pid: 7, report: {}, on: (name, fn) => { on[name] = fn; } };
+	const crashFile = h.installCrashLog({ PINK_CODING_AGENT_DIR: crashDir }, proc);
+	on.exit(0);
+	on.uncaughtExceptionMonitor(new Error("boom"), "uncaughtException");
+	on.exit(3);
+	const crashText = fs.readFileSync(crashFile, "utf8");
+	const crashFacts = { boom: crashText.includes("uncaughtException: Error: boom"), code: crashText.includes("exit code=3"), report: proc.report, once: h.installCrashLog({}, proc) === crashFile };
+	fs.rmSync(crashDir, { recursive: true, force: true });
 	const agent = path.join(os.tmpdir(), "pink-hooks-agent")	, cwd = path.join(os.tmpdir(), "pink-hooks-proj");
 	fs.mkdirSync(path.join(cwd, ".pink"), { recursive: true });
 	const node = JSON.stringify(process.execPath);
@@ -678,6 +715,7 @@ out.hooks = await (async () => {
 		untrustedGrep: await u.ev("tool_call", { toolName: "grep", input: {} }),
 		trustedGrep: await t.ev("tool_call", { toolName: "grep", input: {} }),
 		post: await u.ev("tool_result", { toolName: "bash", input: {}, content: [{ type: "text", text: "saida" }] }),
+		crashLog: crashFacts,
 	};
 	await u.ev("session_start", { reason: "startup" });
 	const first = { systemPromptOptions: { sections: {} } }, second = { systemPromptOptions: { sections: {} } };
