@@ -149,6 +149,10 @@
       "to": "extensions/pink-tela.ts"
     },
     {
+      "from": "extensions/pink-tela-borda.cs",
+      "to": "extensions/pink-tela-borda.cs"
+    },
+    {
       "from": "extensions/pink-i18n.ts",
       "to": "extensions/pink-i18n.ts"
     },

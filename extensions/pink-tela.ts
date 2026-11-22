@@ -12,6 +12,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import { t } from "./pink-i18n.ts";
 
@@ -195,6 +196,92 @@ const alive = (pid: number) => {
 	}
 };
 
+// cor de destaque do tema em rrggbb, tirada do código ANSI que o tema usa (truecolor ou 256 cores); azul se não der
+export function accentHex(theme: any): string {
+	let ansi = "";
+	try {
+		ansi = String(theme?.getFgAnsi?.("accent") ?? theme?.fg?.("accent", "") ?? "");
+	} catch {
+		/* tema sem a cor */
+	}
+	const hex = (...rgb: number[]) => rgb.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0")).join("");
+	const rgb = ansi.match(/38;2;(\d+);(\d+);(\d+)/);
+	if (rgb) return hex(+rgb[1], +rgb[2], +rgb[3]);
+	const idx = ansi.match(/38;5;(\d+)/);
+	if (idx) {
+		const n = +idx[1];
+		const base = [[0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128], [128, 0, 128], [0, 128, 128], [192, 192, 192], [128, 128, 128], [255, 0, 0], [0, 255, 0], [255, 255, 0], [0, 0, 255], [255, 0, 255], [0, 255, 255], [255, 255, 255]];
+		if (n < 16) return hex(...base[n]);
+		if (n < 232) {
+			const step = (v: number) => (v ? 55 + v * 40 : 0);
+			return hex(step(Math.floor((n - 16) / 36)), step(Math.floor((n - 16) / 6) % 6), step((n - 16) % 6));
+		}
+		const g = 8 + (n - 232) * 10;
+		return hex(g, g, g);
+	}
+	return "3b82f6";
+}
+
+// o que contornar: a janela lida/acionada, ou a tela inteira na captura do desktop; nada nas listas
+export function borderTarget(action: string, args: Record<string, any>): string | undefined {
+	const hwnd = Number(args.window_id);
+	if (Number.isInteger(hwnd) && hwnd > 0) return `hwnd ${hwnd}`;
+	const pid = Number(args.pid);
+	if (Number.isInteger(pid) && pid > 0) return `pid ${pid}`;
+	return action === "get_desktop_state" ? "screen 0" : undefined;
+}
+
+export type Border = { send(line: string): void; stop(): void };
+
+const moduleDir = () => {
+	try {
+		return path.dirname(fileURLToPath(import.meta.url));
+	} catch {
+		return __dirname;
+	}
+};
+
+// compila a fonte uma vez por versão (o nome leva o hash), com o csc que vem no Windows, como o sandbox faz
+export function buildBorder(dir: string, source = path.join(moduleDir(), "pink-tela-borda.cs"), env = process.env, sync = spawnSync): string | undefined {
+	try {
+		const text = fs.readFileSync(source, "utf8");
+		const exe = path.join(dir, `pink-tela-borda-${sha256(Buffer.from(text)).slice(0, 12)}.exe`);
+		if (fs.existsSync(exe)) return exe;
+		const csc = path.join(env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+		fs.mkdirSync(dir, { recursive: true });
+		const built = sync(csc, ["/nologo", "/optimize", `/out:${exe}`, path.resolve(source)], { windowsHide: true, timeout: 60_000 });
+		return built.status === 0 && fs.existsSync(exe) ? exe : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+// contorno na tela (pink-tela-borda.cs); sem ele a tela funciona igual
+export function startBorder(env = process.env, start = spawn): Border | undefined {
+	const exe = buildBorder(path.join(path.dirname(driverDir(env)), "tela-borda"), undefined, env);
+	if (!exe) return undefined;
+	try {
+		const child = start(exe, [], { windowsHide: true, stdio: ["pipe", "ignore", "ignore"] });
+		child.on("error", () => {});
+		child.stdin?.on("error", () => {});
+		return {
+			send: (line) => {
+				if (child.exitCode == null) child.stdin?.write(`${line}\n`);
+			},
+			stop: () => {
+				try {
+					child.stdin?.end(); // fim da entrada encerra o contorno
+					setTimeout(() => child.exitCode == null && child.kill(), 2000).unref?.();
+				} catch {
+					/* já saiu */
+				}
+			},
+		};
+	} catch {
+		return undefined;
+	}
+}
+
 type Run = (exe: string, argv: string[], signal?: AbortSignal) => Promise<{ code: number | null; stdout: string; stderr: string }>;
 
 const runProcess: Run = (exe, argv, signal) =>
@@ -209,8 +296,9 @@ const runProcess: Run = (exe, argv, signal) =>
 		child.on("close", (code) => resolve({ code, stdout, stderr }));
 	});
 
-export function createTela(pink: any, { env = process.env, run = runProcess, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install } = {}) {
+export function createTela(pink: any, { env = process.env, run = runProcess, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install, border = startBorder as (env: NodeJS.ProcessEnv) => Border | undefined } = {}) {
 	let on = false;
+	let outline: Border | undefined;
 	let starting = false;
 	let daemon: any;
 	let pipe = "";
@@ -303,6 +391,11 @@ export function createTela(pink: any, { env = process.env, run = runProcess, spa
 				const probe = await run(copy, ["status", "--socket", pipe]);
 				if (probe.code === 0 && daemon === child && child.exitCode == null) {
 					on = true;
+					try {
+						outline = border(env);
+					} catch {
+						outline = undefined;
+					}
 					return `${status()}\n${t("Aviso: as capturas de tela e o texto das janelas vão para o modelo (e o provedor dele). Feche o que for sigiloso antes de pedir para ver a tela.", "Aviso: las capturas de pantalla y el texto de las ventanas van al modelo (y a su proveedor). Cierra lo confidencial antes de pedir que vea la pantalla.", "Warning: screenshots and window text go to the model (and its provider). Close anything confidential before asking it to see the screen.")}`;
 				}
 				await new Promise((resolve) => setTimeout(resolve, 200));
@@ -335,6 +428,8 @@ export function createTela(pink: any, { env = process.env, run = runProcess, spa
 				/* temporário */
 			}
 		}
+		outline?.stop();
+		outline = undefined;
 		daemon = undefined;
 		on = false;
 		pipe = dir = exeUsed = "";
@@ -366,10 +461,15 @@ export function createTela(pink: any, { env = process.env, run = runProcess, spa
 				if (!again) return reply(t("A pessoa recusou digitar no terminal. Não repita.", "La persona rechazó escribir en la terminal. No lo repitas.", "The person declined typing in the terminal. Do not repeat it."), true);
 			}
 		}
+		// contorno na cor do tema enquanto o agente vê ou age (de novo no fim, para contar os segundos a partir dali)
+		const outlined = borderTarget(action, args);
+		const mark = () => outlined && outline?.send(`show ${outlined} ${accentHex(ctx?.ui?.theme)}`);
+		mark();
 		const shot = isRead(action) ? path.join(dir, `${crypto.randomUUID()}.png`) : "";
 		// shortcut: a cópia da sessão é conferida só ao ligar, não a cada call (processo do mesmo usuário poderia trocá-la); reconferir por call se isso virar risco
 		const argv = ["call", "--socket", pipe, action, JSON.stringify(args), ...(shot ? ["--screenshot-out-file", shot] : [])];
 		const result = await run(exe, argv, signal);
+		mark();
 		let image: string | undefined;
 		if (shot) {
 			try {

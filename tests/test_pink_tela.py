@@ -107,13 +107,24 @@ const ctx = (answers = [true], hasUI = true) => {
   return c;
 };
 
-function newTela({ dir, run, spawned, sync, find, envOverride = env, existsOverride = exists } = {}) {
+// contorno falso: guarda as linhas enviadas e quantas vezes parou (o real abre uma janela no Windows)
+function fakeBorder() {
+  const b = { lines: [], stops: 0, starts: 0 };
+  b.fn = () => {
+    b.starts++;
+    return { send: (line) => b.lines.push(line), stop: () => b.stops++ };
+  };
+  return b;
+}
+
+function newTela({ dir, run, spawned, sync, find, envOverride = env, existsOverride = exists, borderFake } = {}) {
   const pi = fakePi();
   const d = dir ?? newTmp();
   const sp = spawned ?? fakeSpawn();
   const sy = sync ?? fakeSync();
-  const t = tela.createTela(pi, { env: envOverride, run: run ?? fakeRun(), spawnDaemon: sp.fn, exists: existsOverride, tmp: d, check: checkFn, find: find ?? (() => undefined), sync: sy.fn });
-  return { pi, t, sp, sy, dir: d };
+  const bd = borderFake ?? fakeBorder();
+  const t = tela.createTela(pi, { env: envOverride, run: run ?? fakeRun(), spawnDaemon: sp.fn, exists: existsOverride, tmp: d, check: checkFn, find: find ?? (() => undefined), sync: sy.fn, border: bd.fn });
+  return { pi, t, sp, sy, dir: d, bd };
 }
 
 const exec = (t, action, args, c) => t.execute("id", { action, args }, undefined, undefined, c);
@@ -542,6 +553,43 @@ const hasLeftovers = (agentDir) => (fs.existsSync(agentDir) ? fs.readdirSync(age
   out.cmdBadHash = { text: bad.notes[0].text, level: bad.notes[0].level };
 }
 
+// (15) contorno na cor do tema: janela lida, tela inteira, listas sem contorno, desligar para
+{
+  const bd = fakeBorder();
+  const { t } = newTela({ run: fakeRun(), borderFake: bd });
+  const before = bd.starts;
+  await t.turnOn();
+  const themed = (ansi) => ({ ...ctx(), ui: { ...ctx().ui, theme: { getFgAnsi: () => ansi } } });
+  await exec(t, "get_window_state", { pid: 844, window_id: 10725 }, themed("\x1b[38;2;255;45;149m"));
+  await exec(t, "get_desktop_state", {}, themed("\x1b[38;5;33m"));
+  await exec(t, "list_windows", {}, themed("\x1b[38;2;1;2;3m"));
+  await exec(t, "type_text", { pid: 844, text: "oi" }, ctx([true, true]));
+  t.turnOff();
+  out.border = { startedOnTurnOn: bd.starts - before, lines: bd.lines, stops: bd.stops };
+  out.accentHex = {
+    truecolor: tela.accentHex({ getFgAnsi: () => "\x1b[38;2;16;32;48m" }),
+    idx16: tela.accentHex({ getFgAnsi: () => "\x1b[38;5;9m" }),
+    cube: tela.accentHex({ getFgAnsi: () => "\x1b[38;5;33m" }),
+    gray: tela.accentHex({ getFgAnsi: () => "\x1b[38;5;244m" }),
+    fgOnly: tela.accentHex({ fg: (_c, s) => `\x1b[38;2;200;100;0m${s}\x1b[39m` }),
+    none: tela.accentHex(undefined),
+    throws: tela.accentHex({ getFgAnsi: () => { throw new Error("x"); } }),
+  };
+  out.borderTarget = {
+    hwnd: tela.borderTarget("click", { pid: 1, window_id: 77 }) ?? null,
+    pid: tela.borderTarget("type_text", { pid: 5 }) ?? null,
+    desktop: tela.borderTarget("get_desktop_state", {}) ?? null,
+    list: tela.borderTarget("list_windows", {}) ?? null,
+    bad: tela.borderTarget("click", { window_id: "1; rm", pid: -3 }) ?? null,
+  };
+  // contorno que falha ao subir não impede a tela de ligar
+  const { t: t2 } = newTela({ run: fakeRun(), borderFake: { fn: () => { throw new Error("sem csc"); } } });
+  const turn2 = await t2.turnOn();
+  const r2 = await exec(t2, "get_desktop_state", {}, ctx());
+  out.borderFails = { on: t2.isOn(), isError: r2.isError, turn: turn2.split("\n")[0] };
+  t2.turnOff();
+}
+
 console.log(JSON.stringify(out));
 
 """
@@ -587,6 +635,44 @@ def tela_out(package_dir: Path) -> dict:
 
 def test_registered_tool_command_and_shutdown(tela_out: dict) -> None:
     assert tela_out["registered"] == {"tool": ["tela"], "cmd": True, "shutdown": True}
+
+
+def test_border_outlines_the_window_or_screen_in_the_theme_color(tela_out: dict) -> None:
+    b = tela_out["border"]
+    assert b["startedOnTurnOn"] == 1, b
+    # antes e depois de cada chamada; list_windows não contorna; sem tema cai no azul
+    assert b["lines"] == ["show hwnd 10725 ff2d95"] * 2 + ["show screen 0 0087ff"] * 2 + ["show pid 844 3b82f6"] * 2, b
+    assert b["stops"] == 1, b
+
+
+def test_accent_hex_reads_the_theme_ansi(tela_out: dict) -> None:
+    assert tela_out["accentHex"] == {"truecolor": "102030", "idx16": "ff0000", "cube": "0087ff", "gray": "808080", "fgOnly": "c86400", "none": "3b82f6", "throws": "3b82f6"}
+
+
+def test_border_target_only_takes_integer_ids(tela_out: dict) -> None:
+    assert tela_out["borderTarget"] == {"hwnd": "hwnd 77", "pid": "pid 5", "desktop": "screen 0", "list": None, "bad": None}
+
+
+def test_border_failure_does_not_block_the_screen(tela_out: dict) -> None:
+    r = tela_out["borderFails"]
+    assert r["on"] is True and r["isError"] is False, r
+
+
+def test_border_helper_source_ships_and_compiles(package_dir: Path, tmp_path: Path) -> None:
+    if sys.platform != "win32":
+        pytest.skip("contorno é Windows")
+    src = package_dir / "extensions" / "pink-tela-borda.cs"
+    assert src.is_file()
+    csc = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+    exe = tmp_path / "borda.exe"
+    done = subprocess.run([str(csc), "/nologo", f"/out:{exe}", str(src)], capture_output=True, text=True, check=False)
+    assert done.returncode == 0 and exe.is_file(), done.stdout[-1500:]
+    # recebe comandos (com lixo antes, como um BOM) e sai quando a entrada fecha
+    proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, creationflags=0x08000000)
+    assert proc.stdin is not None
+    proc.stdin.write(b"\xef\xbb\xbfshow screen 0 ff2d95\nhide\n")
+    proc.stdin.close()
+    assert proc.wait(timeout=10) == 0
 
 
 def test_pure_helpers(tela_out: dict) -> None:
