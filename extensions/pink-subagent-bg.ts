@@ -35,6 +35,7 @@ export function createBackground(pink: any, { now = Date.now, write = muxWrite }
 	let ui: any;
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let shown = 0;
+	(globalThis as any).__pinkSubagentJobs = jobs; // a seção SUBAGENTES da lateral lê daqui
 
 	const lines = () => [
 		...[...jobs.values()].map((job) => `⏳ #${job.id} ${job.agent} · ${oneLine(job.task, 60)} · ${clock(now() - job.started)} · ↓ ${tokens(job.tokens)} tokens`),
@@ -43,7 +44,8 @@ export function createBackground(pink: any, { now = Date.now, write = muxWrite }
 	const refresh = () => {
 		try {
 			// embaixo da caixa de texto, como o painel do Claude Code (owner 2026-11-20, card 1dfwh7kg4g2)
-			ui?.setWidget(WIDGET, jobs.size && !closed ? lines() : undefined, { placement: "belowEditor" });
+			// com a lateral visível (pink-ui), eles aparecem na seção SUBAGENTES de lá
+			ui?.setWidget(WIDGET, jobs.size && !closed && !(globalThis as any).__pinkRightOn ? lines() : undefined, { placement: "belowEditor" });
 		} catch {
 			/* tela já fechada */
 		}

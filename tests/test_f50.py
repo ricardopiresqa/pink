@@ -712,6 +712,15 @@ def test_consecutive_tool_calls_collapse_into_one_group_line(ui_facts: dict) -> 
     assert rows["e"] == rows["g"] == [" → Rodou: ls"]  # sozinha: a linha detalhada de sempre
 
 
+def test_the_sidebar_lists_running_subagents_and_only_the_latest_changes(ui_facts: dict) -> None:
+    """Owner 2026-11-22 (card 1dfwh7kg7r1): seção SUBAGENTES com quem roda agora; ALTERAÇÕES não empurra o resto para fora."""
+    s = ui_facts["pink3"]["sideAgents"]
+    assert s["tracked"] == 1 and s["cleared"] == 0 and s["none"] is False
+    text = s["text"]
+    assert "SUBAGENTES  3" in text and "● cloud implementa" in text and "2m 5s" in text and "● tifa testa o login" in text and "1m 5s" in text
+    assert "ALTERAÇÕES  8" in text and "+3 anteriores" in text and "f7.py" in text and "f2.py" not in text
+
+
 def test_a_crash_leaves_its_cause_in_crash_log(ui_facts: dict) -> None:
     """Owner 2026-11-22 (card 1dfwh7kg7r1): o Pink fechava sem rastro; agora a exceção e o código de saída ficam no crash.log."""
     c = ui_facts["hooks"]["crashLog"]

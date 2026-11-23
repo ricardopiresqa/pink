@@ -367,6 +367,15 @@ export function rightColumn({ theme, width, height, data }) {
 	} else {
 		out.push(theme.fg("dim", t("ainda sem medida", "todavía sin medir", "not measured yet")));
 	}
+	const agents = data.agents ?? [];
+	if (agents.length) {
+		out.push("", rule(theme, inner), heading(theme, t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS"), theme.fg("muted", `  ${agents.length}`)));
+		for (const item of agents) {
+			const clock = theme.fg("dim", elapsedLabel((data.now ?? Date.now()) - item.started));
+			const text = `${theme.fg("accent", "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
+			out.push(footerLine({ theme, width: inner, left: fit(text, Math.max(1, inner - visible(clock) - 1)), right: clock }));
+		}
+	}
 	if (data.thoth) out.push("", rule(theme, inner), heading(theme, "THOTH"), ...thothLines({ theme, thoth: data.thoth, width: inner }));
 	if (data.plan) out.push("", rule(theme, inner), heading(theme, t("COTA", "CUOTA", "QUOTA")), ...planLines({ theme, plan: data.plan, width: inner }));
 	if (data.mcp) {
@@ -378,9 +387,12 @@ export function rightColumn({ theme, width, height, data }) {
 	out.push("", rule(theme, inner), heading(theme, t("PLANO", "PLAN", "PLAN"), todos.length ? theme.fg("muted", `  ${todos.filter((item) => item.status === "completed").length}/${todos.length}`) : ""));
 	if (todos.length) out.push(...todoLines({ theme, todos, width: inner }).slice(1).map((line) => line.replace(/^ {2}/, "")));
 	else out.push(theme.fg("dim", t("sem plano nesta sessão", "sin plan en esta sesión", "no plan in this session")));
-	const changes = data.changes ?? [];
-	out.push("", rule(theme, inner), heading(theme, t("ALTERAÇÕES", "CAMBIOS", "CHANGES"), changes.length ? theme.fg("muted", `  ${changes.length}`) : ""));
+	const all = data.changes ?? [];
+	out.push("", rule(theme, inner), heading(theme, t("ALTERAÇÕES", "CAMBIOS", "CHANGES"), all.length ? theme.fg("muted", `  ${all.length}`) : ""));
+	// só os mais recentes: 31 arquivos empurravam a SESSÃO para fora da tela
+	const changes = all.slice(-MAX_CHANGES);
 	if (changes.length) {
+		if (all.length > changes.length) out.push(theme.fg("dim", `+${all.length - changes.length} ${t("anteriores", "anteriores", "earlier")}`));
 		for (const item of changes) {
 			const status = item.status === "novo" ? `${theme.fg("accent", "●")} ${theme.fg("muted", t("novo", "nuevo", "new"))}` : `${theme.fg("success", "●")} ${theme.fg("muted", t("editado", "editado", "edited"))}`;
 			const room = inner - visible(status) - 1;
@@ -397,6 +409,21 @@ export function rightColumn({ theme, width, height, data }) {
 	if (data.project) out.push(theme.fg("muted", `${t("projeto", "proyecto", "project")} ${data.project}`));
 	const lines = out.slice(0, height).map((line) => pad(fit(line, inner), inner));
 	return [...lines, ...Array(Math.max(0, height - lines.length)).fill(" ".repeat(inner))].map((line) => `${theme.fg("borderMuted", "│")} ${line} `);
+}
+
+export const MAX_CHANGES = 5;
+
+// subagentes rodando agora: os de segundo plano (pink-subagent-bg) e os que a conversa está esperando (ferramenta subagent)
+export function trackSubagent(map, event) {
+	if (event?.toolName !== "subagent" || !event.toolCallId) return;
+	if (event.type === "tool_result" || event.content !== undefined) return void map.delete(event.toolCallId);
+	const input = event.input ?? {};
+	if (input.background) return; // esses o pink-subagent-bg acompanha até o resultado chegar
+	const items = Array.isArray(input.tasks) ? input.tasks : Array.isArray(input.chain) ? input.chain : [{ agent: input.agent, task: input.task }];
+	map.set(event.toolCallId, items.map((item) => ({ agent: item?.agent, task: item?.task, started: Date.now() })));
+}
+export function runningSubagents(waiting, background) {
+	return [...[...(background?.values?.() ?? [])].map((job) => ({ agent: job.agent, task: job.task, started: job.started })), ...[...(waiting?.values?.() ?? [])].flat()];
 }
 
 export function changesFromBranch(entries, created = new Set()) {
@@ -903,7 +930,12 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			else return undefined;
 			return { handled: true };
 		}, undefined),
-		visible: live((slot, viewport) => (slot === "top" || slot === "bottom" ? true : Boolean(columns(viewport.width)[slot])), false),
+		visible: live((slot, viewport) => {
+			if (slot === "top" || slot === "bottom") return true;
+			const on = Boolean(columns(viewport.width)[slot]);
+			if (slot === "right") globalThis.__pinkRightOn = on; // com a lateral, os subagentes saem de baixo da caixa de texto
+			return on;
+		}, false),
 		render: live((slot, width) => {
 			const theme = ctx.ui.theme;
 			const height = Math.max(1, rows() - 2 * barRows(rows()));
@@ -919,7 +951,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, plan: PINK.plan.data, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, plan: PINK.plan.data, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
@@ -1258,6 +1290,7 @@ export function assistantFooter({ theme, model, agent, ms, output, run }) {
 // estado das funções do OpenCode, compartilhado entre os comandos e a interface
 // agentOf: o agente de cada resposta (pelo timestamp da mensagem); created: caminhos que o write criou (não existiam antes)
 export const PINK = { agent: "build", permission: globalThis.__pinkPermissionSaved === "ask" ? "ask" : "edits", todos: [], snapshots: new Map(), redo: [], agentOf: new Map(), timing: new Map(), runOf: new Map(), run: undefined, runTimer: undefined, lastRun: undefined, lastRunEnd: 0, thinking: new Map(), created: new Set(), thoth: { data: { ok: false, loading: true }, timer: undefined, busy: false, redraw: undefined }, plan: { data: { ok: false, loading: true }, timer: undefined, busy: false }, mcpOpen: false, rightHits: {} };
+PINK.subagents = new Map();
 
 // mensagem do usuário como no Claude Code (patch user-bar): ">" na primeira linha, sem caixa nem fundo; o recuo de 1 do
 // Markdown vira o espaço depois do ">"
@@ -1415,6 +1448,7 @@ function registerOpenCodeFunctions(pink) {
 	});
 	pink.on("agent_end", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
+		PINK.subagents.clear(); // ferramenta bloqueada ou interrompida não manda tool_result
 		ctx.ui.setWorkingMessage?.();
 		if (PINK.run?.last !== undefined) PINK.runOf.set(PINK.run.last, PINK.run.summary());
 		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
@@ -1456,7 +1490,9 @@ function registerOpenCodeFunctions(pink) {
 		const timing = event?.message?.role === "assistant" ? PINK.timing.get(event.message.timestamp) : undefined;
 		if (timing?.start) timing.ms = Date.now() - timing.start;
 	});
+	pink.on("tool_result", async (event) => trackSubagent(PINK.subagents, event));
 	pink.on("tool_call", async (event, ctx) => {
+		trackSubagent(PINK.subagents, event);
 		const target = event.toolName === "write" ? event.input?.path : undefined;
 		if (typeof target === "string" && target) {
 			try {
