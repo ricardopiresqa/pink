@@ -97,6 +97,10 @@
       "to": "examples/extensions/subagent/background.ts"
     },
     {
+      "from": "extensions/pink-external-agents.ts",
+      "to": "examples/extensions/subagent/external.ts"
+    },
+    {
       "from": "extensions/pink-shell-bg.ts",
       "to": "extensions/pink-shell-bg.ts"
     },
@@ -2962,6 +2966,41 @@
       "find": "handleInput,",
       "replace": "handleInput,\n\t\t\t\t\thandleMouse,",
       "count": 1
+    },
+    {
+      "id": "subagent-external-agents-list",
+      "file": "examples/extensions/subagent/agents.ts",
+      "count": 1,
+      "find": "\t// Pink: revisor só leitura do /review (card 1dfwh7kfzxw)",
+      "replace": "\t// Pink: agentes instalados (claude) como subagentes, com o login e a cota deles (card 1dfwh7kgf8g); um agents/claude.md vence.\n\t// Antes do revisor, que tem de ser o último a entrar\n\tfor (const agent of externalAgents()) if (!agentMap.has(agent.name)) agentMap.set(agent.name, agent as unknown as AgentConfig);\n\t// Pink: revisor só leitura do /review (card 1dfwh7kfzxw)"
+    },
+    {
+      "id": "subagent-external-agents-import-list",
+      "file": "examples/extensions/subagent/agents.ts",
+      "count": 1,
+      "find": "import * as path from \"node:path\";",
+      "replace": "import * as path from \"node:path\";\nimport { externalAgents } from \"./external.ts\"; // Pink: agentes instalados"
+    },
+    {
+      "id": "subagent-external-agents-import-run",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "import { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano",
+      "replace": "import { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano\nimport { applyExternalEvent, externalInvocation } from \"./external.ts\"; // Pink: agentes instalados (card 1dfwh7kgf8g)"
+    },
+    {
+      "id": "subagent-external-agents-spawn",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\t\t\tconst invocation = getPiInvocation(args);",
+      "replace": "\t\t\tconst invocation = (agent as any).external ? externalInvocation(agent as any, task) : getPiInvocation(args); // Pink: agente instalado roda o programa dele"
+    },
+    {
+      "id": "subagent-external-agents-events",
+      "file": "examples/extensions/subagent/index.ts",
+      "count": 1,
+      "find": "\t\t\t\tif (event.type === \"message_end\" && event.message) {",
+      "replace": "\t\t\t\tif ((agent as any).external) return applyExternalEvent(event, currentResult, emitUpdate); // Pink: stream-json do agente instalado\n\t\t\t\tif (event.type === \"message_end\" && event.message) {"
     }
   ],
   "left_as_upstream": [
