@@ -683,13 +683,14 @@ out.hooks = await (async () => {
 	// card 1dfwh7kg7r1: a queda deixa a causa em crash.log; saída normal (código 0) não escreve nada
 	const crashDir = path.join(os.tmpdir(), "pink-crash-agent");
 	fs.rmSync(crashDir, { recursive: true, force: true });
-	const on = {}, proc = { pid: 7, report: {}, on: (name, fn) => { on[name] = fn; } };
+	const on = {}, proc = { pid: 7, platform: "win32", report: {}, on: (name, fn) => { on[name] = fn; } };
 	const crashFile = h.installCrashLog({ PINK_CODING_AGENT_DIR: crashDir }, proc);
 	on.exit(0);
+	on.SIGINT();  // Ctrl+C do console no Windows: registrado, não derruba
 	on.uncaughtExceptionMonitor(new Error("boom"), "uncaughtException");
 	on.exit(3);
 	const crashText = fs.readFileSync(crashFile, "utf8");
-	const crashFacts = { boom: crashText.includes("uncaughtException: Error: boom"), code: crashText.includes("exit code=3"), report: proc.report, once: h.installCrashLog({}, proc) === crashFile };
+	const crashFacts = { sigint: crashText.includes("SIGINT do console ignorado"), sigbreak: typeof on.SIGBREAK === "function", boom: crashText.includes("uncaughtException: Error: boom"), code: crashText.includes("exit code=3"), report: proc.report, once: h.installCrashLog({}, proc) === crashFile };
 	fs.rmSync(crashDir, { recursive: true, force: true });
 	const agent = path.join(os.tmpdir(), "pink-hooks-agent")	, cwd = path.join(os.tmpdir(), "pink-hooks-proj");
 	fs.mkdirSync(path.join(cwd, ".pink"), { recursive: true });

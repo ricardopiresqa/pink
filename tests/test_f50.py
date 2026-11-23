@@ -724,6 +724,7 @@ def test_the_sidebar_lists_running_subagents_and_only_the_latest_changes(ui_fact
 def test_a_crash_leaves_its_cause_in_crash_log(ui_facts: dict) -> None:
     """Owner 2026-11-22 (card 1dfwh7kg7r1): o Pink fechava sem rastro; agora a exceção e o código de saída ficam no crash.log."""
     c = ui_facts["hooks"]["crashLog"]
+    assert c["sigint"] and c["sigbreak"]  # Windows: Ctrl+C/Break do console não mata mais o Pink em silêncio
     assert c["boom"] and c["code"] and c["once"] and c["report"]["reportOnFatalError"] is True and c["report"]["directory"].endswith("pink-crash-agent")
 
 

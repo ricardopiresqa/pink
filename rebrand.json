@@ -2635,6 +2635,13 @@
       "count": 1
     },
     {
+      "id": "terminal-reassert-input",
+      "file": "dist/bundle/chunks/chunk-T726RZZU.js",
+      "find": "start(onInput,onResize){this.inputHandler=onInput,",
+      "replace": "start(onInput,onResize){globalThis.__pinkReassertInput=()=>{if(!process.stdin.isTTY||!process.stdin.isRaw)return!1;process.stdin.setRawMode(!1),process.stdin.setRawMode(!0),this.enableWindowsVTInput();return!0};this.inputHandler=onInput,",
+      "count": 1
+    },
+    {
       "id": "assistant-bullet",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "this.contentContainer.addChild(new Markdown(content.text.trim(),this.outputPad,0,this.markdownTheme,void 0,{transform:createMarkdownTransform(\"assistant\",this.isStreaming,this.markdownTransformers)}))",

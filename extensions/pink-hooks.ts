@@ -156,6 +156,11 @@ export function installCrashLog(env = process.env, proc = process) {
 	proc.on("exit", (code) => {
 		if (code) write(`exit code=${code}`);
 	});
+	// no Windows, sem ouvinte, um Ctrl+C/Break do console (vindo de um comando filho, ou com o console fora do modo raw)
+	// encerra o Pink na hora, sem evento de saída; no Pink o Ctrl+C é tecla do editor, então o sinal só é registrado
+	if (proc.platform === "win32") {
+		for (const sig of ["SIGINT", "SIGBREAK"]) proc.on(sig, () => write(`${sig} do console ignorado`));
+	}
 	try {
 		proc.report.reportOnFatalError = true;
 		proc.report.directory = dir;

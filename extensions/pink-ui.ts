@@ -1490,7 +1490,15 @@ function registerOpenCodeFunctions(pink) {
 		const timing = event?.message?.role === "assistant" ? PINK.timing.get(event.message.timestamp) : undefined;
 		if (timing?.start) timing.ms = Date.now() - timing.start;
 	});
-	pink.on("tool_result", async (event) => trackSubagent(PINK.subagents, event));
+	pink.on("tool_result", async (event) => {
+		trackSubagent(PINK.subagents, event);
+		// Git Bash, docker e cia. mexem no modo do console do Windows: o teclado parava de chegar ao Pink ("trava")
+		if (process.platform === "win32" && (event?.toolName === "bash" || event?.toolName === "powershell")) {
+			try {
+				globalThis.__pinkReassertInput?.();
+			} catch {}
+		}
+	});
 	pink.on("tool_call", async (event, ctx) => {
 		trackSubagent(PINK.subagents, event);
 		const target = event.toolName === "write" ? event.input?.path : undefined;
