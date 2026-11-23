@@ -73,15 +73,15 @@ m.onSignal(c, "bell", false); flow.push({ ...c });
 facts.flow = flow.map(({ working, attention }) => ({ working, attention }));
 facts.progress = [m.progressSignal("4;3"), m.progressSignal("4;1"), m.progressSignal("4;0"), m.progressSignal("4"), m.progressSignal("1;x")];
 facts.icons = [m.icon(s("a", { working: true }), 1), m.icon(s("a", { attention: true, working: true }), 0), m.icon(s("a"), 0), m.icon(s("a", { exited: true }), 0)];
-facts.titles = [m.shortTitle("Pink - login - api", 0), m.shortTitle("pi - x", 1), m.shortTitle("", 2), m.shortTitle("Pink - a\x1b[2Jb\x07\x9bc", 3)];
+facts.titles = [m.shortTitle("Pink - login - api", 0), m.shortTitle("pi - x", 1), m.shortTitle("", 2), m.shortTitle("Pink - a\x1b[2Jb\x07\x9bc", 3), m.shortTitle("pink - # Missão: stack - mkt", 4)];
 facts.labels = [m.sessionLabel("pink - login - api", 0), m.sessionLabel("pink - api", 1), m.sessionLabel("", 2), m.sessionLabel("pink - site - V2", 3, "site - V2"), m.sessionLabel("pink - login - site - V2", 4, "site - V2")];
 const many = m.sidebar({ sessions: Array.from({ length: 20 }, (_, i) => s(`pink - n${i}`)), active: 0, width: 28, rows: 12 });
 facts.many = { last: strip(many.lines[10]).trim(), rows: many.lines.length, plus: m.hitAt(many.hits, 5, 10) };
 facts.widthsBy = [50, 100, 140, 300].map(m.sidebarWidth);
-const sessions = [s("Pink - Auditar o bot trader atual - api"), s("Pink - 日本語のセッション名 - x", { attention: true }), s("Pink - c", { working: true })];
+const sessions = [s("Pink - Auditar o bot trader atual - api", { started: new Date(2026, 10, 23, 14, 32).getTime() }),s("Pink - 日本語のセッション名 - x", { attention: true }), s("Pink - c", { working: true })];
 const view = (out, clicks) => ({ rows: out.lines.length, widths: [...new Set(out.lines.map(width))], text: out.lines.map(strip), clicks: clicks.map(([x, y]) => m.hitAt(out.hits, x, y) ?? null) });
 const W = m.sidebarWidth(140);
-facts.side = view(m.sidebar({ sessions, active: 0, width: W, rows: 20, frame: 0 }), [[5, 2], [5, 3], [W - 2, 3], [5, 4], [5, 5], [5, 6], [5, 8], [5, 14], [3, 19]]);
+facts.side = view(m.sidebar({ sessions, active: 0, width: W, rows: 20, frame: 0 }), [[5, 2], [W - 2, 2], [5, 3], [5, 4], [5, 5], [5, 6], [W - 2, 5], [5, 11], [3, 19]]);
 facts.ask = view(m.sidebar({ sessions, active: 2, width: W, rows: 12, confirm: "Sair do Pink com 3 sessões abertas?" }), [[4, 11], [13, 11], [5, 2]]);
 facts.narrow = view(m.sidebar({ sessions, active: 1, width: m.sidebarWidth(50), rows: 8 }), [[1, 3], [1, 6]]);
 facts.fit = [width(m.fit("😀😀😀", 5)), m.fit("abc", 5)];
@@ -236,7 +236,7 @@ def test_a_session_that_finishes_out_of_sight_waits_for_the_person_and_the_visib
     assert facts["flow"] == [{"working": True, "attention": False}, {"working": False, "attention": True}, {"working": False, "attention": False}, {"working": False, "attention": True}]
     assert facts["progress"] == ["work", "work", "idle", "idle", None]
     assert facts["icons"] == ["◠", "!", "·", "×"]
-    assert facts["titles"] == ["login - api", "x", "Sessão 3", "a[2Jbc"]  # código de controle no título não chega ao terminal
+    assert facts["titles"] == ["login - api", "x", "Sessão 3", "a[2Jbc", "Missão: stack - mkt"]  # controle não chega ao terminal; "# " do markdown sai
 
 
 def test_the_sidebar_looks_like_the_owners_print_and_every_item_is_clickable(facts: dict) -> None:
@@ -248,11 +248,11 @@ def test_the_sidebar_looks_like_the_owners_print_and_every_item_is_clickable(fac
     assert facts["many"] == {"last": "+ nova sessão", "rows": 12, "plus": "new"}  # mais sessões que linhas: o "+" continua visível
     assert side["rows"] == 20 and side["widths"] == [28]  # nunca passa da largura, nem com título longo ou japonês
     text = side["text"]
-    # cada sessão num card de 3 linhas (nome, o × sozinho no meio da altura, estado) e um espaço entre eles
-    assert text[0].strip() == "SESSÕES" and text[2].startswith("▌ · Auditar o bot") and "×" not in text[2] and text[3].strip("▌ ") == "×" and text[4].rstrip() == "▌   api"
-    assert text[6].startswith("  ! 日本語") and text[7].strip() == "×" and text[8].strip() == "terminou · espera você" and text[10].startswith("  ◜ Sessão 3") and text[12].strip() == "trabalhando…"
-    assert text[14].strip() == "+ nova sessão" and text[-1].strip() == "sair do Pink" and not any("alt+" in line for line in text)
-    assert side["clicks"] == ["select:0", "select:0", "close:0", "select:0", None, "select:1", "select:1", "new", "quit"]
+    # card 1dfwh7kgeyf: cada sessão em 2 linhas (nome, horário e × em cima; estado embaixo) e um espaço entre elas
+    assert text[0].strip() == "SESSÕES" and text[2].startswith("▌ · Auditar o bot") and text[2].endswith(" 14:32 × ") and text[3].rstrip() == "▌   api"
+    assert text[5].startswith("  ! 日本語") and text[5].rstrip().endswith("×") and text[6].strip() == "terminou · espera você" and text[8].startswith("  ◜ Sessão 3") and text[9].strip() == "trabalhando…"
+    assert text[11].strip() == "+ nova sessão" and text[-1].strip() == "sair do Pink" and not any("alt+" in line for line in text)
+    assert side["clicks"] == ["select:0", "close:0", "select:0", None, "select:1", "select:1", "close:1", "new", "quit"]
     assert ask["rows"] == 12 and ask["widths"] == [28] and ask["text"][-1].strip() == "[ sim ]  [ não ]" and "Sair do Pink com 3 sessões abertas?" in " ".join(line.strip() for line in ask["text"])
     assert ask["clicks"] == ["yes", "no", "select:0"]  # sem altura para 2 linhas por sessão: 1 linha cada
     assert narrow["widths"] == [5] and narrow["text"][3].startswith("▌2 !") and narrow["clicks"] == ["select:1", "new"]  # terminal estreito: número e estado
@@ -306,14 +306,14 @@ def test_in_a_real_terminal_two_sessions_run_side_by_side_with_status_and_a_ques
     future = time.time() + 86400
     os.utime(saved, (future, future))
 
-    # lateral de 28 colunas; seletor começa na coluna 30. Card de 3 linhas + espaço: com 1 sessão o "+" está na linha 7,
-    # com 2 na 11; a 1ª sessão salva na linha 10
+    # lateral de 28 colunas; seletor começa na coluna 30. Card de 2 linhas + espaço: com 1 sessão o "+" está na linha 6
+    # (base 1), com 2 na 9; a 1ª sessão salva na linha 10
     steps = [
         (None, 7.0), ("\r", 5.0), ("oi pink", 1.0),
-        ("\r" + click(5, 7), 2.0),  # envia e já abre o seletor enquanto a 1 trabalha
+        ("\r" + click(5, 6), 2.0),  # envia e já abre o seletor enquanto a 1 trabalha
         (str(tmp_path / "outra") + "\r", 12.0),  # digita outra pasta: a sessão 2 abre nela
         ("\r", 4.0),  # aceita a confiança na pasta, se o Pi perguntar
-        (click(5, 11), 2.0),  # seletor de novo
+        (click(5, 9), 2.0),  # seletor de novo
         (click(35, 10), 12.0),  # retoma a sessão salva da pasta "antiga"
         ("\r", 4.0),
         (click(5, 3), 3.0), (click(5, 36), 2.0), (click(13, 36), 2.0), ((110, 30), 4.0),
@@ -326,12 +326,12 @@ def test_in_a_real_terminal_two_sessions_run_side_by_side_with_status_and_a_ques
     assert "Trust project folder?" not in joined(first) and "██████╗" in joined(home)  # o Pink da primeira sessão roda à direita da lateral
     assert "SESSÕES" not in right(home)  # a coluna de sessões do próprio Pink some: a lateral já lista
     assert "Nova sessão" in right(picker) and "(atual)" in right(picker) and "Sessões anteriores, de todas as pastas" in right(picker) and "conversa antiga" in right(picker)
-    # card de 3 linhas + espaço: sessão 1 nas linhas 2-4, a 2 em 6-8 (estado na 8), a 3 em 10-12
-    assert two[2][2] in "·!" and two[6].startswith("▌ ") and "outra" in two[8]  # a 2 abriu na pasta digitada; a 1 segue na lista
-    assert three[10].startswith("▌ ") and "antiga" in three[12] and "conversa antiga" in right(three)  # a sessão salva voltou, na pasta dela
+    # card de 2 linhas + espaço: sessão 1 nas linhas 2-3, a 2 em 5-6 (estado na 6), a 3 em 8-9
+    assert two[2][2] in "·!" and two[5].startswith("▌ ") and "outra" in two[6]  # a 2 abriu na pasta digitada; a 1 segue na lista
+    assert three[8].startswith("▌ ") and "antiga" in three[9] and "conversa antiga" in right(three)  # a sessão salva voltou, na pasta dela
     assert back[2].startswith("▌ ") and "!" not in back[2][:5] and "pong" in joined(back)  # clique na 1 tira o "!" e mostra a resposta
     assert "Sair do Pink com 3 sessões abertas?" in " ".join(line[:28].strip() for line in asking) and "[ sim ]" in joined(asking)
-    assert "Sair do Pink com" not in joined(after) and after[10][2] != " "  # clique em [ não ]: as três seguem abertas
+    assert "Sair do Pink com" not in joined(after) and after[8][2] != " "  # clique em [ não ]: as três seguem abertas
     assert all(len(line) <= 110 for line in resized) and resized[0].startswith(" SESSÕES") and "pong" in joined(resized)
 
 

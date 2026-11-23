@@ -107,7 +107,7 @@ export function fit(text, width) {
 
 export function shortTitle(title, index) {
 	// o título vem do processo da sessão: sem caracteres de controle ele não consegue mexer no terminal ao ser desenhado
-	const clean = (title ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, "").replace(/^\s*p(?:i|ink)\s*-\s*/i, "").trim();
+	const clean = (title ?? "").replace(/[\u0000-\u001f\u007f-\u009f]|\p{Cf}/gu, "").replace(/^\s*p(?:i|ink)\s*-\s*/i, "").replace(/^#+\s+/, "").trim(); // "# Missão" do markdown vira "Missão"
 	// só o nome do programa (antes da pasta ser confiável o Pink ainda não pôs a pasta no título) conta como vazio
 	return clean && !/^p(?:i|ink)$/i.test(clean) ? clean : `Sessão ${index + 1}`;
 }
@@ -265,9 +265,9 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 	const hit = (action, from = 0, to = width) => hits.push({ y: lines.length, from, to, action });
 	const asking = confirm && !compact ? wrap(confirm, width - 1) : [];
 	const bottomRows = compact ? 0 : asking.length ? asking.length + 1 : 1;
-	// cada sessão num card de 3 linhas com fundo (nome, o × sozinho no meio da altura, estado) e um espaço
-	// (owner 2026-11-22); sem altura para todas, 1 linha cada
-	const tall = !compact && sessions.length * 4 <= rows - lines.length - 2 - bottomRows;
+	// cada sessão num card de 2 linhas com fundo (nome, horário e × em cima; estado embaixo) e um espaço
+	// (owner 2026-11-23, card 1dfwh7kgeyf); sem altura para todas, 1 linha cada
+	const tall = !compact && sessions.length * 3 <= rows - lines.length - 2 - bottomRows;
 	sessions.forEach((session, index) => {
 		const on = index === active;
 		const bar = on ? `\x1b[${ACTIVE_BG};${PINK}m▌\x1b[0m` : " ";
@@ -288,12 +288,12 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 			return lines.push(`${bar}\x1b[${bg}${tone}1m${fit(` ${mark} ${name}`, width - 4)}\x1b[0m\x1b[${bg}2m × \x1b[0m`);
 		}
 		const bg = `${on ? ACTIVE_BG : CARD_BG};`;
-		const nameRow = fit(` ${mark} ${name}`, width - 1).replace(mark, markText(bg));
-		hit(`select:${index}`);
-		lines.push(`${bar}\x1b[${bg}${tone}1m${nameRow}\x1b[0m`);
+		const clock = Number.isFinite(session.started) ? ` ${new Date(session.started).toTimeString().slice(0, 5)}` : "";
+		const corner = `${clock} × `; // o × nas 3 últimas colunas, o horário logo antes
+		const nameRow = fit(` ${mark} ${name}`, width - 1 - corner.length).replace(mark, markText(bg));
 		hit(`select:${index}`, 0, width - 3);
 		hit(`close:${index}`, width - 3);
-		lines.push(`${bar}\x1b[${bg}2m${" ".repeat(Math.max(0, width - 4))} × \x1b[0m`);
+		lines.push(`${bar}\x1b[${bg}${tone}1m${nameRow}\x1b[0m\x1b[${bg}2m${corner}\x1b[0m`);
 		hit(`select:${index}`);
 		lines.push(`${bar}\x1b[${bg}2m${fit(`   ${status(session, where)}`, width - 1)}\x1b[0m`);
 		lines.push(plain(""));
