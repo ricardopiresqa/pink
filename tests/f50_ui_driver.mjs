@@ -112,6 +112,7 @@ out.trash = (() => {
 	return result;
 })();
 out.userLines = ui.userLines(["\x1b[48;2;1;2;3m   \x1b[49m", "\x1b[48;5;236moi\x1b[49m", "tudo"]);
+out.bullet = ui.bulleted({ render: (width) => ["", ` pong ${width}`, " fim"] }).render(40);
 out.skipThinking = [
 	ui.skipThinking({ content: [{ type: "thinking", thinking: "x" }, { type: "toolCall", name: "bash" }] }),
 	ui.skipThinking({ content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "pronto" }, { type: "toolCall", name: "bash" }] }),

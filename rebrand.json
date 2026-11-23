@@ -2635,6 +2635,13 @@
       "count": 1
     },
     {
+      "id": "assistant-bullet",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "this.contentContainer.addChild(new Markdown(content.text.trim(),this.outputPad,0,this.markdownTheme,void 0,{transform:createMarkdownTransform(\"assistant\",this.isStreaming,this.markdownTransformers)}))",
+      "replace": "this.contentContainer.addChild((md=>globalThis.__pinkBullet?globalThis.__pinkBullet(md):md)(new Markdown(content.text.trim(),this.outputPad,0,this.markdownTheme,void 0,{transform:createMarkdownTransform(\"assistant\",this.isStreaming,this.markdownTransformers)})))",
+      "count": 1
+    },
+    {
       "id": "thinking-skip-tool-only",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "hidden=this.thinkingVisibilityOverrides.get(runIndex)??this.hideThinkingBlock,",

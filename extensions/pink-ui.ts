@@ -688,7 +688,7 @@ export function live(fn, fallback) {
 	};
 }
 
-export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel", "__pinkSkipThinking"];
+export const PINK_GLOBALS = ["__pinkFrame", "__pinkAssistantFooter", "__pinkUserBar", "__pinkThinkingLabel", "__pinkSkipThinking", "__pinkBullet"];
 
 export function install(pink, ctx, { CustomEditor, SessionManager, version = "", matchesKey, onPalette, onAgent }) {
 	const state = { home: !hasMessages(ctx), tui: undefined, branch: "", sessions: [] };
@@ -820,6 +820,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 	}, []);
 	globalThis.__pinkUserBar = live((lines) => userLines(lines, ctx.ui.theme.fg("muted", ">")), (lines) => lines);
 	globalThis.__pinkSkipThinking = skipThinking;
+	globalThis.__pinkBullet = bulleted;
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new PinkEditor(tui, theme, keybindings));
 	const project = (() => {
 		try {
@@ -1264,6 +1265,11 @@ const BG = /\x1b\[(?:48;(?:2;\d+;\d+;\d+|5;\d+)|49)m/g;
 export function userLines(lines, mark = ">") {
 	const first = lines.findIndex((row) => String(row).replace(/\x1b\[[0-9;]*m/g, "").trim());
 	return lines.map((row, index) => `${index === first ? mark : " "}${String(row).replace(BG, "")}`);
+}
+
+// "●" na primeira linha de cada texto da resposta, como no Claude Code (patch assistant-bullet); o resto recua junto
+export function bulleted(inner) {
+	return { render: (width) => userLines(inner.render(Math.max(1, width - 1)), "●"), invalidate: () => inner.invalidate?.() };
 }
 
 // "+ Pensou" some na resposta que só chama ferramenta (sem texto): a linha do grupo já diz o que aconteceu
