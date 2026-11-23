@@ -310,7 +310,8 @@ export function topBar({ theme, width, rows, data }) {
 	let left = `${theme.fg("accent", "✱")} ${bold(theme, theme.fg("text", "pink"))}${width >= 100 && data.version ? theme.fg("dim", ` ${data.version}`) : ""}`;
 	left += `${sep}${theme.fg("text", data.folder || "")}`;
 	if (data.branch && width >= 80) left += `${sep}${theme.bg ? theme.bg("selectedBg", theme.fg("accent", ` ⎇ ${data.branch} `)) : ` ⎇ ${data.branch} `}`;
-	let right = `${bold(theme, theme.fg("text", "THOTH"))}${theme.fg("muted", " · ")}${theme.fg("accent", (AGENTS[data.agent]?.label ?? "Build").toUpperCase())}`;
+	// o modo do agente (Build edita, Plano só lê); o Thoth é outro produto e não entra no topo
+	let right = theme.fg("accent", (AGENTS[data.agent]?.label ?? "Build").toUpperCase());
 	const ctx = data.context;
 	if (width >= TWO_COLUMNS && ctx?.tokens != null && ctx.window) {
 		right += `${sep}${meter({ theme, percent: ctx.percent, cells: 14 })} ${theme.fg("text", `${Math.round(ctx.percent ?? 0)}% · ${kTokens(ctx.tokens)} / ${kTokens(ctx.window)}`)}`;
@@ -532,6 +533,16 @@ export function thothLines({ theme, thoth, width }) {
 		...detail(card?.goal),
 		row("thoth free", free === undefined ? undefined : free ?? t("sem chamadas", "sin llamadas", "no calls")),
 	];
+}
+
+// o Thoth é outro produto: THOTH e COTA só aparecem (e só consultam) com ele nesta máquina (variáveis ou CLI no PATH)
+export function thothInstalled(env = process.env, exists = (file) => Boolean(process.getBuiltinModule?.("node:fs")?.existsSync(file)), platform = process.platform) {
+	if (env.THOTH_VAULT_PATH || env.THOTH_TOKEN) return true;
+	const exts = platform === "win32" ? [".exe", ".cmd"] : [""];
+	return String(env.PATH || env.Path || "").split(platform === "win32" ? ";" : ":").some((dir) => {
+		const base = dir.trim().replace(/^"|"$/g, "").replace(/[\\/]+$/, "");
+		return base && ["thoth", "thoth-client"].some((name) => exts.some((ext) => exists(`${base}/${name}${ext}`)));
+	});
 }
 
 // as fontes reais: o CLI `thoth approvals list --json`, o painel local (/api/work-center/cards) e as chamadas do
@@ -859,6 +870,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 	})();
 	// a seção THOTH só consulta quando a coluna da direita aparece pela primeira vez; um único relógio para o processo todo
 	// (trocar de sessão reinstala a interface e só troca quem redesenha), sem segurar a saída do Pink (unref)
+	PINK.thothOn = thothInstalled();
 	const startThoth = () => {
 		PINK.thoth.redraw = redraw;
 		if (PINK.thoth.timer) return;
@@ -948,10 +960,10 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 				const sessions = listed.some((item) => item.current) ? listed : [{ title, current: true, when: relativeTime(Date.now()) }, ...listed];
 				return leftColumn({ theme, width: LEFT_WIDTH, height, data: { sessions, tools: (pink.getActiveTools?.() ?? []).length } });
 			}
-			startThoth();
+			if (PINK.thothOn) startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thoth.data, plan: PINK.plan.data, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : undefined, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)

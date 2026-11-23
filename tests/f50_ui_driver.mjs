@@ -346,6 +346,13 @@ out.sideAgents = (() => {
 	return { tracked, cleared: waiting.size, text, none: ui.rightColumn({ theme: plain, width: 36, height: 60, data: { input: 0, output: 0, cost: 0 } }).join("\n").includes("SUBAGENTES") };
 })();
 out.rightModels =ui.rightColumn({ theme: plain, width: 36, height: 30, data: { input: 1, output: 1, cost: 0, models: ["anthropic/claude-sonnet-4-5-20250929", "thoth"] } }).join("\n");
+// card 1dfwh7kg7r1: o Thoth é outro produto; a lateral só mostra THOTH/COTA com ele na máquina
+out.thothInstalled = [
+	ui.thothInstalled({ PATH: "C:\\bin" }, () => false, "win32"),
+	ui.thothInstalled({ THOTH_VAULT_PATH: "C:\\v" }, () => false, "win32"),
+	ui.thothInstalled({ PATH: "C:\\x;C:\\py\\Scripts\\" }, (file) => file === "C:\\py\\Scripts/thoth-client.exe", "win32"),
+	ui.thothInstalled({ PATH: "bin;." }, () => true, "win32") === true,
+];
 // -- pink.4 (card 86e3px66t): a seção THOTH, com fontes falsas (nenhuma rede, nenhum processo)
 out.thoth = await (async () => {
 	const now = Date.parse("2026-10-29T12:00:00Z");
@@ -861,4 +868,4 @@ out.web = await (async () => {
 		})(),
 	};
 })();
-console.log(JSON.stringify({ web: out.web, notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels, sideAgents: out.sideAgents }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
+console.log(JSON.stringify({ web: out.web, notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels, sideAgents: out.sideAgents, thothInstalled: out.thothInstalled }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));

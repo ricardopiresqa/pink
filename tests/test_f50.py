@@ -404,9 +404,9 @@ def test_the_frame_picks_the_columns_by_width_and_the_bars_by_height(ui_facts: d
     assert ui_facts["frame"]["barRows"] == [1, 1, 2, 2] and ui_facts["topBarLow"] == 1
     top = ui_facts["topBar"]
     assert all(top[w]["width"] == int(w) for w in top)
-    assert "pink 9.9" in top["180"]["text"] and "~/studio" in top["180"]["text"] and "feature/x" in top["180"]["text"] and "THOTH · PLANO" in top["180"]["text"] and "36% · 46k / 128k" in top["180"]["text"]
+    assert "pink 9.9" in top["180"]["text"] and "~/studio" in top["180"]["text"] and "feature/x" in top["180"]["text"] and "PLANO" in top["180"]["text"] and "THOTH" not in top["180"]["text"] and "36% · 46k / 128k" in top["180"]["text"]
     assert "%" not in top["110"]["text"] and "feature/x" in top["110"]["text"]  # estreito: some o medidor
-    assert "feature/x" not in top["70"]["text"] and "THOTH · PLANO" in top["70"]["text"]  # mais estreito: some a branch
+    assert "feature/x" not in top["70"]["text"] and "PLANO" in top["70"]["text"]  # mais estreito: some a branch
     assert "%" not in ui_facts["topBarNoContext"]  # contexto ainda não medido: o medidor não aparece
     bottom = ui_facts["bottomBar"]
     assert bottom["180"]["width"] == 180 and bottom["60"]["width"] == 60 and "ctrl+p comandos │ ctrl+c limpar │ /hotkeys ajuda" in bottom["180"]["text"] and "feature/x" not in bottom["60"]["text"]
@@ -417,6 +417,7 @@ def test_messages_are_labelled_and_the_empty_box_shows_the_placeholder(ui_facts:
     # mensagem do usuário como no Claude Code (card 1dfwh7kg7r1): "> " na primeira linha com texto, sem fundo nem caixa
     assert ui_facts["userLines"] == ["    ", ">oi", " tudo"]  # o Markdown real traz 1 de recuo: "> oi"
     assert ui_facts["skipThinking"] == [True, False, False]
+    assert ui_facts["pink3"]["thothInstalled"] == [False, True, True, True]  # só com o Thoth na máquina a lateral mostra THOTH/COTA
     assert ui_facts["bullet"] == [" ", "● pong 39", "  fim"]  # resposta com "●", como no Claude Code
     # rodapé da resposta como o do OpenCode (pink.3): modelo curto, tempo e velocidade só quando medidos
     assert ui_facts["footers"] == {"full": "Pink · claude-sonnet-4-5 · 20.5s · 45.6 tok/s", "plan": "Pink · Plano · thoth · 4.1s", "fast": "Pink · thoth · 0.0s", "history": "Pink · thoth"}
@@ -594,7 +595,7 @@ def test_in_a_real_terminal_the_frame_shows_three_two_or_one_column_by_width(cli
     (tmp_path / ".pink" / "agent" / "settings.json").write_text(json.dumps({"defaultProvider": "fake", "defaultModel": "ok"}), encoding="utf-8")
     steps = [(None, 6.0), ("\r", 6.0), ("oi pink", 1.0), ("\r", 10.0), ((170, 40), 3.0), ((130, 40), 3.0), ((100, 30), 3.0), ((170, 16), 3.0)]
     wide, middle, narrow, low = ("\n".join(screen) for screen in run_tui(cli, tmp_path, steps, columns=170, rows=40)[4:])
-    assert "SESSÕES" in wide and "CONTEXTO" in wide and "● pong" in wide and "> oi pink" in wide and "Pink · ok · " in wide and "THOTH · BUILD" in wide and "▌" in wide
+    assert "SESSÕES" in wide and "CONTEXTO" in wide and "● pong" in wide and "> oi pink" in wide and "Pink · ok · " in wide and "BUILD" in wide and "THOTH · BUILD" not in wide and "▌" in wide
     assert "SESSÕES" not in middle and "CONTEXTO" in middle and "pong" in middle
     assert "SESSÕES" not in narrow and "CONTEXTO" not in narrow and "pong" in narrow and "ctrl+p comandos" in narrow
     assert "SESSÕES" in low and "pong" in low and len(low.splitlines()) <= 16  # altura pequena: a moldura encolhe, não quebra

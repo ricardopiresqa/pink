@@ -81,10 +81,14 @@ facts.widthsBy = [50, 100, 140, 300].map(m.sidebarWidth);
 const sessions = [s("Pink - Auditar o bot trader atual - api"), s("Pink - 日本語のセッション名 - x", { attention: true }), s("Pink - c", { working: true })];
 const view = (out, clicks) => ({ rows: out.lines.length, widths: [...new Set(out.lines.map(width))], text: out.lines.map(strip), clicks: clicks.map(([x, y]) => m.hitAt(out.hits, x, y) ?? null) });
 const W = m.sidebarWidth(140);
-facts.side = view(m.sidebar({ sessions, active: 0, width: W, rows: 20, frame: 0 }), [[5, 2], [W - 2, 2], [5, 3], [5, 4], [5, 5], [5, 11], [3, 19]]);
+facts.side = view(m.sidebar({ sessions, active: 0, width: W, rows: 20, frame: 0 }), [[5, 2], [5, 3], [W - 2, 3], [5, 4], [5, 5], [5, 6], [5, 8], [5, 14], [3, 19]]);
 facts.ask = view(m.sidebar({ sessions, active: 2, width: W, rows: 12, confirm: "Sair do Pink com 3 sessões abertas?" }), [[4, 11], [13, 11], [5, 2]]);
 facts.narrow = view(m.sidebar({ sessions, active: 1, width: m.sidebarWidth(50), rows: 8 }), [[1, 3], [1, 6]]);
 facts.fit = [width(m.fit("😀😀😀", 5)), m.fit("abc", 5)];
+// card 1dfwh7kg7r1: sessão que morre sozinha deixa o código no crash.log
+const written = [];
+m.logChildExit({ cwd: "C:/Projetos/marketing-stack", started: Date.now() - 5000 }, 3221225786, undefined, { PINK_CODING_AGENT_DIR: process.env.TEMP || process.env.TMPDIR || "/tmp" }, (file, text) => written.push([file.replace(/\\/g, "/"), text]));
+facts.childExit = { codes: [m.exitCodeText(3221225786), m.exitCodeText(1), m.exitCodeText(undefined)], written };
 // seletor da nova sessão: sessões salvas de várias pastas num diretório temporário
 const fs = await import("node:fs");
 const os = await import("node:os");
@@ -231,7 +235,7 @@ def test_clicks_drive_the_sidebar_and_every_key_goes_to_the_active_session(facts
 def test_a_session_that_finishes_out_of_sight_waits_for_the_person_and_the_visible_one_does_not(facts: dict) -> None:
     assert facts["flow"] == [{"working": True, "attention": False}, {"working": False, "attention": True}, {"working": False, "attention": False}, {"working": False, "attention": True}]
     assert facts["progress"] == ["work", "work", "idle", "idle", None]
-    assert facts["icons"] == ["◓", "!", "·", "×"]
+    assert facts["icons"] == ["◠", "!", "·", "×"]
     assert facts["titles"] == ["login - api", "x", "Sessão 3", "a[2Jbc"]  # código de controle no título não chega ao terminal
 
 
@@ -244,15 +248,19 @@ def test_the_sidebar_looks_like_the_owners_print_and_every_item_is_clickable(fac
     assert facts["many"] == {"last": "+ nova sessão", "rows": 12, "plus": "new"}  # mais sessões que linhas: o "+" continua visível
     assert side["rows"] == 20 and side["widths"] == [28]  # nunca passa da largura, nem com título longo ou japonês
     text = side["text"]
-    # cada sessão: nome em negrito com × à direita, linha de estado embaixo, um espaço entre elas
-    assert text[0].strip() == "SESSÕES" and text[2].startswith("▌ · Auditar o bot") and text[2].endswith(" × ") and text[3].rstrip() == "▌   api"
-    assert text[5].startswith("  ! 日本語") and text[6].strip() == "terminou · espera você" and text[8].startswith("  ◐ Sessão 3") and text[9].strip() == "trabalhando…"
-    assert text[11].strip() == "+ nova sessão" and text[-1].strip() == "sair do Pink" and not any("alt+" in line for line in text)
-    assert side["clicks"] == ["select:0", "close:0", "select:0", None, "select:1", "new", "quit"]
+    # cada sessão num card de 3 linhas (nome, o × sozinho no meio da altura, estado) e um espaço entre eles
+    assert text[0].strip() == "SESSÕES" and text[2].startswith("▌ · Auditar o bot") and "×" not in text[2] and text[3].strip("▌ ") == "×" and text[4].rstrip() == "▌   api"
+    assert text[6].startswith("  ! 日本語") and text[7].strip() == "×" and text[8].strip() == "terminou · espera você" and text[10].startswith("  ◜ Sessão 3") and text[12].strip() == "trabalhando…"
+    assert text[14].strip() == "+ nova sessão" and text[-1].strip() == "sair do Pink" and not any("alt+" in line for line in text)
+    assert side["clicks"] == ["select:0", "select:0", "close:0", "select:0", None, "select:1", "select:1", "new", "quit"]
     assert ask["rows"] == 12 and ask["widths"] == [28] and ask["text"][-1].strip() == "[ sim ]  [ não ]" and "Sair do Pink com 3 sessões abertas?" in " ".join(line.strip() for line in ask["text"])
     assert ask["clicks"] == ["yes", "no", "select:0"]  # sem altura para 2 linhas por sessão: 1 linha cada
     assert narrow["widths"] == [5] and narrow["text"][3].startswith("▌2 !") and narrow["clicks"] == ["select:1", "new"]  # terminal estreito: número e estado
     assert facts["fit"] == [5, "abc  "]
+    child = facts["childExit"]
+    assert child["codes"] == ["0xC000013A", "1", "undefined"]
+    assert len(child["written"]) == 1 and child["written"][0][0].endswith("/crash.log")
+    assert "mux: sessão C:/Projetos/marketing-stack saiu sozinha · código 0xC000013A" in child["written"][0][1]
 
 
 def test_the_new_session_picker_lists_folders_and_saved_sessions_from_every_folder(facts: dict) -> None:
@@ -298,13 +306,14 @@ def test_in_a_real_terminal_two_sessions_run_side_by_side_with_status_and_a_ques
     future = time.time() + 86400
     os.utime(saved, (future, future))
 
-    # lateral de 28 colunas; seletor começa na coluna 30. Com 1 sessão o "+" está na linha 6, com 2 na 9; a 1ª sessão salva na linha 10
+    # lateral de 28 colunas; seletor começa na coluna 30. Card de 3 linhas + espaço: com 1 sessão o "+" está na linha 7,
+    # com 2 na 11; a 1ª sessão salva na linha 10
     steps = [
         (None, 7.0), ("\r", 5.0), ("oi pink", 1.0),
-        ("\r" + click(5, 6), 2.0),  # envia e já abre o seletor enquanto a 1 trabalha
+        ("\r" + click(5, 7), 2.0),  # envia e já abre o seletor enquanto a 1 trabalha
         (str(tmp_path / "outra") + "\r", 12.0),  # digita outra pasta: a sessão 2 abre nela
         ("\r", 4.0),  # aceita a confiança na pasta, se o Pi perguntar
-        (click(5, 9), 2.0),  # seletor de novo
+        (click(5, 11), 2.0),  # seletor de novo
         (click(35, 10), 12.0),  # retoma a sessão salva da pasta "antiga"
         ("\r", 4.0),
         (click(5, 3), 3.0), (click(5, 36), 2.0), (click(13, 36), 2.0), ((110, 30), 4.0),
@@ -317,11 +326,12 @@ def test_in_a_real_terminal_two_sessions_run_side_by_side_with_status_and_a_ques
     assert "Trust project folder?" not in joined(first) and "██████╗" in joined(home)  # o Pink da primeira sessão roda à direita da lateral
     assert "SESSÕES" not in right(home)  # a coluna de sessões do próprio Pink some: a lateral já lista
     assert "Nova sessão" in right(picker) and "(atual)" in right(picker) and "Sessões anteriores, de todas as pastas" in right(picker) and "conversa antiga" in right(picker)
-    assert two[2][2] in "·!" and two[5].startswith("▌ ") and "outra" in two[6]  # a 2 abriu na pasta digitada; a 1 segue na lista
-    assert three[8].startswith("▌ ") and "antiga" in three[9] and "conversa antiga" in right(three)  # a sessão salva voltou, na pasta dela
+    # card de 3 linhas + espaço: sessão 1 nas linhas 2-4, a 2 em 6-8 (estado na 8), a 3 em 10-12
+    assert two[2][2] in "·!" and two[6].startswith("▌ ") and "outra" in two[8]  # a 2 abriu na pasta digitada; a 1 segue na lista
+    assert three[10].startswith("▌ ") and "antiga" in three[12] and "conversa antiga" in right(three)  # a sessão salva voltou, na pasta dela
     assert back[2].startswith("▌ ") and "!" not in back[2][:5] and "pong" in joined(back)  # clique na 1 tira o "!" e mostra a resposta
     assert "Sair do Pink com 3 sessões abertas?" in " ".join(line[:28].strip() for line in asking) and "[ sim ]" in joined(asking)
-    assert "Sair do Pink com" not in joined(after) and after[8][2] != " "  # clique em [ não ]: as três seguem abertas
+    assert "Sair do Pink com" not in joined(after) and after[10][2] != " "  # clique em [ não ]: as três seguem abertas
     assert all(len(line) <= 110 for line in resized) and resized[0].startswith(" SESSÕES") and "pong" in joined(resized)
 
 
@@ -617,7 +627,7 @@ def test_a_blocked_session_shows_a_question_mark_and_never_spins(status_facts: d
     icon = status_facts["icon"]
     assert icon["blocked"] == "?"  # criterio (a): nao gira mesmo com o progresso aberto
     assert icon["attention"] == "!" and icon["error"] == "!" and icon["exited"] == "×" and icon["idle"] == "·"
-    assert icon["working"] in "◐◓◑◒"  # criterio (b): trabalhando gira
+    assert icon["working"] in "◜◠◝◞◡◟"  # criterio (b): trabalhando gira (arco de carregamento)
 
 
 def test_the_sidebar_says_what_each_state_waits_for_without_colors(status_facts: dict) -> None:
@@ -664,4 +674,4 @@ def test_a_working_child_shows_the_spinner_and_trabalhando(cli: Path, tmp_path: 
     screens = run_tui(mux, tmp_path, [(None, 7.0)], extra_env=extra, columns=160, rows=30)
     text = "\n".join(line[:32] for line in screens[0])
     assert "trabalhando…" in text
-    assert any(ch in text for ch in "◐◓◑◒")
+    assert any(ch in text for ch in "◜◠◝◞◡◟")

@@ -4,7 +4,7 @@
 // terminal virtual (node-pty + @xterm/headless) e este processo só desenha a lateral, a tela do filho ativo e repassa o teclado.
 // Sem terminal interativo, com comando de uma vez (-p, --help, install...) ou sem node-pty, roda o Pink normal, sem lateral.
 import { execFile } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,7 +28,8 @@ const FIRST_ONLY = new Set(["-c", "--continue", "-r", "--resume"]); // continuar
 const FIRST_ONLY_VALUE = new Set(["--session", "--session-id", "--fork"]);
 // opções do Pink que recebem valor (pink --help); qualquer outro texto solto é a mensagem inicial, que fica só na primeira sessão
 const TAKES_VALUE = new Set(["--provider", "--model", "--api-key", "--system-prompt", "--append-system-prompt", "--mode", "--session-dir", "--models", "--thinking", "--skill", "--prompt-template", "--theme", "--use-theme", "--export", "--tui-mode", "--extension", "-e", "--tools"]);
-const SPIN = ["◐", "◓", "◑", "◒"];
+const SPIN = ["◜", "◠", "◝", "◞", "◡", "◟"]; // arco girando, como um círculo de carregamento
+const CARD_BG = "48;2;32;30;38"; // fundo do card das outras sessões (a ativa usa ACTIVE_BG)
 const PINK = "38;2;255;110;180";
 
 // o lançador põe "--provider thoth --model thoth" antes de tudo; o Pink só reconhece subcomando como 1º argumento
@@ -113,6 +114,20 @@ export function shortTitle(title, index) {
 
 // estado de uma sessão a partir dos sinais do Pink filho: progresso (OSC 9;4) = trabalhando; fim do progresso ou sino numa
 // sessão que não está na tela = espera a pessoa (!) até ela abrir a sessão
+// sessão que morreu sozinha some da lateral: o código de saída vai para o crash.log (0xC000013A = Ctrl+C do console,
+// 0xC0000005/0xC0000409 = queda do processo, 1 = erro tratado), e é ele que diz a causa
+export function exitCodeText(code) {
+	const n = Number(code);
+	return Number.isFinite(n) && n > 255 ? `0x${(n >>> 0).toString(16).toUpperCase()}` : String(code);
+}
+export function logChildExit(session, exitCode, signal, env = process.env, write = appendFileSync) {
+	try {
+		const dir = env.PINK_CODING_AGENT_DIR || path.join(homedir(), ".pink", "agent");
+		mkdirSync(dir, { recursive: true });
+		write(path.join(dir, "crash.log"), `${new Date().toISOString()} mux: sessão ${session.cwd} saiu sozinha · código ${exitCodeText(exitCode)}${signal ? ` · sinal ${signal}` : ""} · ${Math.round((Date.now() - session.started) / 1000)}s aberta\n`);
+	} catch { /* sem disco, sem registro */ }
+}
+
 export function onSignal(session, signal, isActive) {
 	if (signal === "work") session.working = true;
 	if (signal === "idle") {
@@ -250,20 +265,35 @@ export function sidebar({ sessions, active, width, rows, frame = 0, confirm, fol
 	const hit = (action, from = 0, to = width) => hits.push({ y: lines.length, from, to, action });
 	const asking = confirm && !compact ? wrap(confirm, width - 1) : [];
 	const bottomRows = compact ? 0 : asking.length ? asking.length + 1 : 1;
-	// cada sessão em 2 linhas e um espaço, como no print; sem altura para todas, 1 linha cada
-	const tall = !compact && sessions.length * 3 <= rows - lines.length - 2 - bottomRows;
+	// cada sessão num card de 3 linhas com fundo (nome, o × sozinho no meio da altura, estado) e um espaço
+	// (owner 2026-11-22); sem altura para todas, 1 linha cada
+	const tall = !compact && sessions.length * 4 <= rows - lines.length - 2 - bottomRows;
 	sessions.forEach((session, index) => {
 		const on = index === active;
 		const bar = on ? `\x1b[${ACTIVE_BG};${PINK}m▌\x1b[0m` : " ";
-		const bg = on ? `${ACTIVE_BG};` : "";
 		const mark = icon(session, frame);
-		hit(`select:${index}`, 0, compact ? width : width - 3);
-		if (compact) return lines.push(`${bar}\x1b[${bg}1m${fit(`${index < 9 ? index + 1 : " "} ${mark}`, width - 1)}\x1b[0m`);
-		hit(`close:${index}`, width - 3);
+		const spin = isWorking(session) && !session.exited && mark !== "!" && mark !== "?";
+		const markText = (bg) => (spin ? `\x1b[${bg}${PINK}m${mark}\x1b[0m\x1b[${bg}1m` : mark);
+		if (compact) {
+			hit(`select:${index}`);
+			const bg = on ? `${ACTIVE_BG};` : "";
+			return lines.push(`${bar}\x1b[${bg}1m${fit(`${index < 9 ? index + 1 : " "} ${mark}`, width - 1)}\x1b[0m`);
+		}
 		const { name, folder: where } = sessionLabel(session.title, index, session.cwd ? path.basename(session.cwd) : folder);
 		const tone = (session.attention || session.program?.state === "blocked") && !on ? "38;2;240;196;135;" : "";
-		lines.push(`${bar}\x1b[${bg}${tone}1m${fit(` ${mark} ${name}`, width - 4)}\x1b[0m\x1b[${bg}2m × \x1b[0m`);
-		if (!tall) return;
+		if (!tall) {
+			const bg = on ? `${ACTIVE_BG};` : "";
+			hit(`select:${index}`, 0, width - 3);
+			hit(`close:${index}`, width - 3);
+			return lines.push(`${bar}\x1b[${bg}${tone}1m${fit(` ${mark} ${name}`, width - 4)}\x1b[0m\x1b[${bg}2m × \x1b[0m`);
+		}
+		const bg = `${on ? ACTIVE_BG : CARD_BG};`;
+		const nameRow = fit(` ${mark} ${name}`, width - 1).replace(mark, markText(bg));
+		hit(`select:${index}`);
+		lines.push(`${bar}\x1b[${bg}${tone}1m${nameRow}\x1b[0m`);
+		hit(`select:${index}`, 0, width - 3);
+		hit(`close:${index}`, width - 3);
+		lines.push(`${bar}\x1b[${bg}2m${" ".repeat(Math.max(0, width - 4))} × \x1b[0m`);
 		hit(`select:${index}`);
 		lines.push(`${bar}\x1b[${bg}2m${fit(`   ${status(session, where)}`, width - 1)}\x1b[0m`);
 		lines.push(plain(""));
@@ -704,8 +734,9 @@ async function main() {
 		});
 		term.onData((data) => child.write(data)); // respostas às perguntas do Pink ao terminal (posição do cursor, cores)
 		child.onData((data) => term.write(data, () => { if (isActive()) schedule(); }));
-		child.onExit(({ exitCode }) => {
+		child.onExit(({ exitCode, signal }) => {
 			session.exited = true;
+			if (!session.closing && exitCode !== 0) logChildExit(session, exitCode, signal);
 			const index = sessions.indexOf(session);
 			if (index < 0) return;
 			sessions.splice(index, 1);
