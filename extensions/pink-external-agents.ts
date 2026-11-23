@@ -21,6 +21,7 @@ export interface ExternalAgent {
 	external: Kind;
 	command: string;
 	args: string[];
+	model?: string; // escolhido no /agente (card 1dfwh7kgfjf); sem ele vale o padrão do agente
 }
 
 interface Spec {
@@ -221,12 +222,65 @@ export type Ask = (title: string, body: string) => Promise<boolean>;
 const asker = (): Ask | undefined => (globalThis as any).__pinkExternalAsk;
 
 // ---------- execução: o subagente externo é dono do processo ----------
+// os argumentos são fixos (nunca a tarefa nem o modelo de outra origem que não o menu), então o .cmd do npm pelo shell é seguro
+function spawnAgent(agent: ExternalAgent, args: string[], cwd: string, start: typeof spawn): any {
+	const shell = /\.cmd$/i.test(agent.command);
+	const safe = shell ? args.map((arg) => (/^[\w./:@-]+$/.test(arg) ? arg : `"${arg.replace(/"/g, "")}"`)) : args;
+	return start(shell ? `"${agent.command}"` : agent.command, safe, { cwd, shell, windowsHide: true, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, PINK_SUBAGENT: "1" } });
+}
+
+export type ModelChoice = { id: string; label: string; current?: boolean };
+const CLAUDE_MODELS: ModelChoice[] = [{ id: "opus", label: "opus" }, { id: "sonnet", label: "sonnet" }, { id: "haiku", label: "haiku" }];
+
+// os modelos que o agente informa: claude pelos apelidos do próprio CLI, codex por model/list, ACP pelas opções da sessão
+// shortcut: no ACP a lista vem de uma session/new, então fica uma sessão vazia no histórico do agente; session/close se incomodar
+export async function listModels(agent: ExternalAgent, cwd: string, start: typeof spawn = spawn, timeoutMs = 30000): Promise<ModelChoice[]> {
+	if (agent.external === "claude") return CLAUDE_MODELS;
+	const child = spawnAgent(agent, agent.args, cwd, start);
+	child.stderr?.on?.("data", () => {});
+	const client = rpc(child, agent.name, () => {}, async () => undefined);
+	let timer: any;
+	const timeout = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`o ${agent.name} não respondeu a lista de modelos`)), timeoutMs)));
+	const ask = async (method: string, params: unknown) => {
+		const answer = await Promise.race([client.request(method, params), timeout]);
+		if (answer.error) throw new Error(String(answer.error.message ?? `${method} falhou`));
+		return answer.result ?? {};
+	};
+	try {
+		if (agent.external === "codex") {
+			await ask("initialize", { clientInfo: { name: "pink", version: "1" } });
+			client.notify("initialized");
+			const list = await ask("model/list", { limit: 200 });
+			return (list.data ?? []).filter((model: any) => !model?.hidden).map((model: any) => ({ id: String(model.model || model.id), label: String(model.displayName || model.model || model.id), current: Boolean(model.isDefault) }));
+		}
+		await ask("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
+		return acpModels(await ask("session/new", { cwd, mcpServers: [] }));
+	} finally {
+		clearTimeout(timer);
+		try {
+			child.kill();
+		} catch {
+			/* já saiu */
+		}
+	}
+}
+
+// configOptions (categoria model, com ou sem grupos) ou o models antigo do ACP
+export function acpModels(session: any): ModelChoice[] {
+	const option = (session?.configOptions ?? []).find((item: any) => item?.category === "model");
+	if (option) {
+		const flat = (option.options ?? []).flatMap((item: any) => (Array.isArray(item?.options) ? item.options : [item]));
+		return flat.filter((item: any) => item?.value != null).map((item: any) => ({ id: String(item.value), label: String(item.name ?? item.value), current: item.value === option.currentValue }));
+	}
+	const models = session?.models;
+	return (models?.availableModels ?? []).map((item: any) => ({ id: String(item.modelId), label: String(item.name ?? item.modelId), current: item.modelId === models.currentModelId }));
+}
+
 // resume: a conversa continua entre chamadas (sessão inteira no agente, card 1dfwh7kgf8k); o id é gravado nele
 export async function runExternal(agent: ExternalAgent, task: string, cwd: string, signal: AbortSignal | undefined, result: any, emit: () => void, start: typeof spawn = spawn, ask: () => Ask | undefined = asker, resume?: { id?: string }): Promise<any> {
-	result.model = result.model ?? agent.name;
-	const shell = /\.cmd$/i.test(agent.command);
-	const args = agent.external === "claude" && resume?.id ? [...agent.args, "--resume", resume.id] : agent.args;
-	const child: any = start(shell ? `"${agent.command}"` : agent.command, args, { cwd, shell, windowsHide: true, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, PINK_SUBAGENT: "1" } });
+	result.model = result.model ?? agent.model ?? agent.name;
+	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;
+	const child = spawnAgent(agent, args, cwd, start);
 	let aborted = false;
 	const killChild = () => {
 		aborted = true;
@@ -268,8 +322,8 @@ export async function runExternal(agent: ExternalAgent, task: string, cwd: strin
 			});
 			child.stdin.end(task);
 			result.exitCode = await exited;
-		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume);
-		else result.exitCode = await runAcp(child, agent.name, task, cwd, result, emit, ask, exited, resume);
+		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume, agent.model);
+		else result.exitCode = await runAcp(child, agent.name, task, cwd, result, emit, ask, exited, resume, agent.model);
 	} finally {
 		signal?.removeEventListener?.("abort", killChild);
 		if (child.exitCode == null) killChild();
@@ -288,7 +342,7 @@ const failed = (result: any, name: string, message: string) => {
 	return 1;
 };
 
-async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }): Promise<number> {
+async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string): Promise<number> {
 	let done: (code: number) => void = () => {};
 	const finished = new Promise<number>((resolve) => (done = resolve));
 	const client = rpc(
@@ -327,7 +381,7 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 	const init = await client.request("initialize", { clientInfo: { name: "pink", version: "1" } });
 	if (init.error) return failed(result, "codex", String(init.error.message ?? "initialize falhou"));
 	client.notify("initialized");
-	const options = { cwd, approvalPolicy: "on-request", sandbox: "workspace-write" };
+	const options = { cwd, approvalPolicy: "on-request", sandbox: "workspace-write", ...(model ? { model } : {}) };
 	const thread = await client.request(resume?.id ? "thread/resume" : "thread/start", resume?.id ? { threadId: resume.id, ...options } : options);
 	if (thread.error) return failed(result, "codex", String(thread.error.message ?? "thread/start falhou"));
 	if (typeof thread.result?.model === "string") result.model = thread.result.model;
@@ -337,8 +391,9 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 	return Promise.race([finished, exited.then((code) => (result.stopReason ? code : failed(result, "codex", result.errorMessage || `o codex saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}`)))]);
 }
 
-async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }): Promise<number> {
+async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string): Promise<number> {
 	const state = { text: "", loading: false };
+	let config: any[] = [];
 	const client = rpc(
 		child,
 		name,
@@ -363,15 +418,22 @@ async function runAcp(child: any, name: string, task: string, cwd: string, resul
 		state.loading = true;
 		const loaded = await client.request("session/load", { sessionId: resume.id, cwd, mcpServers: [] });
 		state.loading = false;
-		if (!loaded.error) sessionId = resume.id;
+		if (!loaded.error) (sessionId = resume.id), (config = loaded.result?.configOptions ?? []);
 	}
 	if (!sessionId) {
 		// shortcut: agente sem loadSession recomeça a conversa a cada mensagem; manter o processo vivo resolveria
 		const session = await client.request("session/new", { cwd, mcpServers: [] });
 		if (session.error) return failed(result, name, String(session.error.message ?? "session/new falhou"));
 		sessionId = session.result?.sessionId;
+		config = session.result?.configOptions ?? [];
 	}
 	if (resume && sessionId) resume.id = sessionId;
+	if (model && sessionId) {
+		const option = config.find((item: any) => item?.category === "model");
+		const set = option ? await client.request("session/set_config_option", { sessionId, configId: option.id, value: model }) : await client.request("session/set_model", { sessionId, modelId: model });
+		if (set.error) return failed(result, name, `O ${name} recusou o modelo ${model}: ${set.error.message ?? "erro"}`);
+		result.model = model;
+	}
 	const prompt = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: task }] });
 	const answer = await Promise.race([prompt, exited.then((code) => ({ error: { message: `o ${name} saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}` } }))]);
 	if (answer.error) return failed(result, name, String(answer.error.message ?? "session/prompt falhou"));

@@ -41,7 +41,8 @@ rl.on("line", (line) => {
   const m = JSON.parse(line);
   if (m.method === "initialize") return say({ id: m.id, result: { userAgent: "fake" } });
   if (m.method === "initialized") return;
-  if (m.method === "thread/start") return say({ id: m.id, result: { thread: { id: "th1" }, model: "gpt-fake", cwd: m.params.cwd, approvalPolicy: m.params.approvalPolicy, sandbox: m.params.sandbox } });
+  if (m.method === "model/list") return say({ id: m.id, result: { data: [{ id: "a", model: "gpt-5", displayName: "GPT-5", isDefault: true, hidden: false }, { id: "h", model: "oculto", displayName: "x", hidden: true }, { id: "m", model: "gpt-mini", displayName: "GPT mini", hidden: false }], nextCursor: null } });
+  if (m.method === "thread/start") return say({ id: m.id, result: { thread: { id: "th1" }, model: m.params.model ?? "gpt-fake", cwd: m.params.cwd, approvalPolicy: m.params.approvalPolicy, sandbox: m.params.sandbox } });
   if (m.method === "thread/resume") return say({ id: m.id, result: { thread: { id: m.params.threadId }, model: "gpt-retomado" } });
   if (m.method === "turn/start") {
     task = m.params.input[0].text;
@@ -72,7 +73,8 @@ rl.on("line", (line) => {
     say({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "HISTORICO" } } } });
     return say({ jsonrpc: "2.0", id: m.id, result: {} });
   }
-  if (m.method === "session/new") return say({ jsonrpc: "2.0", id: m.id, result: { sessionId: "s-" + require_cwd(m.params.cwd) } });
+  if (m.method === "session/new") return say({ jsonrpc: "2.0", id: m.id, result: { sessionId: "s-" + require_cwd(m.params.cwd), configOptions: [{ id: "modelo", category: "model", type: "select", currentValue: "a/1", options: [{ group: "g", name: "G", options: [{ value: "a/1", name: "A 1" }, { value: "b/2", name: "B 2" }] }] }] } });
+  if (m.method === "session/set_config_option") return say(m.params.value === "ruim" || m.params.configId !== "modelo" ? { jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "modelo desconhecido" } } : { jsonrpc: "2.0", id: m.id, result: {} });
   if (m.method === "session/prompt") {
     promptId = m.id;
     const up = (u) => say({ jsonrpc: "2.0", method: "session/update", params: { sessionId: m.params.sessionId, update: u } });
@@ -152,6 +154,21 @@ out.codexResume = { id: cx.id, model: r.model };
 const ac2 = { id: "s-antiga" };
 r = await ext.runExternal(agent("opencode", "acp", ["acp"]), "c", root, undefined, fresh(), () => {}, fake(acpJs), say(true), ac2);
 out.acpResume = { id: ac2.id, parts: parts(r) };
+
+// modelo escolhido no /agente
+r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), model: "opus" }, "m", root, undefined, fresh(), () => {}, fake(claudeJs));
+out.claudeModel = r.messages.at(-1).content[0].text;
+r = await ext.runExternal({ ...agent("codex", "codex", []), model: "gpt-mini" }, "arrumar build", root, undefined, fresh(), () => {}, fake(codexJs), say(true));
+out.codexModel = r.model;
+r = await ext.runExternal({ ...agent("opencode", "acp", ["acp"]), model: "b/2" }, "editar b", root, undefined, fresh(), () => {}, fake(acpJs), say(true));
+out.acpModel = [r.stopReason, r.model];
+r = await ext.runExternal({ ...agent("opencode", "acp", ["acp"]), model: "ruim" }, "editar b", root, undefined, fresh(), () => {}, fake(acpJs), say(true));
+out.acpBadModel = [r.stopReason, r.errorMessage];
+out.listCodex = await ext.listModels(agent("codex", "codex", []), root, fake(codexJs));
+out.listAcp = await ext.listModels(agent("opencode", "acp", ["acp"]), root, fake(acpJs));
+out.listClaude = (await ext.listModels(agent("claude", "claude", []), root)).map((m) => m.id);
+out.listSilent = await ext.listModels(agent("codex", "codex", []), root, () => spawn(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], { stdio: ["pipe", "pipe", "pipe"] }), 300).then(() => "ok", (e) => e.message);
+out.acpOld = ext.acpModels({ models: { currentModelId: "x", availableModels: [{ modelId: "x", name: "X" }, { modelId: "y" }] } });
 console.log(JSON.stringify(out));
 """
 
@@ -163,15 +180,19 @@ const pi = { registerCommand: (name, spec) => (commands[name] = spec), on: (even
 const agents = [{ name: "claude", external: "claude" }, { name: "codex", external: "codex" }];
 let release;
 const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) => {
-  runs.push({ agent: agent.name, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
+  runs.push({ agent: agent.name, model: agent.model ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
   resume.id = resume.id ?? "sess-1";
   if (text === "devagar") await new Promise((r) => (release = r));
   result.messages.push({ content: [{ type: "toolCall", name: "bash", arguments: { command: "ls -la" } }] }, { content: [{ type: "text", text: `resposta a ${text}` }] });
   result.stopReason = "stop";
   emit();
 };
-mod.default(pi, () => agents, run);
-const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), select: async () => "codex", confirm: async () => true };
+const menus = [];
+const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini" }] : [{ id: "opus", label: "opus" }]);
+mod.default(pi, () => agents, run, models);
+const answers = [];
+const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
+answers.push("Padrão do claude");
 const ctx = { hasUI: true, cwd: "C:\\proj", ui };
 const input = (text, c = ctx) => handlers.input({ text, source: "interactive" }, c);
 const out = {};
@@ -192,8 +213,19 @@ out.busy = [(await input("outra")).action, notes.at(-1)];
 release();
 await new Promise((r) => setTimeout(r, 20));
 out.status = status.filter(Boolean).slice(0, 3);
+answers.push("codex", "GPT mini — gpt-mini");
 await commands.agente.handler("", ctx);
-out.picked = runs.length && (await input("pelo menu"), await new Promise((r) => setTimeout(r, 20)), runs.at(-1).agent);
+out.picked = runs.length && (await input("pelo menu"), await new Promise((r) => setTimeout(r, 20)), [runs.at(-1).agent, runs.at(-1).model]);
+await commands.agente.handler("claude opus", ctx);
+await input("direto");
+await new Promise((r) => setTimeout(r, 20));
+out.direct = [runs.at(-1).agent, runs.at(-1).model, status.at(-1)];
+await commands.agente.handler("codex x;rm", ctx);
+out.badModel = [notes.at(-1), runs.length];
+answers.push(undefined);
+await commands.agente.handler("codex", ctx);
+out.cancelKeeps = (await input("ainda claude"), await new Promise((r) => setTimeout(r, 20)), runs.at(-1).agent);
+out.menus = menus;
 await commands.agente.handler("off", ctx);
 out.after = (await input("de volta")).action;
 out.headless = await (async () => {
@@ -294,14 +326,38 @@ def test_agente_sends_what_the_person_types_to_the_agent_and_keeps_the_conversat
     assert session["first"] == session["second"] == "handled"
     assert session["runs"][:2] == [["claude", "primeira", "C:\\proj", True], ["claude", "segunda", "C:\\proj", True]]
     assert session["sent"][:2] == [["pink-agente-pedido", "› claude: primeira"], ["pink-agente", "• bash ls -la\n\nresposta a primeira"]]
-    assert session["status"][0] == "agente: claude" and session["status"][1].startswith("claude trabalhando")
+    assert session["status"][:2] == ["claude: buscando modelos…", "agente: claude"] and session["status"][2].startswith("claude trabalhando")
 
 
 def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_off(session: dict) -> None:
     assert session["busy"] == ["handled", "warning"]
-    assert session["picked"] == "codex"
+    assert session["picked"] == ["codex", "gpt-mini"]
     assert session["after"] == "continue"
     assert session["headless"] == 2
+
+
+def test_agente_model_menu_direct_choice_and_validation(session: dict) -> None:
+    assert session["runs"][0][:2] == ["claude", "primeira"]
+    assert session["menus"][0] == ["Modelo do claude", ["Padrão do claude", "opus"]]  # padrão primeiro: mantém o do agente
+    assert session["menus"][2] == ["Modelo do codex", ["Padrão do codex (GPT-5)", "GPT-5 — gpt-5", "GPT mini — gpt-mini"]]
+    assert session["direct"] == ["claude", "opus", "agente: claude · opus"]  # com o nome, sem menu
+    assert session["badModel"][0] == "warning"
+    assert session["cancelKeeps"] == "claude"  # Esc no menu não troca o agente
+
+
+def test_the_chosen_model_reaches_each_agent(ext: dict) -> None:
+    assert ext["claudeModel"].endswith("args=-p --model opus")
+    assert ext["codexModel"] == "gpt-mini"
+    assert ext["acpModel"] == ["stop", "b/2"]
+    assert ext["acpBadModel"][0] == "error" and "recusou o modelo ruim" in ext["acpBadModel"][1]
+
+
+def test_model_lists_come_from_each_agent(ext: dict) -> None:
+    assert ext["listCodex"] == [{"id": "gpt-5", "label": "GPT-5", "current": True}, {"id": "gpt-mini", "label": "GPT mini", "current": False}]  # escondido fica de fora
+    assert ext["listAcp"] == [{"id": "a/1", "label": "A 1", "current": True}, {"id": "b/2", "label": "B 2", "current": False}]  # grupos achatados
+    assert ext["listClaude"] == ["opus", "sonnet", "haiku"]
+    assert "não respondeu" in ext["listSilent"]
+    assert ext["acpOld"] == [{"id": "x", "label": "X", "current": True}, {"id": "y", "label": "y", "current": False}]
 
 
 def test_the_subagent_patches_are_in_the_package(package_dir: Path) -> None:

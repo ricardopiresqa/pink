@@ -4,7 +4,7 @@
 // thread/resume, ACP session/load). /agente off volta ao modelo do Pink, que vê a conversa (as mensagens ficam na sessão).
 // O transporte é o mesmo dos subagentes externos (examples/extensions/subagent/external.ts, cards 1dfwh7kgf8g/h/j).
 import { t } from "./pink-i18n.ts";
-import { externalAgents, runExternal } from "../examples/extensions/subagent/external.ts";
+import { externalAgents, listModels, runExternal } from "../examples/extensions/subagent/external.ts";
 
 const STATUS = "pink-agente";
 
@@ -28,7 +28,9 @@ export function render(result: any): string {
 	return body || t("(sem resposta)", "(sin respuesta)", "(no answer)");
 }
 
-export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal) {
+const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` : agent.name);
+
+export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels) {
 	let active: { agent: any; resume: { id?: string }; controller?: AbortController } | undefined;
 
 	const stop = (ctx?: any) => {
@@ -57,14 +59,16 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			result.errorMessage = controller.signal.aborted ? t("cancelado", "cancelado", "cancelled") : String(error?.message ?? error);
 		}
 		if (current.controller === controller) current.controller = undefined;
-		if (active === current) ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${name}`);
+		if (active === current) ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(current.agent)}`);
 		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result), details: { agent: name, model: result.model, usage: result.usage, error: result.stopReason === "error" } });
 	};
 
 	pink.registerCommand("agente", {
 		description: t("Conversa direto com um agente instalado (claude, codex, opencode...) com o login dele; /agente off volta ao Pink", "Conversa directo con un agente instalado (claude, codex, opencode...) con su login; /agente off vuelve a Pink", "Talk straight to an installed agent (claude, codex, opencode...) with its own login; /agente off returns to Pink"),
 		handler: async (args: string, ctx: any) => {
-			const wanted = String(args ?? "").trim().toLowerCase();
+			const [first = "", ...rest] = String(args ?? "").trim().split(/\s+/);
+			const wanted = first.toLowerCase();
+			let model = rest.join(" ");
 			const agents = list();
 			if (wanted === "off" || wanted === "parar" || wanted === "stop") {
 				const was = active?.agent.name;
@@ -80,10 +84,30 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			}
 			const agent = agents.find((item) => item.name === name);
 			if (!agent) return ctx.ui?.notify?.(t(`${name} não está instalado. Disponíveis: ${agents.map((a) => a.name).join(", ") || "nenhum"}.`, `${name} no está instalado. Disponibles: ${agents.map((a) => a.name).join(", ") || "ninguno"}.`, `${name} is not installed. Available: ${agents.map((a) => a.name).join(", ") || "none"}.`), "warning");
+			if (model && !/^[\w./:@-]+$/.test(model)) return ctx.ui?.notify?.(t(`Nome de modelo inválido: ${model}`, `Nombre de modelo no válido: ${model}`, `Invalid model name: ${model}`), "warning");
+			if (!model && ctx.hasUI) {
+				// menu com os modelos que o agente informa; o primeiro item mantém o padrão dele
+				ctx.ui?.setStatus?.(STATUS, t(`${name}: buscando modelos…`, `${name}: buscando modelos…`, `${name}: fetching models…`));
+				let choices: Awaited<ReturnType<typeof listModels>> = [];
+				try {
+					choices = await models(agent, ctx.cwd);
+				} catch (error: any) {
+					ctx.ui?.notify?.(t(`Não deu para listar os modelos do ${name} (${error?.message ?? error}); fica o padrão dele.`, `No se pudieron listar los modelos de ${name} (${error?.message ?? error}); queda su predeterminado.`, `Could not list ${name}'s models (${error?.message ?? error}); keeping its default.`), "warning");
+				}
+				ctx.ui?.setStatus?.(STATUS, active ? `${t("agente", "agente", "agent")}: ${label(active.agent)}` : undefined);
+				if (choices.length) {
+					const current = choices.find((choice) => choice.current);
+					const keep = t(`Padrão do ${name}${current ? ` (${current.label})` : ""}`, `Predeterminado de ${name}${current ? ` (${current.label})` : ""}`, `${name} default${current ? ` (${current.label})` : ""}`);
+					const shown = choices.map((choice) => (choice.label === choice.id ? choice.id : `${choice.label} — ${choice.id}`));
+					const picked = await ctx.ui.select(t(`Modelo do ${name}`, `Modelo de ${name}`, `${name} model`), [keep, ...shown]);
+					if (picked === undefined) return;
+					if (picked !== keep) model = choices[shown.indexOf(picked)]?.id ?? "";
+				}
+			}
 			stop(ctx);
-			active = { agent, resume: {} };
-			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${name}`);
-			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${name}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${name}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${name}, with its own login and quota. /agente off returns to Pink.`), "info");
+			active = { agent: model ? { ...agent, model } : agent, resume: {} };
+			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
+			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
 		},
 	});
 
