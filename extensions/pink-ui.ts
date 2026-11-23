@@ -116,9 +116,11 @@ const THINKING_PT = { minimal: t("mínimo", "mínimo", "minimal"), low: t("baixo
 // "thoth  thoth  off" dizia modelo, provedor e nível sem explicar nada: agora o nome do modelo, o provedor só quando é
 // outro, e o pensamento só quando está ligado ("pensamento alto")
 // como no OpenCode, o agente (Build/Plano) vem antes do modelo, na cor da marca
-export function modelLabel({ theme, model, thinking, agent, permission = "edits" }) {
+export function modelLabel({ theme, model, thinking, agent, permission = "edits", external = (globalThis as any).__pinkExternalAgent }) {
 	const mode = agent === "build" && permission === "ask" ? t(" (pergunta tudo)", " (pregunta todo)", " (ask everything)") : "";
 	const who = AGENTS[agent] ? `${theme.fg("accent", `${AGENTS[agent].label}${mode}`)}${theme.fg("muted", " · ")}` : "";
+	// /agente ligado (card 1dfwh7kgfjr): o Build fica; no lugar do modelo do Pink, o agente instalado e o modelo dele
+	if (external?.name) return `${who}${external.name}${theme.fg("muted", ` · ${external.model ?? t("modelo padrão", "modelo predeterminado", "default model")}`)}`;
 	if (!model) return `${who}${theme.fg("muted", t("sem modelo", "sin modelo", "no model"))}`;
 	const name = model.name || model.id;
 	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";

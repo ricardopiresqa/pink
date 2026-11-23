@@ -107,6 +107,12 @@ out.modo4 = ui.currentMode();
 out.modoDesc = cmds.modo.description;
 out.label = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build", permission: "ask" });
 out.labelEdits = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build", permission: "edits" });
+out.labelExternal = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build", external: { name: "opencode", model: "opencode/deepseek" } });
+out.labelExternalDefault = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build", external: { name: "claude" } });
+globalThis.__pinkExternalAgent = { name: "codex", model: "gpt-6-sol" };
+out.labelGlobal = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build" });
+globalThis.__pinkExternalAgent = undefined;
+out.labelBack = ui.modelLabel({ theme, model: { name: "m", id: "m" }, thinking: "off", agent: "build" });
 out.hints = ui.hintsLine({ theme, width: 200 });
 out.shortcuts = Object.keys(shortcuts);
 out.altDesc = shortcuts["alt+m"].description;
@@ -324,6 +330,14 @@ def test_modo_command_takes_names_cycles_on_no_argument_and_warns_on_unknown(mod
 def test_model_label_says_pergunta_tudo_only_in_ask_mode(modes_out: dict) -> None:
     assert "Build (pergunta tudo)" in modes_out["label"]
     assert "pergunta tudo" not in modes_out["labelEdits"]
+
+
+def test_model_label_shows_the_external_agent_while_agente_is_on(modes_out: dict) -> None:  # card 1dfwh7kgfjr
+    strip = lambda s: __import__("re").sub(r"\x1b\[[0-9;]*m", "", s)  # noqa: E731
+    assert strip(modes_out["labelExternal"]) == "Build · opencode · opencode/deepseek"  # o Build fica, o modelo do Pink sai
+    assert strip(modes_out["labelExternalDefault"]) == "Build · claude · modelo padrão"
+    assert strip(modes_out["labelGlobal"]) == "Build · codex · gpt-6-sol"  # o /agente liga pelo globalThis
+    assert "Build" in strip(modes_out["labelBack"]) and "codex" not in strip(modes_out["labelBack"])
 
 
 def test_hints_line_mentions_alt_m_and_the_only_shortcut_is_alt_m(modes_out: dict) -> None:

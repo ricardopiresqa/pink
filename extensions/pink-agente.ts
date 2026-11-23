@@ -36,6 +36,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 	const stop = (ctx?: any) => {
 		active?.controller?.abort();
 		active = undefined;
+		(globalThis as any).__pinkExternalAgent = undefined; // o rótulo da caixa volta a "Build · modelo" (pink-ui)
 		ctx?.ui?.setStatus?.(STATUS, undefined);
 	};
 
@@ -106,6 +107,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			}
 			stop(ctx);
 			active = { agent: model ? { ...agent, model } : agent, resume: {} };
+			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
 		},
