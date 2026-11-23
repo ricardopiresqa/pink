@@ -590,6 +590,43 @@ const hasLeftovers = (agentDir) => (fs.existsSync(agentDir) ? fs.readdirSync(age
   t2.turnOff();
 }
 
+// (16) card 1dfwh7kg8mn: as ações vão por UMA conexão MCP; o servidor falso conta as chamadas no mesmo processo
+{
+  const { spawn } = await import("node:child_process");
+  const server = path.join(root, "fake-mcp.mjs");
+  fs.writeFileSync(server, `
+    const rl = (await import("node:readline")).createInterface({ input: process.stdin });
+    let calls = 0;
+    const send = (m) => process.stdout.write(JSON.stringify(m) + "\\n");
+    rl.on("line", (line) => {
+      const m = JSON.parse(line);
+      if (m.method === "initialize") return send({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2025-06-18", capabilities: {} } });
+      if (m.method !== "tools/call") return;
+      calls++;
+      const a = m.params.arguments;
+      if (m.params.name === "set_value") return send({ jsonrpc: "2.0", id: m.id, result: { isError: calls < 2, content: [{ type: "text", text: "chamada " + calls + " " + a.element_token }] } });
+      send({ jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "chamada " + calls + " pid " + a.pid }, { type: "image", data: Buffer.from("PNG-MCP").toString("base64"), mimeType: "image/png" }] } });
+    });
+    rl.on("close", () => process.exit(0));
+  `);
+  const started = [];
+  const start = (exe, argv, opts) => {
+    started.push({ exe, argv });
+    return spawn(process.execPath, [server, ...argv], opts);
+  };
+  const run = tela.createMcpRun(start);
+  const pipe = "\\\\.\\pipe\\pink-cua-teste";
+  const shot = path.join(root, "shot-mcp.png");
+  const r1 = await run("cua.exe", ["call", "--socket", pipe, "get_window_state", JSON.stringify({ pid: 7, window_id: 9 }), "--screenshot-out-file", shot]);
+  const r2 = await run("cua.exe", ["call", "--socket", pipe, "set_value", JSON.stringify({ pid: 7, element_token: "s00000001:3", value: "x" })]);
+  const child = started.length;
+  run.close(pipe);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const r3 = await run("cua.exe", ["call", "--socket", pipe, "list_windows", "{}"]);
+  run.close();
+  out.mcpRun = { r1, r2, r3, shot: fs.existsSync(shot) ? fs.readFileSync(shot, "utf8") : null, startsBeforeClose: child, startsAfterClose: started.length, argv: started[0].argv };
+}
+
 console.log(JSON.stringify(out));
 
 """
@@ -656,6 +693,15 @@ def test_border_target_only_takes_integer_ids(tela_out: dict) -> None:
 def test_border_failure_does_not_block_the_screen(tela_out: dict) -> None:
     r = tela_out["borderFails"]
     assert r["on"] is True and r["isError"] is False, r
+
+
+def test_actions_share_one_mcp_connection_so_the_read_is_remembered(tela_out: dict) -> None:
+    """Card 1dfwh7kg8mn: com um `call` por ação o daemon esquecia a leitura e clicar/preencher falhava."""
+    m = tela_out["mcpRun"]
+    assert m["argv"][:2] == ["mcp", "--socket"] and m["startsBeforeClose"] == 1  # leitura e ação no mesmo processo
+    assert m["r1"] == {"code": 0, "stdout": "chamada 1 pid 7", "stderr": ""} and m["shot"] == "PNG-MCP"  # captura vem da resposta MCP
+    assert m["r2"]["stdout"] == "chamada 2 s00000001:3" and m["r2"]["code"] == 0  # o servidor viu a 2a chamada na mesma conexão
+    assert m["startsAfterClose"] == 2 and m["r3"]["stdout"].startswith("chamada 1")  # desligar fecha; a próxima abre conexão nova
 
 
 def test_border_helper_source_ships_and_compiles(package_dir: Path, tmp_path: Path) -> None:

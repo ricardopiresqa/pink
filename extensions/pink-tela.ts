@@ -296,7 +296,114 @@ const runProcess: Run = (exe, argv, signal) =>
 		child.on("close", (code) => resolve({ code, stdout, stderr }));
 	});
 
-export function createTela(pink: any, { env = process.env, run = runProcess, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install, border = startBorder as (env: NodeJS.ProcessEnv) => Border | undefined } = {}) {
+// as ações vão por UMA conexão MCP (`cua-driver mcp --socket`) por daemon: cada `cua-driver call` abria uma sessão nova
+// e o daemon esquecia a leitura, então clicar e preencher falhavam ("window_never_read", "older read"; card 1dfwh7kg8mn)
+type Client = { child: any; next: number; waiting: Map<number, (msg: any) => void>; ready: Promise<boolean> };
+
+function request(client: Client, method: string, params: unknown, signal?: AbortSignal, ms = 60_000): Promise<any> {
+	const id = ++client.next;
+	return new Promise((resolve) => {
+		const finish = (msg: any) => {
+			clearTimeout(timer);
+			signal?.removeEventListener?.("abort", abort);
+			client.waiting.delete(id);
+			resolve(msg);
+		};
+		const abort = () => finish({ error: { message: t("cancelado", "cancelado", "cancelled") } });
+		const timer = setTimeout(() => finish({ error: { message: t("o cua-driver não respondeu em 60 s", "el cua-driver no respondió en 60 s", "the cua-driver did not answer in 60 s") } }), ms);
+		signal?.addEventListener?.("abort", abort, { once: true });
+		client.waiting.set(id, finish);
+		try {
+			client.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+		} catch (error: any) {
+			finish({ error: { message: String(error?.message ?? error) } });
+		}
+	});
+}
+
+export function createMcpRun(start: typeof spawn = spawn) {
+	const clients = new Map<string, Client>();
+	const connect = (exe: string, pipe: string): Client => {
+		const key = `${exe}|${pipe}`;
+		const known = clients.get(key);
+		if (known && known.child.exitCode == null) return known;
+		const child = start(exe, ["mcp", "--socket", pipe], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+		const client: Client = { child, next: 0, waiting: new Map(), ready: Promise.resolve(false) };
+		let buffer = "";
+		child.stdout.setEncoding("utf8");
+		child.stdout.on("data", (chunk: string) => {
+			buffer += chunk;
+			for (let end = buffer.indexOf("\n"); end >= 0; end = buffer.indexOf("\n")) {
+				const line = buffer.slice(0, end).trim();
+				buffer = buffer.slice(end + 1);
+				try {
+					const msg = line ? JSON.parse(line) : undefined;
+					if (msg?.id != null) client.waiting.get(msg.id)?.(msg);
+				} catch {
+					/* linha que não é JSON-RPC */
+				}
+			}
+		});
+		const gone = () => {
+			for (const finish of [...client.waiting.values()]) finish({ error: { message: t("o cua-driver mcp saiu", "el cua-driver mcp salió", "the cua-driver mcp exited") } });
+			if (clients.get(key) === client) clients.delete(key);
+		};
+		child.on("exit", gone);
+		child.on("error", gone);
+		clients.set(key, client);
+		client.ready = request(client, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "pink", version: "1" } }, undefined, 10_000).then((msg) => {
+			if (msg.error) return false;
+			try {
+				child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+			} catch {
+				return false;
+			}
+			return true;
+		});
+		return client;
+	};
+	const run: Run & { close: (pipe?: string) => void } = Object.assign(
+		async (exe: string, argv: string[], signal?: AbortSignal) => {
+			if (argv[0] !== "call") return runProcess(exe, argv, signal);
+			// argv igual ao do `call`: ["call", "--socket", pipe, ação, json, ("--screenshot-out-file", arquivo)]
+			const pipe = argv[2];
+			const client = connect(exe, pipe);
+			if (!(await client.ready)) return { code: 1, stdout: "", stderr: t("o cua-driver mcp não iniciou", "el cua-driver mcp no inició", "the cua-driver mcp did not start") };
+			let args = {};
+			try {
+				args = JSON.parse(argv[4] || "{}");
+			} catch {
+				/* o execute já manda JSON */
+			}
+			const msg = await request(client, "tools/call", { name: argv[3], arguments: args }, signal);
+			if (msg.error) return { code: 1, stdout: "", stderr: String(msg.error.message ?? JSON.stringify(msg.error)) };
+			const content = Array.isArray(msg.result?.content) ? msg.result.content : [];
+			const text = content.filter((part: any) => part?.type === "text").map((part: any) => part.text).join("\n") || (msg.result?.structuredContent ? JSON.stringify(msg.result.structuredContent) : "");
+			const image = content.find((part: any) => part?.type === "image" && part.data);
+			const shot = argv.indexOf("--screenshot-out-file");
+			if (shot >= 0 && image) fs.writeFileSync(argv[shot + 1], Buffer.from(image.data, "base64"));
+			return { code: msg.result?.isError ? 1 : 0, stdout: text.slice(0, OUTPUT_CAP), stderr: "" };
+		},
+		{
+			close(pipe?: string) {
+				for (const [key, client] of clients) {
+					if (pipe && !key.endsWith(`|${pipe}`)) continue;
+					clients.delete(key);
+					try {
+						client.child.stdin.end(); // fim da entrada encerra o cua-driver mcp
+						client.child.kill();
+					} catch {
+						/* já saiu */
+					}
+				}
+			},
+		},
+	);
+	return run;
+}
+const mcpRun = createMcpRun();
+
+export function createTela(pink: any, { env = process.env, run = mcpRun as Run, spawnDaemon = spawn, exists = fs.existsSync, tmp = os.tmpdir(), check = trusted, find = lookup, sync = spawnSync, installer = install, border = startBorder as (env: NodeJS.ProcessEnv) => Border | undefined } = {}) {
 	let on = false;
 	let outline: Border | undefined;
 	let starting = false;
@@ -409,6 +516,7 @@ export function createTela(pink: any, { env = process.env, run = runProcess, spa
 
 	function turnOff(): string {
 		const child = daemon;
+		if (pipe) (run as any).close?.(pipe); // a conexão das ações antes do daemon
 		if (exeUsed && pipe) {
 			try {
 				sync(exeUsed, ["stop", "--socket", pipe], { windowsHide: true, timeout: 5000 });
