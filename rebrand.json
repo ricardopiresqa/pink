@@ -163,6 +163,10 @@
     {
       "from": "extensions/pink-i18n.ts",
       "to": "examples/extensions/subagent/pink-i18n.ts"
+    },
+    {
+      "from": "extensions/pink-agente.ts",
+      "to": "extensions/pink-agente.ts"
     }
   ],
   "env_rename": {
@@ -2264,7 +2268,7 @@
       "id": "builtin-ui-extension",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "resolvedExtensionPaths=resolveCliPaths(cwd,parsed.extensions)",
-      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-lsp.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-rules.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-review.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skill-propose.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sandbox.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-tela.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
+      "replace": "resolvedExtensionPaths=[path5.join(getPackageDir(),\"extensions\",\"pink-permissions.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-hooks.ts\"),...process.env.PINK_NO_BUILTIN_UI?[]:[path5.join(getPackageDir(),\"extensions\",\"pink-ui.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-notify.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-natives.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-web.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-shell-bg.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-agente.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-memory.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sessions-bus.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-loop.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skills.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-context.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-lsp.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-rules.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-review.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-skill-propose.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-sandbox.ts\"),path5.join(getPackageDir(),\"extensions\",\"pink-tela.ts\")],path5.join(getPackageDir(),\"examples\",\"extensions\",\"subagent\",\"index.ts\"),path5.join(getPackageDir(),\"examples\",\"extensions\",\"questionnaire.ts\"),...(resolveCliPaths(cwd,parsed.extensions)??[])]",
       "count": 1
     },
     {
@@ -2986,21 +2990,21 @@
       "file": "examples/extensions/subagent/index.ts",
       "count": 1,
       "find": "import { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano",
-      "replace": "import { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano\nimport { applyExternalEvent, externalInvocation } from \"./external.ts\"; // Pink: agentes instalados (card 1dfwh7kgf8g)"
+      "replace": "import { createBackground } from \"./background.ts\"; // Pink: subagente em segundo plano\nimport { runExternal } from \"./external.ts\"; // Pink: agentes instalados (claude, codex, ACP)"
     },
     {
-      "id": "subagent-external-agents-spawn",
+      "id": "subagent-external-agents-run",
       "file": "examples/extensions/subagent/index.ts",
       "count": 1,
-      "find": "\t\t\tconst invocation = getPiInvocation(args);",
-      "replace": "\t\t\tconst invocation = (agent as any).external ? externalInvocation(agent as any, task) : getPiInvocation(args); // Pink: agente instalado roda o programa dele"
+      "find": "\ttry {\n\t\tif (agent.systemPrompt.trim()) {",
+      "replace": "\t// Pink: agente instalado (claude, codex, ACP) roda o programa dele, com o login e a cota dele\n\tif ((agent as any).external) return runExternal(agent as any, task, cwd ?? defaultCwd, signal, currentResult, emitUpdate);\n\ttry {\n\t\tif (agent.systemPrompt.trim()) {"
     },
     {
-      "id": "subagent-external-agents-events",
+      "id": "subagent-external-agents-ask",
       "file": "examples/extensions/subagent/index.ts",
       "count": 1,
-      "find": "\t\t\t\tif (event.type === \"message_end\" && event.message) {",
-      "replace": "\t\t\t\tif ((agent as any).external) return applyExternalEvent(event, currentResult, emitUpdate); // Pink: stream-json do agente instalado\n\t\t\t\tif (event.type === \"message_end\" && event.message) {"
+      "find": "async execute(_toolCallId, params, signal, onUpdate, ctx) {",
+      "replace": "async execute(_toolCallId, params, signal, onUpdate, ctx) {\n\t\t\t// Pink: aprovações pedidas por um agente instalado (codex, ACP) viram pergunta aqui; sem tela, recusa\n\t\t\t(globalThis as any).__pinkExternalAsk = ctx?.hasUI ? (title: string, body: string) => ctx.ui.confirm(title, body) : undefined;"
     }
   ],
   "left_as_upstream": [
