@@ -3,6 +3,13 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.1] - 2026-11-23
+
+- `/agente`: aparece "<agente> trabalhando · Ns" embaixo da caixa enquanto o agente responde; com um agente ligado, o
+  primeiro item do menu é "Voltar ao Pink" (o mesmo que `/agente off`); as mensagens aparecem como "Você → opencode" e
+  "opencode · modelo", em vez dos tipos crus `[pink-agente-pedido]` e `[pink-agente]`.
+- README em inglês, com o logo e a tela.
+
 ## [1.0.0] - 2026-11-23
 
 Primeira versão pública: código aberto (MIT) em https://github.com/ricardopiresqa/pink e pacote `@thothdev/pink` no npm. As

@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thothdev/pink",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "homepage": "https://pink.thothdev.ia.br",
       "repository": {

@@ -938,7 +938,7 @@ def test_the_package_no_longer_says_pi_outside_the_declared_exceptions(package_d
     assert "Default: `pink`." in (package_dir / "dist" / "core" / "mcp-servers.d.ts").read_text(encoding="utf-8")
     assert 'command: "pink"' in (package_dir / "examples" / "extensions" / "subagent" / "index.ts").read_text(encoding="utf-8")
     # o README do pacote só fala do Pi na linha de fork e na de licença
-    readme = [line for line in (package_dir / "README.md").read_text(encoding="utf-8").splitlines() if "fork do" not in line and not line.startswith("Licença:")]
+    readme = [line for line in (package_dir / "README.md").read_text(encoding="utf-8").splitlines() if "fork of" not in line and not line.startswith("License:")]
     assert not [line for line in readme if product.search(line)]
     system_prompt = "".join(p.read_text(encoding="utf-8") for p in (package_dir / "dist" / "bundle" / "chunks").glob("chunk-MM3LKT73.js"))
     assert "You can inspect PINK_* environment variables" in system_prompt and 'new McpClient({name:"pink",' in (package_dir / "dist" / "bundle" / "chunks" / "chunk-EGE5YVUM.js").read_text(encoding="utf-8")

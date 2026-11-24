@@ -36,6 +36,8 @@ export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR 
 }
 
 const STATUS = "pink-agente";
+const WIDGET = "pink-agente-trabalhando";
+const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const fresh = () => ({ messages: [] as any[], stderr: "", exitCode: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 } });
 
@@ -59,28 +61,81 @@ export function render(result: any): string {
 
 const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` : agent.name);
 
-export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: () => any = () => gatherExtras(pink)) {
+const loadTui = () => Promise.all([import("@earendil-works/pi-tui"), import("@earendil-works/pi-coding-agent")]);
+
+export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: () => any = () => gatherExtras(pink), load: () => Promise<any[]> = loadTui) {
 	let active: { agent: any; resume: { id?: string }; controller?: AbortController } | undefined;
+	let ticker: ReturnType<typeof setInterval> | undefined;
+	let lastUi: any;
+
+	// "trabalhando" embaixo da caixa: o carregador do Pink só aparece quando o modelo dele está respondendo
+	const idle = () => {
+		if (ticker) clearInterval(ticker);
+		ticker = undefined;
+		lastUi?.setWidget?.(WIDGET, undefined);
+	};
+	const busy = (ui: any, name: string, tool: () => string | undefined) => {
+		idle();
+		lastUi = ui;
+		if (!ui?.setWidget) return;
+		const started = Date.now();
+		let frame = 0;
+		const draw = () => {
+			const secs = Math.floor((Date.now() - started) / 1000);
+			const what = tool();
+			ui.setWidget(WIDGET, [`${FRAMES[frame++ % FRAMES.length]} ${name} ${t("trabalhando", "trabajando", "working")} · ${secs}s${what ? ` · ${what}` : ""}   ${t("/agente off cancela", "/agente off cancela", "/agente off cancels")}`], { placement: "belowEditor" });
+		};
+		draw();
+		ticker = setInterval(draw, 120);
+		ticker.unref?.();
+	};
 
 	const stop = (ctx?: any) => {
 		active?.controller?.abort();
 		active = undefined;
+		idle();
 		(globalThis as any).__pinkExternalAgent = undefined; // o rótulo da caixa volta a "Build · modelo" (pink-ui)
 		ctx?.ui?.setStatus?.(STATUS, undefined);
 	};
+
+	// mensagens desenhadas como as da conversa ("Você → opencode" e "opencode · modelo"), não com o tipo cru
+	let tui: any;
+	let coding: any;
+	void load().then(([a, b]) => {
+		tui = a;
+		coding = b;
+	}).catch(() => undefined);
+	const textOf = (message: any) => (typeof message.content === "string" ? message.content : (message.content ?? []).map((part: any) => part.text ?? "").join(""));
+	pink.registerMessageRenderer?.("pink-agente-pedido", (message: any, options: any, theme: any) => {
+		if (!tui) return undefined;
+		const details = message.details ?? {};
+		const box = new tui.Box(options.outputPad, 1, (line: string) => theme.bg("userMessageBg", line));
+		box.addChild(new tui.Text(`${theme.fg("accent", theme.bold(`${t("Você", "Tú", "You")} → ${details.agent ?? ""}`))}\n${details.text ?? textOf(message)}`, 0, 0));
+		return box;
+	});
+	pink.registerMessageRenderer?.("pink-agente", (message: any, options: any, theme: any) => {
+		if (!tui || !coding?.getMarkdownTheme) return undefined;
+		const details = message.details ?? {};
+		const box = new tui.Box(options.outputPad, 0);
+		box.addChild(new tui.Text(theme.fg(details.error ? "error" : "accent", theme.bold(details.model ? `${details.agent} · ${details.model}` : details.agent ?? t("agente", "agente", "agent"))), 0, 0));
+		box.addChild(new tui.Markdown(textOf(message), 0, 0, coding.getMarkdownTheme()));
+		return box;
+	});
 
 	const send = async (text: string, ctx: any) => {
 		const current = active!;
 		const controller = new AbortController();
 		current.controller = controller;
 		const name = current.agent.name;
-		pink.sendMessage({ customType: "pink-agente-pedido", display: true, content: `› ${name}: ${text}`, details: { agent: name } });
+		pink.sendMessage({ customType: "pink-agente-pedido", display: true, content: `› ${name}: ${text}`, details: { agent: name, text } });
 		const result = fresh();
+		const lastTool = () => result.messages.at(-1)?.content?.find((part: any) => part.type === "toolCall")?.name;
 		const status = () => {
-			const last = result.messages.at(-1)?.content?.find((part: any) => part.type === "toolCall");
-			ctx.ui?.setStatus?.(STATUS, `${name} ${t("trabalhando", "trabajando", "working")}${last ? `: ${last.name}` : "…"}`);
+			const last = lastTool();
+			ctx.ui?.setStatus?.(STATUS, `${name} ${t("trabalhando", "trabajando", "working")}${last ? `: ${last}` : "…"}`);
 		};
 		status();
+		if (ctx.hasUI) busy(ctx.ui, name, lastTool);
 		(globalThis as any).__pinkExternalAsk = ctx.hasUI ? (title: string, body: string) => ctx.ui.confirm(title, body) : undefined;
 		try {
 			await run(current.agent, text, ctx.cwd, controller.signal, result, status, undefined, undefined, current.resume);
@@ -89,6 +144,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			result.errorMessage = controller.signal.aborted ? t("cancelado", "cancelado", "cancelled") : String(error?.message ?? error);
 		}
 		if (current.controller === controller) current.controller = undefined;
+		if (active === current || !active) idle();
 		if (active === current) ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(current.agent)}`);
 		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result), details: { agent: name, model: result.model, usage: result.usage, error: result.stopReason === "error" } });
 	};
@@ -109,8 +165,15 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			let name = wanted;
 			if (!name) {
 				if (!agents.length) return ctx.ui?.notify?.(t("Nenhum agente instalado encontrado (claude, codex, opencode, cline, copilot, qwen, goose, gemini).", "No se encontró ningún agente instalado (claude, codex, opencode, cline, copilot, qwen, goose, gemini).", "No installed agent found (claude, codex, opencode, cline, copilot, qwen, goose, gemini)."), "warning");
-				name = ctx.hasUI ? ((await ctx.ui.select(t("Conversar com qual agente?", "¿Con qué agente conversar?", "Talk to which agent?"), agents.map((agent) => agent.name))) ?? "") : "";
+				// com um agente ligado, o primeiro item volta ao modelo/provedor do Pink (o mesmo que /agente off)
+				const back = active ? t(`Voltar ao Pink (desliga o ${active.agent.name})`, `Volver a Pink (apaga ${active.agent.name})`, `Back to Pink (turns ${active.agent.name} off)`) : undefined;
+				name = ctx.hasUI ? ((await ctx.ui.select(t("Conversar com qual agente?", "¿Con qué agente conversar?", "Talk to which agent?"), [...(back ? [back] : []), ...agents.map((agent) => agent.name)])) ?? "") : "";
 				if (!name) return;
+				if (name === back) {
+					const was = active?.agent.name;
+					stop(ctx);
+					return ctx.ui?.notify?.(t(`Voltou ao Pink (${was} desligado).`, `Volviste a Pink (${was} apagado).`, `Back to Pink (${was} off).`), "info");
+				}
 			}
 			const agent = agents.find((item) => item.name === name);
 			if (!agent) return ctx.ui?.notify?.(t(`${name} não está instalado. Disponíveis: ${agents.map((a) => a.name).join(", ") || "nenhum"}.`, `${name} no está instalado. Disponibles: ${agents.map((a) => a.name).join(", ") || "ninguno"}.`, `${name} is not installed. Available: ${agents.map((a) => a.name).join(", ") || "none"}.`), "warning");

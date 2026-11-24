@@ -18,7 +18,7 @@ import pytest
 
 sys.path[:0] = [str(Path(__file__).resolve().parent)]
 
-from test_f50 import built, package_dir  # noqa: E402, F401 - fixtures do pacote construido
+from test_f50 import built, cli, package_dir  # noqa: E402, F401 - fixtures do pacote construido (cli: instalado com as dependências)
 
 FAKE_CLAUDE = r"""
 let input = "";
@@ -208,10 +208,10 @@ console.log(JSON.stringify(out));
 """
 
 SESSION_DRIVER = r"""
-const [url] = process.argv.slice(1);
+const [url, tuiUrl, codingUrl] = process.argv.slice(1);
 const mod = await import(url);
-const sent = [], notes = [], status = [], commands = {}, handlers = {}, runs = [];
-const pi = { registerCommand: (name, spec) => (commands[name] = spec), on: (event, fn) => (handlers[event] = fn), sendMessage: (m) => sent.push(m) };
+const sent = [], notes = [], status = [], commands = {}, handlers = {}, runs = [], widgets = [], renderers = {};
+const pi = { registerCommand: (name, spec) => (commands[name] = spec), on: (event, fn) => (handlers[event] = fn), sendMessage: (m) => sent.push(m), registerMessageRenderer: (type, fn) => (renderers[type] = fn) };
 const agents = [{ name: "claude", external: "claude" }, { name: "codex", external: "codex" }];
 let release;
 const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) => {
@@ -225,9 +225,9 @@ const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) =
 };
 const menus = [];
 const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini" }] : [{ id: "opus", label: "opus" }]);
-mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regras do pink" }));
+mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regras do pink" }), () => Promise.all([import(tuiUrl), import(codingUrl)]));
 const answers = [];
-const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
+const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), setWidget: (k, v, o) => widgets.push([k, v ? v[0] : null, o?.placement ?? null]), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
 answers.push("Padrão do claude");
 const ctx = { hasUI: true, cwd: "C:\\proj", ui };
 const input = (text, c = ctx) => handlers.input({ text, source: "interactive" }, c);
@@ -246,8 +246,10 @@ out.runs = runs.map((r) => [r.agent, r.text, r.cwd, r.sameResume]);
 input("devagar");
 await new Promise((r) => setTimeout(r, 20));
 out.busy = [(await input("outra")).action, notes.at(-1)];
+out.working = widgets.filter((w) => w[1]).at(-1);
 release();
 await new Promise((r) => setTimeout(r, 20));
+out.workingEnd = widgets.at(-1);
 out.status = status.filter(Boolean).slice(0, 3);
 answers.push("codex", "GPT mini — gpt-mini");
 await commands.agente.handler("", ctx);
@@ -262,6 +264,17 @@ answers.push(undefined);
 await commands.agente.handler("codex", ctx);
 out.cancelKeeps = (await input("ainda claude"), await new Promise((r) => setTimeout(r, 20)), runs.at(-1).agent);
 out.menus = menus;
+answers.push("Voltar ao Pink (desliga o claude)");
+await commands.agente.handler("", ctx);
+out.back = [(await input("pro pink")).action, menus.at(-1)[1][0]];
+const theme = { fg: (c, s) => s, bold: (s) => s, bg: (c, s) => s };
+await new Promise((r) => setTimeout(r, 300));
+(await import(codingUrl)).initTheme?.(); // o Pink inicia o tema ao abrir; aqui o driver faz isso
+const draw = (type, message) => renderers[type]?.(message, { outputPad: 1, expanded: false }, theme)?.render(60).join("\n").replace(/\s+$/gm, "") ?? null;
+out.renderers = Object.keys(renderers).sort();
+out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: { agent: "claude", text: "oi" } });
+out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "claude", model: "opus" } });
+await commands.agente.handler("claude", ctx);
 await commands.agente.handler("off", ctx);
 out.after = (await input("de volta")).action;
 out.headless = await (async () => {
@@ -349,9 +362,11 @@ def test_the_conversation_continues_between_calls(ext: dict) -> None:
 
 
 @pytest.fixture(scope="module")
-def session(package_dir: Path) -> dict:
+def session(package_dir: Path, cli: Path) -> dict:
     url = (package_dir / "extensions" / "pink-agente.ts").as_uri()
-    done = subprocess.run(["node", "--input-type=module", "-e", SESSION_DRIVER, url], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
+    installed = cli.parents[2]  # <prefixo>/node_modules/@thothdev/pink: os componentes de tela vêm do pacote instalado
+    tui = next(p for p in (installed / "node_modules" / "@earendil-works" / "pi-tui" / "dist" / "index.js", installed.parents[1] / "@earendil-works" / "pi-tui" / "dist" / "index.js") if p.is_file())
+    done = subprocess.run(["node", "--input-type=module", "-e", SESSION_DRIVER, url, tui.as_uri(), (installed / "dist" / "index.js").as_uri()], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
     assert done.returncode == 0, done.stderr[-2000:]
     return json.loads(done.stdout.strip().splitlines()[-1])
 
@@ -370,6 +385,20 @@ def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_
     assert session["picked"] == ["codex", "gpt-mini"]
     assert session["after"] == "continue"
     assert session["headless"] == 2
+
+
+def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_pink(session: dict) -> None:
+    key, line, placement = session["working"]
+    assert key == "pink-agente-trabalhando" and placement == "belowEditor" and "claude trabalhando · 0s" in line and "/agente off cancela" in line
+    assert session["workingEnd"] == ["pink-agente-trabalhando", None, None]  # some quando a resposta chega
+    assert session["back"] == ["continue", "Voltar ao Pink (desliga o claude)"]  # 1º item do menu com agente ligado
+    assert session["menus"][1][1][0] == "Voltar ao Pink (desliga o claude)"
+
+
+def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(session: dict) -> None:
+    assert session["renderers"] == ["pink-agente", "pink-agente-pedido"]
+    assert "Você → claude" in session["drawAsk"] and "oi" in session["drawAsk"] and "pink-agente" not in session["drawAsk"]
+    assert "claude · opus" in session["drawAnswer"] and "olá" in session["drawAnswer"] and "**" not in session["drawAnswer"]
 
 
 def test_agente_model_menu_direct_choice_and_validation(session: dict) -> None:
