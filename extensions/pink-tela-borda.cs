@@ -12,7 +12,9 @@ using System.Windows.Forms;
 class Borda : Form
 {
 	const int THICK = 4;
-	const int IDLE_MS = 4000;
+	// fica acesa entre as ações (o modelo pensa entre uma e outra; com 4 s ela piscava); o Pink manda "hide" quando o
+	// agente termina, e isto é só a rede de segurança
+	const int IDLE_MS = 90000;
 	IntPtr target = IntPtr.Zero;
 	bool screen;
 	DateTime last = DateTime.MinValue;

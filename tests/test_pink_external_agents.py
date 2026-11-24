@@ -176,6 +176,8 @@ ext.closeKept(kept);
 // modelo escolhido no /agente
 r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), model: "opus" }, "m", root, undefined, fresh(), () => {}, fake(claudeJs));
 out.claudeModel = r.messages.at(-1).content[0].text;
+r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), model: "opus", effort: "high" }, "m", root, undefined, fresh(), () => {}, fake(claudeJs));
+out.claudeEffort = r.messages.at(-1).content[0].text;
 r = await ext.runExternal({ ...agent("codex", "codex", []), model: "gpt-mini" }, "arrumar build", root, undefined, fresh(), () => {}, fake(codexJs), say(true));
 out.codexModel = r.model;
 r = await ext.runExternal({ ...agent("opencode", "acp", ["acp"]), model: "b/2" }, "editar b", root, undefined, fresh(), () => {}, fake(acpJs), say(true));
@@ -215,12 +217,13 @@ r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), extras }, "x",
 const echoed = r.messages.at(-1).content[0].text.split("args=")[1].split(" ");
 const mcpFile = echoed[echoed.indexOf("--mcp-config") + 1];
 out.claudeExtras = { flags: echoed.filter((a) => a.startsWith("--")), mcpGone: !fsx.existsSync(mcpFile) };
-await ext.runExternal({ ...agent("codex", "codex", []), extras }, "arrumar build", root, undefined, fresh(), () => {}, fake(codexJs), say(true));
+await ext.runExternal({ ...agent("codex", "codex", []), extras, effort: "high" }, "arrumar build", root, undefined, fresh(), () => {}, fake(codexJs), say(true));
 const k1 = {};
 await ext.runExternal({ ...agent("opencode", "acp", ["acp"]), extras }, "primeira", root, undefined, fresh(), () => {}, fake(acpJs), say(true), k1);
 const log = fsx.readFileSync(process.env.FAKE_LOG, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 const ts = log.find((m) => m.method === "thread/start").params;
 out.codexExtras = { dev: ts.developerInstructions === extras.instructions, config: Object.keys(ts.config ?? {}) };
+out.codexEffort = log.find((m) => m.method === "turn/start" && m.params?.effort)?.params.effort ?? null;
 const sn = log.find((m) => m.method === "session/new").params;
 const sp = log.find((m) => m.method === "session/prompt").params;
 out.acpExtras = { servers: sn.mcpServers.map((s) => s.name), first: sp.prompt.map((b) => b.text.slice(0, 6)) };
@@ -237,7 +240,7 @@ const agents = [{ name: "claude", external: "claude" }, { name: "codex", externa
 let release;
 const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) => {
   out.extrasSeen = agent.extras?.instructions ?? null;
-  runs.push({ agent: agent.name, model: agent.model ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
+  runs.push({ agent: agent.name, model: agent.model ?? null, effort: agent.effort ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
   resume.id = resume.id ?? "sess-1";
   if (text === "devagar") await new Promise((r) => (release = r));
   result.messages.push({ content: [{ type: "toolCall", name: "bash", arguments: { command: "ls -la" } }] }, { content: [{ type: "text", text: `resposta a ${text}` }] });
@@ -245,7 +248,7 @@ const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) =
   emit();
 };
 const menus = [];
-const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini" }] : [{ id: "opus", label: "opus" }]);
+const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini", efforts: ["low", "high"], effort: "low" }] : [{ id: "opus", label: "opus" }]);
 mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regras do pink" }), () => Promise.all([import(tuiUrl), import(codingUrl)]));
 const answers = [];
 const plain = { fg: (c, s) => s, bold: (s) => s, bg: (c, s) => s };
@@ -268,15 +271,16 @@ out.sent = sent.map((m) => [m.customType, m.content]);
 out.runs = runs.map((r) => [r.agent, r.text, r.cwd, r.sameResume]);
 input("devagar");
 await new Promise((r) => setTimeout(r, 20));
-out.busy = [(await input("outra")).action, notes.at(-1)];
+out.busy = [(await input("outra")).action, notes.at(-1), (await input("e mais")).action];
 out.working = widgets.filter((w) => w[1]).at(-1);
 release();
 await new Promise((r) => setTimeout(r, 20));
 out.workingEnd = widgets.at(-1);
+out.queued = runs.slice(-2).map((r) => r.text); // a fila saiu depois do "devagar", numa mensagem só
 out.status = status.filter(Boolean).slice(0, 3);
-answers.push("codex", "GPT mini — gpt-mini");
+answers.push("codex", "GPT mini — gpt-mini", "high");
 await commands.agente.handler("", ctx);
-out.picked = runs.length && (await input("pelo menu"), await new Promise((r) => setTimeout(r, 20)), [runs.at(-1).agent, runs.at(-1).model]);
+out.picked = runs.length && (await input("pelo menu"), await new Promise((r) => setTimeout(r, 20)), [runs.at(-1).agent, runs.at(-1).model, runs.at(-1).effort]);
 await commands.agente.handler("claude opus", ctx);
 await input("direto");
 await new Promise((r) => setTimeout(r, 20));
@@ -298,9 +302,15 @@ out.renderers = Object.keys(renderers).sort();
 out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: { agent: "claude", text: "oi" } });
 const answerSteps = [{ kind: "thinking", ms: 400 }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
 out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } });
-out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } })];
+out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "click", args: { pid: 1, x: 120, y: 340 } } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "type_text", args: { pid: 1, text: "RTX 5070 Ti" } } })];
 const complete = (p) => commands.agente.getArgumentCompletions(p);
 out.completeOff = (await complete(""))?.map((i) => i.value) ?? null;
+await commands.agente.handler("claude opus", ctx);
+out.completeEffort = [(await complete("codex gpt-mini "))?.map((i) => [i.value, i.description ?? null]), await complete("codex gpt-5 ")];
+await commands.agente.handler("codex gpt-mini high", ctx);
+out.directEffort = status.at(-1);
+await commands.agente.handler("codex gpt-mini HIGH;x", ctx);
+out.badEffort = notes.at(-1);
 await commands.agente.handler("claude opus", ctx);
 out.complete = [(await complete(""))?.map((i) => i.value), (await complete("co"))?.map((i) => i.value), (await complete("codex "))?.map((i) => i.value), (await complete("codex gpt-m"))?.map((i) => i.label), await complete("zzz"), await complete("zzz x")];
 await commands.agente.handler("off", ctx);
@@ -420,8 +430,9 @@ def test_agente_sends_what_the_person_types_to_the_agent_and_keeps_the_conversat
 
 
 def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_off(session: dict) -> None:
-    assert session["busy"] == ["handled", "warning"]
-    assert session["picked"] == ["codex", "gpt-mini"]
+    assert session["busy"] == ["handled", "info", "handled"]  # ocupado: entra na fila, sem aviso de erro
+    assert session["queued"] == ["devagar", "outra\n\ne mais"]  # a fila sai quando ele termina, numa mensagem só
+    assert session["picked"] == ["codex", "gpt-mini", "high"]
     assert session["after"] == "continue"
     assert session["headless"] == 2
 
@@ -441,7 +452,14 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + Pensou")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
     rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
     assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
-    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "pink_tela"]  # nomes do Claude viram os do Pink, caminho relativo
+    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "tela · list_windows", "tela · click 120, 340", "tela · type_text \"RTX 5070 Ti\""]  # nomes do Claude viram os do Pink, caminho relativo
+
+
+def test_agente_effort_menu_direct_choice_and_completions(session: dict) -> None:
+    assert session["menus"][3] == ["Esforço do codex", ["Padrão do codex (low)", "low", "high"]]  # depois do modelo, se ele informa níveis
+    assert session["completeEffort"] == [[["codex gpt-mini low", "padrão"], ["codex gpt-mini high", None]], None]  # gpt-5 não informa níveis
+    assert session["directEffort"] == "agente: codex · gpt-mini · high"
+    assert session["badEffort"] == "warning"
 
 
 def test_agente_space_lists_agents_then_models(session: dict) -> None:
@@ -463,6 +481,8 @@ def test_agente_model_menu_direct_choice_and_validation(session: dict) -> None:
 
 def test_the_chosen_model_reaches_each_agent(ext: dict) -> None:
     assert ext["claudeModel"].endswith("args=-p --model opus")
+    assert ext["claudeEffort"].endswith("args=-p --model opus --effort high")
+    assert ext["codexEffort"] == "high"  # turn/start.effort: vale para este turno e os seguintes
     assert ext["codexModel"] == "gpt-mini"
     assert ext["acpModel"] == ["stop", "b/2"]
     assert ext["acpBadModel"][0] == "error" and "recusou o modelo ruim" in ext["acpBadModel"][1]

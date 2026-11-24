@@ -23,6 +23,7 @@ export interface ExternalAgent {
 	command: string;
 	args: string[];
 	model?: string; // escolhido no /agente (card 1dfwh7kgfjf); sem ele vale o padrão do agente
+	effort?: string; // esforço escolhido no /agente: claude --effort, codex turn/start.effort; sem ele vale o padrão
 	extras?: Extras; // o Pink junto (card 1dfwh7kgfjx): MCPs, regras e skills do Pink
 }
 
@@ -53,7 +54,9 @@ export function pinkExtras({ mcp = {}, rules = "", skills = [], server }: { mcp?
 // outro provedor. env_vars repassa pelo nome, sem o valor ir na configuração
 export function codexMcpConfig(mcp: Record<string, McpServer>, names: string[] = Object.keys(process.env)): Record<string, unknown> {
 	const config: Record<string, unknown> = {};
-	for (const [name, server] of Object.entries(mcp)) config[`mcp_servers.${name}`] = server.url ? { url: server.url, ...(server.headers ? { http_headers: server.headers } : {}) } : { command: server.command, args: server.args ?? [], ...(server.env ? { env: server.env } : {}), env_vars: names };
+	// tool_timeout_sec do pink: o padrão do codex é 60 s, e a confirmação da tela esperando a pessoa e o pink_tarefa (até
+	// 15 min) estouravam
+	for (const [name, server] of Object.entries(mcp)) config[`mcp_servers.${name}`] = server.url ? { url: server.url, ...(server.headers ? { http_headers: server.headers } : {}) } : { command: server.command, args: server.args ?? [], ...(server.env ? { env: server.env } : {}), env_vars: names, ...(name === "pink" ? { tool_timeout_sec: 960 } : {}) };
 	return config;
 }
 
@@ -305,8 +308,10 @@ function spawnAgent(agent: ExternalAgent, args: string[], cwd: string, start: ty
 	return start(shell ? `"${agent.command}"` : agent.command, safe, { cwd, shell, windowsHide: true, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, PINK_SUBAGENT: "1" } });
 }
 
-export type ModelChoice = { id: string; label: string; current?: boolean };
-const CLAUDE_MODELS: ModelChoice[] = [{ id: "opus", label: "opus" }, { id: "sonnet", label: "sonnet" }, { id: "haiku", label: "haiku" }];
+// efforts: os níveis de esforço que o modelo aceita (claude --effort; codex supportedReasoningEfforts); effort: o padrão
+export type ModelChoice = { id: string; label: string; current?: boolean; efforts?: string[]; effort?: string };
+const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+const CLAUDE_MODELS: ModelChoice[] = ["opus", "sonnet", "haiku"].map((id) => ({ id, label: id, efforts: CLAUDE_EFFORTS }));
 
 // os modelos que o agente informa: claude pelos apelidos do próprio CLI, codex por model/list, ACP pelas opções da sessão
 // shortcut: no ACP a lista vem de uma session/new, então fica uma sessão vazia no histórico do agente; session/close se incomodar
@@ -327,7 +332,10 @@ export async function listModels(agent: ExternalAgent, cwd: string, start: typeo
 			await ask("initialize", { clientInfo: { name: "pink", version: "1" } });
 			client.notify("initialized");
 			const list = await ask("model/list", { limit: 200 });
-			return (list.data ?? []).filter((model: any) => !model?.hidden).map((model: any) => ({ id: String(model.model || model.id), label: String(model.displayName || model.model || model.id), current: Boolean(model.isDefault) }));
+			return (list.data ?? []).filter((model: any) => !model?.hidden).map((model: any) => {
+				const efforts = (Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : []).map((item: any) => String(item?.reasoningEffort ?? item)).filter((item: string) => /^[a-z]+$/.test(item));
+				return { id: String(model.model || model.id), label: String(model.displayName || model.model || model.id), current: Boolean(model.isDefault), ...(efforts.length ? { efforts, ...(model.defaultReasoningEffort ? { effort: String(model.defaultReasoningEffort) } : {}) } : {}) };
+			});
 		}
 		await ask("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
 		return acpModels(await ask("session/new", { cwd, mcpServers: [] }));
@@ -425,7 +433,7 @@ export async function runExternal(agent: ExternalAgent, task: string, cwd: strin
 		if (agent.extras.mcp.pink) extra.push("--allowedTools", "mcp__pink__pink_tarefa,mcp__pink__pink_tela"); // a tela confirma cada ação no Pink
 		extra.push("--append-system-prompt-file", rulesFile);
 	}
-	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...extra, ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;
+	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...(agent.effort ? ["--effort", agent.effort] : []), ...extra, ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;
 	const child = spawnAgent(agent, args, cwd, start);
 	if (scratch) {
 		const dir = scratch;
@@ -472,7 +480,7 @@ export async function runExternal(agent: ExternalAgent, task: string, cwd: strin
 			});
 			child.stdin.end(task);
 			result.exitCode = await exited;
-		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume, agent.model, agent.extras);
+		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume, agent.model, agent.extras, agent.effort);
 		else result.exitCode = await runAcp(child, agent.name, task, cwd, result, emit, ask, exited, resume, agent.model, agent.extras);
 	} finally {
 		signal?.removeEventListener?.("abort", killChild);
@@ -492,7 +500,7 @@ const failed = (result: any, name: string, message: string) => {
 	return 1;
 };
 
-async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras): Promise<number> {
+async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras, effort?: string): Promise<number> {
 	let done: (code: number) => void = () => {};
 	const finished = new Promise<number>((resolve) => (done = resolve));
 	const client = rpc(
@@ -543,7 +551,7 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 	if (thread.error) return failed(result, "codex", String(thread.error.message ?? "thread/start falhou"));
 	if (typeof thread.result?.model === "string") result.model = thread.result.model;
 	if (resume && thread.result?.thread?.id) resume.id = thread.result.thread.id;
-	const turn = await client.request("turn/start", { threadId: thread.result?.thread?.id, input: [{ type: "text", text: task, text_elements: [] }] });
+	const turn = await client.request("turn/start", { threadId: thread.result?.thread?.id, input: [{ type: "text", text: task, text_elements: [] }], ...(effort ? { effort } : {}) });
 	if (turn.error) return failed(result, "codex", String(turn.error.message ?? "turn/start falhou"));
 	return Promise.race([finished, exited.then((code) => (result.stopReason ? code : failed(result, "codex", result.errorMessage || `o codex saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}`)))]);
 }

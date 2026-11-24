@@ -3,6 +3,19 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.5] - 2026-11-24
+
+- `/agente`: escolha do esforço (`/agente codex gpt-5.5 high`, ou o menu depois do modelo) no Claude e no codex; o
+  opencode não tem esforço.
+- `/agente`: mensagem enviada enquanto o agente trabalha entra na fila e vai quando ele terminar (`/agente off` descarta).
+- `/agente`: as chamadas da tela dizem o que fizeram (`→ tela · click 120, 340`, `→ tela · type_text "RTX 5070 Ti"`) e
+  ferramentas seguidas ficam juntas, sem linha em branco.
+- `/agente` com codex: a tela do Pink e o `pink_tarefa` têm até 16 min por chamada (o padrão do codex, 60 s, estourava
+  com a confirmação esperando a pessoa).
+- Contorno da `/tela`: fica aceso enquanto o agente trabalha e apaga quando ele termina (antes apagava 4 s depois de
+  cada ação e piscava).
+- A ferramenta de tela pede ao agente que siga até terminar o pedido, sem parar depois de uma ação.
+
 ## [1.0.4] - 2026-11-24
 
 - `/tela`: no pedido de confirmação, "Sim, e não perguntar de novo para o msedge.exe" libera aquele programa até

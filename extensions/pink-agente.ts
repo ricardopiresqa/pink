@@ -92,16 +92,28 @@ const fresh = () => ({ messages: [] as any[], stderr: "", exitCode: 0, usage: { 
 // nomes e argumentos de cada agente (Claude: Read/file_path, Glob...) viram os do Pink, para a linha sair igual à nativa
 const NAMES: Record<string, string> = { multiedit: "edit", glob: "find", notebookedit: "edit" };
 export function pinkTool(part: any, cwd = "") {
-	const raw = String(part?.name ?? "tool");
+	// MCP no Claude e no codex vem como mcp__<servidor>__<ferramenta>: fica só a ferramenta
+	const raw = String(part?.name ?? "tool").replace(/^mcp__.+?__/, "");
 	const name = NAMES[raw.toLowerCase()] ?? raw.toLowerCase();
 	const args = { ...(part?.arguments ?? {}) };
+	// pink_tela: a linha diz o que fez na tela (tela · click 120, 340), não só o nome da ferramenta repetido
+	if (name === "pink_tela") return tela(args.action, args.args);
 	const file = args.path ?? args.file_path ?? args.filePath ?? args.notebook_path;
 	if (file) args.path = cwd && path.isAbsolute(String(file)) ? path.relative(cwd, String(file)) || "." : String(file);
 	// o "execute" do opencode roda código que chama ferramentas MCP (tools.pink.pink_tela(...)): mostra as ferramentas
-	const called = [...new Set([...String(args.code ?? "").matchAll(/tools\.[\w$-]+\.([\w$-]+)\s*\(/g)].map((match) => match[1]))];
+	const code = String(args.code ?? "");
+	const actions = [...code.matchAll(/action["']?\s*:\s*["']([\w-]+)["']/g)].map((match) => match[1]);
+	if (actions.length && /pink_tela\s*\(/.test(code)) return tela(actions.join(", "));
+	const called = [...new Set([...code.matchAll(/tools\.[\w$-]+\.([\w$-]+)\s*\(/g)].map((match) => match[1]))];
 	if (called.length) return called.join(", ");
 	const line = toolSummary(name, args);
 	return line === name && args.title ? String(args.title) : line;
+}
+
+function tela(action: unknown, args: any = {}) {
+	const a = args && typeof args === "object" ? args : {};
+	const what = a.text !== undefined ? `"${String(a.text).slice(0, 40)}"` : a.key ?? (Array.isArray(a.keys) ? a.keys.join("+") : a.x !== undefined ? `${a.x}, ${a.y}` : a.name ?? a.direction ?? "");
+	return ["tela ·", String(action || "?"), what].filter(Boolean).join(" ");
 }
 
 // os passos da resposta, na ordem: pensou, ferramentas e textos (o desenho usa; o modelo do Pink lê o texto puro)
@@ -128,14 +140,14 @@ export function render(result: any, cwd = ""): string {
 
 const outputOf = (result: any) => result.usage?.output || result.messages.reduce((sum: number, message: any) => sum + streamedTokens(message), 0);
 
-const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` : agent.name);
+const label = (agent: any) => [agent.name, agent.model, agent.effort].filter(Boolean).join(" · ");
 
 const loadTui = () => Promise.all([import("@earendil-works/pi-tui"), import("@earendil-works/pi-coding-agent")]);
 
 export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge) {
 	let screen: ReturnType<typeof telaBridge> | undefined; // pink_tela: aberto no primeiro /agente, fechado ao sair do Pink
 	let screenCtx: any; // a janela deste Pink, onde a tela pede confirmação
-	let active: { agent: any; resume: { id?: string }; controller?: AbortController } | undefined;
+	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[] } | undefined;
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastUi: any;
 
@@ -204,7 +216,8 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const list = Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }];
 		// o Pink já põe uma linha em branco antes de cada mensagem: entre o pedido e a resposta fica só ela, como no Claude Code
 		for (const [index, step] of list.entries()) {
-			if (index) box.addChild(new tui.Spacer(1));
+			// ferramentas seguidas ficam juntas (uma busca na tela são dezenas de chamadas: com linha em branco virava uma tela inteira)
+			if (index && !(step.kind === "tool" && list[index - 1]?.kind === "tool")) box.addChild(new tui.Spacer(1));
 			if (step.kind === "thinking") box.addChild(new tui.Text(theme.fg("thinkingText", thinkingLabel(step.ms)), pad, 0));
 			else if (step.kind === "tool") box.addChild(new tui.Text(theme.fg("muted", `→ ${step.line}`), pad, 0));
 			else box.addChild(bulleted(new tui.Markdown(String(step.text).trim(), pad, 0, coding.getMarkdownTheme())));
@@ -243,13 +256,20 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		}
 		if (current.controller === controller) current.controller = undefined;
 		if (active === current || !active) idle();
+		Reflect.get(globalThis, "__pinkTela")?.hide?.(); // o agente terminou: apaga o contorno da tela
 		if (active === current) {
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(current.agent)}`);
 			// a caixa passa a mostrar o modelo que o agente usou de fato, em vez de "modelo padrão"
-			if (!current.agent.model && result.model && result.model !== name) (globalThis as any).__pinkExternalAgent = { name, model: result.model };
+			if (!current.agent.model && result.model && result.model !== name) (globalThis as any).__pinkExternalAgent = { name, model: result.model, effort: current.agent.effort };
 		}
 		const error = result.stopReason === "error" ? String(result.errorMessage ?? t("erro", "error", "error")) : undefined;
 		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
+		// a fila sai agora, numa mensagem só (como o Claude Code junta o que você digitou enquanto ele trabalhava)
+		if (active === current && current.queue?.length) {
+			const next = current.queue.join("\n\n");
+			current.queue = [];
+			await send(next, ctx);
+		}
 	};
 
 	// "/agente " lista as opções, como os outros comandos: off e os agentes; "/agente codex " lista os modelos dele
@@ -268,9 +288,18 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		}
 		const agent = agents.find((item) => item.name === text.slice(0, space).toLowerCase());
 		if (!agent) return null;
-		const wanted = text.slice(space + 1).trim();
+		const wanted = text.slice(space + 1).replace(/^\s+/, ""); // o espaço do fim conta: "gpt-5 " pede os esforços
 		if (!modelCache.has(agent.name)) modelCache.set(agent.name, models(agent, process.cwd()).catch(() => (modelCache.delete(agent.name), [])));
 		const choices = await modelCache.get(agent.name)!;
+		// "/agente codex gpt-5 " lista os esforços daquele modelo
+		const gap = wanted.indexOf(" ");
+		if (gap >= 0) {
+			const id = wanted.slice(0, gap);
+			const level = wanted.slice(gap + 1).trim();
+			const choice = choices.find((item) => item.id === id);
+			const levels = (choice?.efforts ?? []).filter((item: string) => item.startsWith(level)).map((item: string) => ({ value: `${agent.name} ${id} ${item}`, label: item, description: item === choice?.effort ? t("padrão", "predeterminado", "default") : undefined }));
+			return levels.length ? levels : null;
+		}
 		const hits = choices.filter((choice) => choice.id.startsWith(wanted) || String(choice.label).toLowerCase().startsWith(wanted.toLowerCase())).map((choice) => ({ value: `${agent.name} ${choice.id}`, label: choice.id, description: `${choice.label !== choice.id ? choice.label : ""}${choice.current ? ` (${t("padrão", "predeterminado", "default")})` : ""}`.trim() || undefined }));
 		return hits.length ? hits : null;
 	};
@@ -281,7 +310,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		handler: async (args: string, ctx: any) => {
 			const [first = "", ...rest] = String(args ?? "").trim().split(/\s+/);
 			const wanted = first.toLowerCase();
-			let model = rest.join(" ");
+			let [model = "", effort = ""] = rest; // /agente codex gpt-5 high: agente, modelo e esforço
 			const agents = list();
 			if (wanted === "off" || wanted === "parar" || wanted === "stop") {
 				const was = active?.agent.name;
@@ -304,7 +333,8 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			}
 			const agent = agents.find((item) => item.name === name);
 			if (!agent) return ctx.ui?.notify?.(t(`${name} não está instalado. Disponíveis: ${agents.map((a) => a.name).join(", ") || "nenhum"}.`, `${name} no está instalado. Disponibles: ${agents.map((a) => a.name).join(", ") || "ninguno"}.`, `${name} is not installed. Available: ${agents.map((a) => a.name).join(", ") || "none"}.`), "warning");
-			if (model && !/^[\w./:@-]+$/.test(model)) return ctx.ui?.notify?.(t(`Nome de modelo inválido: ${model}`, `Nombre de modelo no válido: ${model}`, `Invalid model name: ${model}`), "warning");
+			if (rest.length > 2 || (model && !/^[\w./:@-]+$/.test(model))) return ctx.ui?.notify?.(t(`Nome de modelo inválido: ${rest.join(" ")}`, `Nombre de modelo no válido: ${rest.join(" ")}`, `Invalid model name: ${rest.join(" ")}`), "warning");
+			if (effort && !/^[a-z]+$/.test(effort)) return ctx.ui?.notify?.(t(`Esforço inválido: ${effort}`, `Esfuerzo no válido: ${effort}`, `Invalid effort: ${effort}`), "warning");
 			if (!model && ctx.hasUI) {
 				// menu com os modelos que o agente informa; o primeiro item mantém o padrão dele
 				ctx.ui?.setStatus?.(STATUS, t(`${name}: buscando modelos…`, `${name}: buscando modelos…`, `${name}: fetching models…`));
@@ -322,11 +352,19 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 					const picked = await ctx.ui.select(t(`Modelo do ${name}`, `Modelo de ${name}`, `${name} model`), [keep, ...shown]);
 					if (picked === undefined) return;
 					if (picked !== keep) model = choices[shown.indexOf(picked)]?.id ?? "";
+					// esforço (claude e codex informam os níveis de cada modelo); o primeiro item mantém o padrão dele
+					const chosen = choices.find((choice) => choice.id === model) ?? current;
+					if (chosen?.efforts?.length) {
+						const standard = t(`Padrão do ${name}${chosen.effort ? ` (${chosen.effort})` : ""}`, `Predeterminado de ${name}${chosen.effort ? ` (${chosen.effort})` : ""}`, `${name} default${chosen.effort ? ` (${chosen.effort})` : ""}`);
+						const level = await ctx.ui.select(t(`Esforço do ${name}`, `Esfuerzo de ${name}`, `${name} effort`), [standard, ...chosen.efforts]);
+						if (level === undefined) return;
+						if (level !== standard) effort = level;
+					}
 				}
 			}
 			stop(ctx);
-			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
-			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model }; // rótulo da caixa (pink-ui)
+			active = { agent: { ...agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
+			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model, effort: active.agent.effort }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
 		},
@@ -335,7 +373,10 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 	pink.on("input", async (event: any, ctx: any) => {
 		if (!active || event.source === "extension" || String(event.text ?? "").trimStart().startsWith("/")) return { action: "continue" };
 		if (active.controller) {
-			ctx.ui?.notify?.(t(`O ${active.agent.name} ainda está respondendo; espere ou use /agente off.`, `${active.agent.name} todavía está respondiendo; espera o usa /agente off.`, `${active.agent.name} is still answering; wait or use /agente off.`), "warning");
+			// fila (owner 2026-11-24): o que chega enquanto o agente responde vai junto, numa mensagem só, quando ele terminar
+			active.queue = [...(active.queue ?? []), String(event.text)];
+			const waiting = active.queue.length;
+			ctx.ui?.notify?.(t(`Na fila: vai para o ${active.agent.name} quando ele terminar (${waiting} esperando; /agente off descarta).`, `En cola: va a ${active.agent.name} cuando termine (${waiting} en espera; /agente off la descarta).`, `Queued: goes to ${active.agent.name} when it finishes (${waiting} waiting; /agente off drops it).`), "info");
 			return { action: "handled" };
 		}
 		const done = send(String(event.text), ctx);

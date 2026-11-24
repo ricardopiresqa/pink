@@ -120,7 +120,7 @@ export function modelLabel({ theme, model, thinking, agent, permission = "edits"
 	const mode = agent === "build" && permission === "ask" ? t(" (pergunta tudo)", " (pregunta todo)", " (ask everything)") : "";
 	const who = AGENTS[agent] ? `${theme.fg("accent", `${AGENTS[agent].label}${mode}`)}${theme.fg("muted", " · ")}` : "";
 	// /agente ligado (card 1dfwh7kgfjr): o Build fica; no lugar do modelo do Pink, o agente instalado e o modelo dele
-	if (external?.name) return `${who}${external.name}${theme.fg("muted", ` · ${external.model ?? t("modelo padrão", "modelo predeterminado", "default model")}`)}`;
+	if (external?.name) return `${who}${external.name}${theme.fg("muted", ` · ${external.model ?? t("modelo padrão", "modelo predeterminado", "default model")}${external.effort ? ` · ${t("esforço", "esfuerzo", "effort")} ${external.effort}` : ""}`)}`;
 	if (!model) return `${who}${theme.fg("muted", t("sem modelo", "sin modelo", "no model"))}`;
 	const name = model.name || model.id;
 	const provider = model.provider && model.provider !== model.id && model.provider !== name ? theme.fg("muted", ` · ${model.provider}`) : "";
