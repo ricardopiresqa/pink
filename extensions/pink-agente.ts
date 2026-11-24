@@ -86,6 +86,10 @@ export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR 
 const STATUS = "pink-agente";
 const WIDGET = "pink-agente-trabalhando";
 const QUEUE = "pink-agente-fila";
+// o id da conversa do agente fica nos detalhes de cada resposta gravada na sessão do Pink: reabrir a sessão e escolher o
+// mesmo agente retoma a conversa dele (claude --resume, codex thread/resume, ACP session/load)
+export const lastAgentSession = (entries: any[] | undefined, name: string): string | undefined =>
+	[...(entries ?? [])].reverse().find((e) => e?.type === "custom_message" && e.customType === "pink-agente" && e.details?.agent === name && typeof e.details?.session === "string" && e.details.session)?.details.session;
 // fila como no Claude Code (owner 2026-11-24): cada mensagem esperando aparece em cinza acima da caixa, numa linha
 export const queueLines = (queue: string[], width: number) => queue.map((text) => fit(`> ${String(text).replace(/\s+/g, " ").trim()}`, width));
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -337,7 +341,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			if (!current.agent.model && result.model && result.model !== name) (globalThis as any).__pinkExternalAgent = { name, model: result.model, effort: current.agent.effort };
 		}
 		const error = result.stopReason === "error" ? String(result.errorMessage ?? t("erro", "error", "error")) : undefined;
-		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
+		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, session: current.resume?.id, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
 		// a fila sai agora, numa mensagem só (como o Claude Code junta o que você digitou enquanto ele trabalhava)
 		if (active === current && current.queue?.length) {
 			const next = current.queue.join("\n\n");
@@ -438,11 +442,14 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 				}
 			}
 			stop(ctx);
-			active = { agent: { ...agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
+			// mesma sessão do Pink + mesmo agente: continua a conversa dele (owner 2026-11-24); sessão nova do Pink começa do zero
+			const saved = lastAgentSession(ctx.sessionManager?.getBranch?.(), agent.name);
+			active = { agent: { ...agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true, ...(saved ? { id: saved } : {}) } }; // keep: o processo do agente ACP fica aberto entre as mensagens; id: retoma a conversa
 			warm(active.agent, ctx.cwd, active.resume); // já liga o agente: a primeira mensagem não espera a partida a frio
 			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model, effort: active.agent.effort }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
-			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
+			const again = saved ? t(" Continuando a conversa anterior dele.", " Continuando su conversación anterior.", " Continuing its previous conversation.") : "";
+			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele.${again} /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota.${again} /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota.${again} /agente off returns to Pink.`), "info");
 		},
 	});
 

@@ -248,7 +248,7 @@ const agents = [{ name: "claude", external: "claude" }, { name: "codex", externa
 let release;
 const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) => {
   out.extrasSeen = agent.extras?.instructions ?? null;
-  runs.push({ agent: agent.name, model: agent.model ?? null, effort: agent.effort ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
+  runs.push({ agent: agent.name, model: agent.model ?? null, effort: agent.effort ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume, resumeId: resume?.id ?? null });
   resume.id = resume.id ?? "sess-1";
   if (text === "devagar") await new Promise((r) => (release = r));
   result.messages.push({ content: [{ type: "toolCall", name: "bash", arguments: { command: "ls -la" } }] }, { content: [{ type: "text", text: `resposta a ${text}` }] });
@@ -337,6 +337,20 @@ out.headless = await (async () => {
   await input("sem tela", { ...ctx, hasUI: false });
   return sent.length - n; // pink -p: a resposta já saiu quando o input volta
 })();
+// retomar (owner 2026-11-24): a sessão do Pink reaberta tem as respostas gravadas; o mesmo agente continua a conversa dele
+const branch = [
+  { type: "custom_message", customType: "pink-agente", details: { agent: "claude", session: "s-antiga" } },
+  { type: "custom_message", customType: "pink-agente", details: { agent: "codex", session: "t-codex" } },
+  { type: "custom_message", customType: "pink-agente", details: { agent: "claude", session: "s-ultima" } },
+];
+const reopened = { ...ctx, hasUI: false, sessionManager: { getBranch: () => branch } };
+await commands.agente.handler("claude", reopened);
+await input("continua", reopened);
+out.resumed = [runs.at(-1).resumeId, sent.filter((m) => m.customType === "pink-agente").at(-1).details.session ?? null];
+await commands.agente.handler("claude", { ...ctx, hasUI: false, sessionManager: { getBranch: () => [] } });
+await input("do zero", { ...ctx, hasUI: false });
+out.fresh = runs.at(-1).resumeId;
+out.lastSession = [mod.lastAgentSession(branch, "codex"), mod.lastAgentSession(branch, "opencode") ?? null, mod.lastAgentSession(undefined, "claude") ?? null];
 console.log(JSON.stringify(out));
 """
 
@@ -462,6 +476,13 @@ def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_
     assert session["picked"] == ["codex", "gpt-mini", "high"]
     assert session["after"] == "continue"
     assert session["headless"] == 2
+
+
+def test_agente_resumes_the_agents_conversation_when_the_pink_session_is_reopened(session: dict) -> None:
+    # owner 2026-11-24: fechar e abrir o Pink na mesma sessão e escolher o mesmo agente continua a conversa dele
+    assert session["resumed"] == ["s-ultima", "s-ultima"]  # a última do claude, e a resposta grava o id de novo
+    assert session["fresh"] is None  # sessão do Pink sem resposta do agente: começa do zero
+    assert session["lastSession"] == ["t-codex", None, None]
 
 
 def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_pink(session: dict) -> None:

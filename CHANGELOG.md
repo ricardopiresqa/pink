@@ -16,6 +16,8 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   2 min e percebe o agente morto; um agente travado (ex.: um MCP que não abre na máquina) vira erro em vez de
   "Trabalhando" sem fim, e o Esc solta.
 - Caixa de digitar: linha vazia também embaixo do rótulo ("Build · modelo"), como a do OpenCode.
+- `/agente`: reabrir a mesma sessão do Pink (`/sessions`, `pink -c`) e escolher o mesmo agente continua a conversa
+  dele (claude `--resume`, codex `thread/resume`, opencode e ACP `session/load`); sessão nova do Pink começa do zero.
 
 ## [1.0.7] - 2026-11-24
 
