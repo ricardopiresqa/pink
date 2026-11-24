@@ -3,6 +3,14 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.4] - 2026-11-24
+
+- `/tela`: no pedido de confirmação, "Sim, e não perguntar de novo para o msedge.exe" libera aquele programa até
+  `/tela desligar` (terminais seguem pedindo sempre, com a segunda confirmação). O título da janela sai com acento
+  ("páginas", não "p�ginas").
+- Contorno da `/tela`: por dentro da janela e só no monitor dela (por fora, a janela maximizada ficava só com a borda de
+  baixo, ainda mais com dois monitores); na captura da tela inteira, um contorno em cada monitor.
+
 ## [1.0.3] - 2026-11-24
 
 - `/agente`: só uma linha em branco entre o pedido e a resposta do agente (eram três).

@@ -176,8 +176,12 @@ export function lookup(pid: unknown, sync = spawnSync): Target {
 	if (!Number.isInteger(n) || n <= 0) return undefined;
 	try {
 		// caminho fixo: um tasklist.exe plantado na pasta do projeto não decide o que a pessoa vê
-		const exe = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tasklist.exe");
-		const out = String(sync(exe, ["/V", "/FI", `PID eq ${n}`, "/FO", "CSV", "/NH"], { windowsHide: true, timeout: 5000, encoding: "utf8" }).stdout ?? "");
+		const system = path.join(process.env.SystemRoot || "C:\\Windows", "System32");
+		const exe = path.join(system, "tasklist.exe");
+		// o tasklist escreve na página do console (850 no Brasil): "páginas" virava "p�ginas"; chcp 65001 antes dá UTF-8.
+		// n é inteiro validado acima, e os dois caminhos são fixos: nada de fora entra na linha do cmd
+		const line = `"chcp 65001>nul & "${exe}" /V /FI "PID eq ${n}" /FO CSV /NH"`;
+		const out = String(sync(path.join(system, "cmd.exe"), ["/d", "/s", "/c", line], { windowsHide: true, timeout: 5000, encoding: "utf8", windowsVerbatimArguments: true }).stdout ?? "");
 		const cols = [...(out.trim().split(/\r?\n/)[0] ?? "").matchAll(/"((?:[^"]|"")*)"/g)].map((cell) => cell[1].replace(/""/g, '"'));
 		// o título vem de quem abriu a janela: sem controles e curto
 		const title = (cols.at(-1) ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").slice(0, 80);
@@ -411,6 +415,7 @@ export function createTela(pink: any, { env = process.env, run = mcpRun as Run, 
 	let pipe = "";
 	let dir = "";
 	let exeUsed = "";
+	const allowed = new Set<string>(); // programas liberados sem perguntar, até desligar a tela
 	const stateFile = path.join(tmp, `pink-tela-${process.pid}.json`);
 
 	const binary = (): { exe?: string; error?: string } => {
@@ -540,6 +545,7 @@ export function createTela(pink: any, { env = process.env, run = mcpRun as Run, 
 		outline = undefined;
 		daemon = undefined;
 		on = false;
+		allowed.clear(); // ligar de novo volta a perguntar tudo
 		pipe = dir = exeUsed = "";
 		return t("Tela desligada.", "Pantalla desactivada.", "Screen off.");
 	}
@@ -561,7 +567,22 @@ export function createTela(pink: any, { env = process.env, run = mcpRun as Run, 
 		if (isAct(action)) {
 			if (!ctx?.hasUI) return reply(t("Controlar a tela pede confirmação da pessoa, e aqui não há tela para perguntar.", "Controlar la pantalla requiere confirmación de la persona, y aquí no hay interfaz para preguntar.", "Controlling the screen needs the person's confirmation, and there is no UI here to ask."), true);
 			const target = find(args.pid ?? args.target?.pid, sync);
-			if (!(await ctx.ui.confirm(t("O agente quer agir na sua tela", "El agente quiere actuar en tu pantalla", "The agent wants to act on your screen"), describe(action, args, target)))) return reply(t("A pessoa recusou esta ação na tela. Não repita; pergunte o que ela prefere.", "La persona rechazó esta acción en la pantalla. No la repitas; pregunta qué prefiere.", "The person declined this screen action. Do not repeat it; ask what they prefer."), true);
+			// liberar por programa (owner 2026-11-24): "Sim, e não perguntar de novo para o msedge.exe" vale até /tela desligar;
+			// terminal e alvo desconhecido nunca entram na lista (seguem pedindo sempre, com a segunda confirmação)
+			const program = target && !SHELLS.test(target.image) ? target.image.toLowerCase() : "";
+			if (!(program && allowed.has(program))) {
+				const title = t("O agente quer agir na sua tela", "El agente quiere actuar en tu pantalla", "The agent wants to act on your screen");
+				const body = describe(action, args, target);
+				let ok: boolean;
+				if (program && ctx.ui.select) {
+					const yes = t("Sim", "Sí", "Yes");
+					const always = t(`Sim, e não perguntar de novo para o ${target!.image} (até /tela desligar)`, `Sí, y no volver a preguntar para ${target!.image} (hasta /tela desactivar)`, `Yes, and don't ask again for ${target!.image} (until /tela off)`);
+					const picked = await ctx.ui.select(`${title}\n${body}`, [yes, always, t("Não", "No", "No")]);
+					if (picked === always) allowed.add(program);
+					ok = picked === yes || picked === always;
+				} else ok = await ctx.ui.confirm(title, body);
+				if (!ok) return reply(t("A pessoa recusou esta ação na tela. Não repita; pergunte o que ela prefere.", "La persona rechazó esta acción en la pantalla. No la repitas; pregunta qué prefiere.", "The person declined this screen action. Do not repeat it; ask what they prefer."), true);
+			}
 			// alvo desconhecido conta como terminal
 			if (KEYED.includes(action) && (!target || SHELLS.test(target.image))) {
 				const who = target ? t(`${target.image} executa o que for digitado como comando.`, `${target.image} ejecuta como comando lo que se escriba.`, `${target.image} runs whatever is typed as a command.`) : t("Não consegui identificar o programa alvo: pode ser um terminal.", "No pude identificar el programa destino: puede ser una terminal.", "Could not identify the target program: it may be a terminal.");

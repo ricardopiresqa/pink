@@ -62,10 +62,18 @@ class Borda : Form
 		try { SetWindowDisplayAffinity(Handle, 0x11); } catch { } // WDA_EXCLUDEFROMCAPTURE: o modelo não vê o contorno
 	}
 
+	// tela inteira: um contorno por monitor (o retângulo único dos dois monitores ficava com bordas fora da tela)
 	protected override void OnPaint(PaintEventArgs e)
 	{
 		using (var pen = new Pen(color, THICK))
-			e.Graphics.DrawRectangle(pen, THICK / 2, THICK / 2, Width - THICK, Height - THICK);
+		{
+			if (!screen) { e.Graphics.DrawRectangle(pen, THICK / 2, THICK / 2, Width - THICK, Height - THICK); return; }
+			foreach (var s in Screen.AllScreens)
+			{
+				var b = s.Bounds;
+				e.Graphics.DrawRectangle(pen, b.X - Left + THICK / 2, b.Y - Top + THICK / 2, b.Width - THICK, b.Height - THICK);
+			}
+		}
 	}
 
 	public void Command(string line)
@@ -107,9 +115,13 @@ class Borda : Form
 			RECT w;
 			// limites sem a sombra invisível do Windows 10/11
 			if (DwmGetWindowAttribute(target, 9, out w, Marshal.SizeOf(typeof(RECT))) != 0) GetWindowRect(target, out w);
-			r = Rectangle.FromLTRB(w.L - THICK, w.T - THICK, w.R + THICK, w.B + THICK);
+			// por dentro da janela e recortado ao monitor dela: por fora, a janela maximizada perdia as bordas de cima e do
+			// lado (fora da tela) e a do outro lado caía no monitor vizinho; sobrava só a de baixo
+			var win = Rectangle.FromLTRB(w.L, w.T, w.R, w.B);
+			r = Rectangle.Intersect(win, Screen.FromRectangle(win).Bounds);
+			if (r.Width <= 2 * THICK || r.Height <= 2 * THICK) { if (Visible) Hide(); return; }
 		}
-		if (Bounds != r) Bounds = r;
+		if (Bounds != r) { Bounds = r; Invalidate(); }
 		if (!Visible) Show();
 	}
 

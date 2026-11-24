@@ -470,6 +470,28 @@ const hasLeftovers = (agentDir) => (fs.existsSync(agentDir) ? fs.readdirSync(age
   t.turnOff();
 }
 
+// (9b) liberar por programa: "Sim, e não perguntar de novo" vale para aquele programa até desligar; terminal nunca entra
+{
+  const run = fakeRun();
+  const find = (pid) => ({ 844: { image: "msedge.exe", title: "Edge" }, 845: { image: "notepad.exe", title: "x" }, 9: { image: "cmd.exe", title: "C:\\x" } })[pid];
+  const { t } = newTela({ run, find });
+  await t.turnOn();
+  const picks = [];
+  const c = ctx([true]);
+  c.ui.select = async (title, options) => (picks.push(options), options[picks.length === 1 ? 1 : 0]);
+  const m = run.calls.length;
+  await exec(t, "click", { pid: 844, x: 1, y: 2 }, c); // escolhe "não perguntar de novo"
+  await exec(t, "press_key", { pid: 844, key: "enter" }, c); // liberado: sem pergunta
+  await exec(t, "click", { pid: 845, x: 1, y: 2 }, c); // outro programa: pergunta
+  await exec(t, "type_text", { pid: 9, text: "dir" }, c); // terminal: confirm duplo, sem a opção
+  const afterFour = run.calls.length - m;
+  t.turnOff();
+  await t.turnOn();
+  await exec(t, "click", { pid: 844, x: 1, y: 2 }, c); // desligou: pergunta de novo
+  out.allowProgram = { selects: picks.length, firstOptions: picks[0], confirms: c.asked.length, runs: afterFour };
+  t.turnOff();
+}
+
 // (10) terminal: segunda confirmação
 {
   const run = fakeRun();
@@ -798,6 +820,14 @@ def test_refuse_rules(tela_out: dict) -> None:
     assert "terminal" in refuse["launchShell"]
     # leitura sem confirmação não grava arquivo (Argus 10: get_window_state aceita screenshot_out_file)
     assert "screenshot_out_file" in refuse["readOutFile"] and refuse["readOk"] is None
+
+
+def test_allow_a_program_until_the_screen_is_turned_off(tela_out: dict) -> None:
+    """Owner 2026-11-24: confirmar cada tecla cansava; libera por programa, terminal segue perguntando."""
+    a = tela_out["allowProgram"]
+    assert a["firstOptions"] == ["Sim", "Sim, e não perguntar de novo para o msedge.exe (até /tela desligar)", "Não"]
+    assert a["selects"] == 3  # 1º clique no Edge, o Bloco de Notas e o Edge depois de desligar; a tecla no Edge não perguntou
+    assert a["confirms"] == 2 and a["runs"] == 4  # o terminal pediu as duas confirmações de sempre; as 4 ações rodaram
 
 
 def test_lookup_title_is_cut_to_80_and_empty_cells_are_kept(tela_out: dict) -> None:
