@@ -303,6 +303,8 @@ out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: {
 const answerSteps = [{ kind: "thinking", ms: 400 }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
 out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } });
 out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "click", args: { pid: 1, x: 120, y: 340 } } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "type_text", args: { pid: 1, text: "RTX 5070 Ti" } } })];
+const tl = (line) => ({ kind: "tool", line });
+out.compact = mod.compact([tl("tela · list_windows"), tl("tela · get_window_state"), tl("tela · click 1, 2"), tl("tela · get_window_state"), { kind: "text", text: "ok" }, tl("Leu a.ts"), tl("Leu a.ts"), tl("tela · hotkey ctrl+t")]).map((step) => step.line ?? step.text);
 const complete = (p) => commands.agente.getArgumentCompletions(p);
 out.completeOff = (await complete(""))?.map((i) => i.value) ?? null;
 await commands.agente.handler("claude opus", ctx);
@@ -452,7 +454,8 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + Pensou")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
     rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
     assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
-    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "tela · list_windows", "tela · click 120, 340", "tela · type_text \"RTX 5070 Ti\""]  # nomes do Claude viram os do Pink, caminho relativo
+    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "tela · list_windows", "tela · click 120, 340", "tela · type_text \"RTX 5070 Ti\""]
+    assert session["compact"] == ["tela · 4 ações: list_windows, get_window_state ×2, click", "ok", "Leu a.ts ×2", "tela · hotkey ctrl+t"]  # como o Claude Code: seguidas viram resumo  # nomes do Claude viram os do Pink, caminho relativo
 
 
 def test_agente_effort_menu_direct_choice_and_completions(session: dict) -> None:

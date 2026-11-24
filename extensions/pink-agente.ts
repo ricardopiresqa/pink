@@ -129,8 +129,31 @@ export function steps(result: any, cwd = "") {
 	return out;
 }
 
+// como no Claude Code: ferramentas seguidas viram uma linha de resumo. A tela vira "tela · 16 ações: list_windows,
+// get_window_state ×5, click ×4..." e linhas iguais em sequência viram "linha ×N" (antes eram dezenas de linhas iguais)
+export function compact(list: any[]) {
+	const out: any[] = [];
+	for (const step of list) {
+		const last = out.at(-1);
+		const screen = step.kind === "tool" && String(step.line).startsWith("tela · ");
+		if (screen && last?.screen) last.actions.push(String(step.line).split(" ")[2]);
+		else if (step.kind === "tool" && last?.kind === "tool" && !last.screen && last.base === step.line) last.count++;
+		else out.push(screen ? { kind: "tool", screen: true, actions: [String(step.line).split(" ")[2]], first: step.line } : step.kind === "tool" ? { ...step, base: step.line, count: 1 } : step);
+	}
+	return out.map((step) => {
+		if (step.screen) {
+			if (step.actions.length === 1) return { kind: "tool", line: step.first };
+			const counts = new Map<string, number>();
+			for (const action of step.actions) counts.set(action, (counts.get(action) ?? 0) + 1);
+			const names = [...counts].map(([action, n]) => (n > 1 ? `${action} ×${n}` : action)).join(", ");
+			return { kind: "tool", line: `tela · ${step.actions.length} ${t("ações", "acciones", "actions")}: ${names}` };
+		}
+		return step.kind === "tool" ? { kind: "tool", line: step.count > 1 ? `${step.base} ×${step.count}` : step.base } : step;
+	});
+}
+
 export function render(result: any, cwd = ""): string {
-	const all = steps(result, cwd);
+	const all = compact(steps(result, cwd));
 	const tools = all.filter((step) => step.kind === "tool").map((step) => `→ ${step.line}`);
 	const answer = all.filter((step) => step.kind === "text").at(-1)?.text ?? "";
 	const body = [tools.join("\n"), answer].filter(Boolean).join("\n\n");
@@ -213,7 +236,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const details = message.details ?? {};
 		const pad = options.outputPad ?? 1;
 		const box = new tui.Container();
-		const list = Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }];
+		const list = compact(Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }]);
 		// o Pink já põe uma linha em branco antes de cada mensagem: entre o pedido e a resposta fica só ela, como no Claude Code
 		for (const [index, step] of list.entries()) {
 			// ferramentas seguidas ficam juntas (uma busca na tela são dezenas de chamadas: com linha em branco virava uma tela inteira)
