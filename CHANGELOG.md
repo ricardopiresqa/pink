@@ -3,7 +3,7 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
-## [1.0.8] - 2026-11-24
+## [1.0.9] - 2026-11-24
 
 - COTA: quando o uso do plano não chega, a lateral diz o motivo (`thoth-client` fora do PATH, antigo, lento ou com
   resposta inválida) em vez de só "sem dado do plano"; um aviso impresso antes do JSON não quebra mais a leitura.
@@ -18,6 +18,10 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 - Caixa de digitar: linha vazia também embaixo do rótulo ("Build · modelo"), como a do OpenCode.
 - `/agente`: reabrir a mesma sessão do Pink (`/sessions`, `pink -c`) e escolher o mesmo agente continua a conversa
   dele (claude `--resume`, codex `thread/resume`, opencode e ACP `session/load`); sessão nova do Pink começa do zero.
+
+## [1.0.8] - 2026-11-24
+
+- Publicada no meio do trabalho, com só parte das mudanças acima; use a 1.0.9.
 
 ## [1.0.7] - 2026-11-24
 
