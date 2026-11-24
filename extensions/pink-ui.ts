@@ -1150,7 +1150,7 @@ export function toolGroups(entries) {
 	return groups;
 }
 
-const groupKind = (name) => (name === "bash" || name === "powershell" ? "cmd" : name === "read" ? "read" : name === "grep" || name === "find" ? "search" : name === "ls" ? "ls" : String(name).startsWith("web") ? "web" : "tool");
+const groupKind = (name) => (name === "bash" || name === "powershell" ? "cmd" : name === "read" ? "read" : name === "grep" || name === "find" ? "search" : name === "ls" ? "ls" : name === "tela" ? "tela" : String(name).startsWith("web") ? "web" : "tool");
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const GROUP_LABEL = {
 	cmd: (n) => t(`rodou ${plural(n, "comando", "comandos")}`, `ejecutó ${plural(n, "comando", "comandos")}`, `ran ${plural(n, "shell command", "shell commands")}`),
@@ -1158,6 +1158,7 @@ const GROUP_LABEL = {
 	search: (n) => t(`buscou ${plural(n, "padrão", "padrões")}`, `buscó ${plural(n, "patrón", "patrones")}`, `searched for ${plural(n, "pattern", "patterns")}`),
 	ls: (n) => t(`listou ${plural(n, "pasta", "pastas")}`, `listó ${plural(n, "carpeta", "carpetas")}`, `listed ${plural(n, "folder", "folders")}`),
 	web: (n) => t(`consultou ${plural(n, "página", "páginas")}`, `consultó ${plural(n, "página", "páginas")}`, `fetched ${plural(n, "page", "pages")}`),
+	tela: (n) => t(`usou a tela (${plural(n, "ação", "ações")})`, `usó la pantalla (${plural(n, "acción", "acciones")})`, `used the screen (${plural(n, "action", "actions")})`),
 	tool: (n) => t(`usou ${plural(n, "ferramenta", "ferramentas")}`, `usó ${plural(n, "herramienta", "herramientas")}`, `used ${plural(n, "tool", "tools")}`),
 };
 export function groupSummary(calls) {

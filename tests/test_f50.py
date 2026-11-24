@@ -713,6 +713,7 @@ def test_consecutive_tool_calls_collapse_into_one_group_line(ui_facts: dict) -> 
     g = ui_facts["groups"]
     assert g["sameGroup"] == [True, True, True] and g["eAlone"] == 1 and g["fSkipped"] is False and g["gAlone"] == 1
     assert g["summary"] == {"text": "Rodou 2 comandos, leu 1 arquivo, buscou 1 padrão", "failed": " · 1 falhou", "running": True}
+    assert g["screen"] == "Usou a tela (2 ações), leu 1 arquivo"  # a tela tem nome próprio no grupo
     rows = g["rows"]
     assert rows["a"] == [" → Rodou 2 comandos, leu 1 arquivo, buscou 1 padrão … · 1 falhou"] and rows["b"] == [] and rows["running"] == rows["a"]
     assert rows["e"] == rows["g"] == [" → Rodou: ls"]  # sozinha: a linha detalhada de sempre

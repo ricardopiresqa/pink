@@ -138,7 +138,7 @@ out.groups = (() => {
 	const row = (id) => renderer.renderResult({}, { expanded: false, isPartial: false }, plain, ctx(id)).render(80);
 	const rows = { a: row("a"), b: row("b"), e: row("e"), g: row("g"), running: renderer.renderCall({ command: "ls" }, plain, ctx("a", { isPartial: true })).render(80) };
 	ui.PINK.session = undefined;
-	return { sameGroup: ["b", "c", "d"].map((id) => groups.get(id) === first), eAlone: groups.get("e") !== first && groups.get("e").calls.length, fSkipped: groups.has("f"), gAlone: groups.get("g").calls.length, summary: ui.groupSummary(first.calls), rows };
+	return { sameGroup: ["b", "c", "d"].map((id) => groups.get(id) === first), eAlone: groups.get("e") !== first && groups.get("e").calls.length, fSkipped: groups.has("f"), gAlone: groups.get("g").calls.length, summary: ui.groupSummary(first.calls), screen: ui.groupSummary([{ name: "tela", done: true }, { name: "tela", done: true }, { name: "read", done: true }]).text, rows };
 })();
 const cursorBox = ui.inputBox({ theme: plain, content: ["ab\x1b_pi:c\x07\x1b[7m \x1b[0mcd"], width: 30, label: "m" });
 out.cursorBoxWidths = cursorBox.map(ui.visible);  // o marcador de cursor do Pi não ocupa coluna
