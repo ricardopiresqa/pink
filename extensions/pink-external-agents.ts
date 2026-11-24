@@ -619,8 +619,21 @@ async function runAcp(child: any, name: string, task: string, cwd: string, resul
 
 // abre a sessão (initialize, session/new ou load, modelo). Uma vez por processo: o warmKept faz isto assim que a pessoa
 // escolhe o agente, e a primeira mensagem só espera o que faltar. Devolve o erro, ou nada.
+// cada passo da partida tem prazo e percebe o processo morto: sem isso, um agente travado (ex.: um MCP que não abre em
+// session/new) deixava o "Trabalhando" contando para sempre, e nem o Esc soltava (owner 2026-11-24, opencode no outro PC)
+export const ACP_SETUP_MS = 120000;
+export function acpStep(conn: Pick<AcpConn, "exited">, name: string, step: string, request: Promise<any>, ms = ACP_SETUP_MS): Promise<any> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const late = new Promise((resolve) => {
+		timer = setTimeout(() => resolve({ error: { message: `o ${name} não respondeu ${step} em ${Math.round(ms / 1000)} s${step === "session/new" ? " (um MCP que não abre nesta máquina pode travar aqui)" : ""}` } }), ms);
+		timer.unref?.();
+	});
+	const died = conn.exited.then((code) => ({ error: { message: `o ${name} saiu (código ${code}) durante ${step}` } }));
+	return Promise.race([request, late, died]).finally(() => clearTimeout(timer));
+}
+
 async function acpSetup(conn: AcpConn, name: string, cwd: string, resume?: { id?: string }, model?: string, extras?: Extras): Promise<string | undefined> {
-	const { client } = conn;
+	const client = { request: (method: string, params: any) => acpStep(conn, name, method, conn.client.request(method, params)) };
 	let config: any[] = [];
 	const init = await client.request("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
 	if (init.error) return String(init.error.message ?? "initialize falhou");

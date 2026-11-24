@@ -211,6 +211,14 @@ out.codexConfig = ext.codexMcpConfig(extras.mcp, ["PATH", "THOTH_TOKEN"]);
 const elicit = async (server, ask) => (await ext.runExternal(agent("codex", "codex", []), `mcp:${server}`, root, undefined, fresh(), () => {}, fake(codexJs), ask)).messages.at(-1).content[0].text;
 out.elicit = [await elicit("pink", () => undefined), await elicit("outro", () => undefined), await elicit("outro", say(true))];
 out.acpServers = [ext.acpMcpServers(extras.mcp, true), ext.acpMcpServers(extras.mcp, false).map((s) => s.name)];
+const never = () => new Promise(() => {});
+const hold = setInterval(() => {}, 1000); // o prazo usa unref (não segura o Pink aberto): aqui algo tem de manter o node vivo
+out.acpStep = [
+	(await ext.acpStep({ exited: never() }, "opencode", "session/new", never(), 50)).error.message,
+	(await ext.acpStep({ exited: Promise.resolve(3) }, "opencode", "initialize", never(), 5000)).error.message,
+	(await ext.acpStep({ exited: never() }, "opencode", "initialize", Promise.resolve({ result: "ok" }), 5000)).result,
+];
+clearInterval(hold);
 const fsx = await import("node:fs");
 process.env.FAKE_LOG = path.join(root, "log.jsonl");
 r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), extras }, "x", root, undefined, fresh(), () => {}, fake(claudeJs));
@@ -380,6 +388,14 @@ def test_codex_runs_a_turn_and_its_approvals_become_questions(ext: dict) -> None
     assert ext["codexNo"] == "decisão decline para: arrumar build"
     assert ext["codexHeadless"] == "decisão decline para: arrumar build"  # sem tela para perguntar: recusa
     assert ext["codexLogin"]["stop"] == "error" and ext["codexLogin"]["error"].startswith("401 Unauthorized") and "faça login" in ext["codexLogin"]["error"]
+
+
+def test_acp_setup_steps_time_out_and_notice_the_agent_died(ext: dict) -> None:
+    # owner 2026-11-24: opencode "Trabalhando" sem parar no outro PC; a partida travada agora vira erro (e o Esc solta)
+    late, died, ok = ext["acpStep"]
+    assert late.startswith("o opencode não respondeu session/new em 0 s") and "MCP" in late
+    assert died == "o opencode saiu (código 3) durante initialize"
+    assert ok == "ok"
 
 
 def test_acp_agents_run_a_prompt_and_permissions_become_questions(ext: dict) -> None:

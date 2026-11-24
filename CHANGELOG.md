@@ -12,6 +12,9 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   fechado); o link do changelog leva ao CHANGELOG no GitHub. `PI_SKIP_VERSION_CHECK=1` desliga a consulta.
 - `/agente`: a mensagem enviada enquanto o agente trabalha aparece em cinza acima da caixa, como no Claude Code, no
   lugar do aviso "Na fila"; ela some quando é enviada.
+- `/agente` com opencode e outros agentes ACP: cada passo da partida (initialize, session/new, modelo) tem prazo de
+  2 min e percebe o agente morto; um agente travado (ex.: um MCP que não abre na máquina) vira erro em vez de
+  "Trabalhando" sem fim, e o Esc solta.
 
 ## [1.0.7] - 2026-11-24
 
