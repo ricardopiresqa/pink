@@ -373,7 +373,8 @@ out.thoth = await (async () => {
 	const column = (thoth) => ui.rightColumn({ theme: plain, width: 36, height: 40, data: { input: 0, output: 0, cost: 0, thoth } });
 	const shown = column(full);
 	return { full, down, partial, text: shown.join("\n"), widths: [...new Set(shown.map(ui.visible))], downText: column(down).join("\n"), partialText: column(partial).join("\n"),
-		loading: column({ ok: false, loading: true }).join("\n"), leaks: shown.join("\n").includes(secret.slice(0, 6)) || shown.join("\n").includes("\u001b[31m"), absent: column(undefined).join("\n").includes("THOTH") };
+		loading: column({ ok: false, loading: true }).join("\n"), leaks: shown.join("\n").includes(secret.slice(0, 6)) || shown.join("\n").includes("\u001b[31m"), absent: column(undefined).join("\n").includes("THOTH"),
+		ad: column({ ad: true }), adText: column({ ad: true }).join("\n") };
 })();
 // -- COTA: uso do plano (thoth-client uso estado --json), sem processo
 out.plan = await (async () => {
@@ -397,6 +398,13 @@ out.plan = await (async () => {
 		loading: column({ ok: false, loading: true }).join("\n").includes("consultando"),
 		read: await ui.readPlan(fake(JSON.stringify(raw))).then((v) => v.ok),
 		broken: await ui.readPlan(fake("não é json")).then(() => "ok", () => "rejeitou"),
+		brokenReason: await ui.readPlan(fake("não é json")).then(() => "ok", (e) => e.reason),
+		noisy: await ui.readPlan(fake(`Nova versão disponível\n${JSON.stringify(raw)}`)).then((v) => v.ok),
+		missing: await ui.readPlan(fake("", Object.assign(new Error("spawn"), { code: "ENOENT" }))).then(() => "ok", (e) => e.reason),
+		old: ui.planFailure({ code: 2 }, "thoth-client: error: argument command: invalid choice: 'uso'"),
+		slow: ui.planFailure({ killed: true }),
+		missingText: column({ ok: false, reason: "missing" }).join("\n"),
+		unknownText: column({ ok: false }).join("\n"),
 	};
 })();
 // -- cota do Claude pelo login do Pink e a lista de MCP recolhível

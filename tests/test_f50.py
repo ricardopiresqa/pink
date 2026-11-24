@@ -759,6 +759,9 @@ def test_the_thoth_section_shows_approvals_card_and_the_free_source_and_degrades
     assert thoth["down"] == {"ok": False} and "Thoth indisponível" in thoth["downText"] and "PLANO" in thoth["downText"]
     assert thoth["partial"] == {"card": None, "ok": True} and "nenhum em andamento" in thoth["partialText"] and "aprovações                      —" in thoth["partialText"]
     assert "consultando…" in thoth["loading"] and thoth["absent"] is False
+    # sem o Thoth instalado: apresentação curta com o site, dentro da largura da coluna (owner 2026-11-24)
+    assert "THOTH" in thoth["adText"] and "thothdev.ia.br" in thoth["adText"] and "Governança e memória" in thoth["adText"]
+    assert "indisponível" not in thoth["adText"] and max(len(line) for line in thoth["ad"]) <= 36
 
 
 def test_the_quota_section_shows_claude_and_codex_five_hours_and_week(ui_facts: dict) -> None:
@@ -774,6 +777,11 @@ def test_the_quota_section_shows_claude_and_codex_five_hours_and_week(ui_facts: 
     assert plan["noClaude"] == {"ok": True, "claude": None} and "thoth-client uso ativar" in plan["noClaudeText"]
     assert plan["none"] == {"ok": False} and plan["absent"] is False and plan["loading"] is True
     assert plan["read"] is True and plan["broken"] == "rejeitou"
+    # a falha diz o motivo (máquina nova sem thoth-client no PATH, versão antiga, demora) e aviso antes do JSON não quebra
+    assert plan["noisy"] is True and plan["brokenReason"] == "bad"
+    assert (plan["missing"], plan["old"], plan["slow"]) == ("missing", "old", "slow")
+    assert "sem dado do plano" in plan["missingText"] and "thoth-client não achado no PATH" in plan["missingText"]
+    assert "sem dado do plano" in plan["unknownText"] and "PATH" not in plan["unknownText"]
 
 
 def test_the_themes_of_opencode_claude_and_codex_ship_with_the_same_keys_as_pink(package_dir: Path) -> None:

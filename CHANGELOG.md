@@ -3,6 +3,12 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.8] - 2026-11-24
+
+- COTA: quando o uso do plano não chega, a lateral diz o motivo (`thoth-client` fora do PATH, antigo, lento ou com
+  resposta inválida) em vez de só "sem dado do plano"; um aviso impresso antes do JSON não quebra mais a leitura.
+- THOTH: sem o Thoth instalado, a seção mostra uma apresentação curta com o site (thothdev.ia.br).
+
 ## [1.0.7] - 2026-11-24
 
 - `/agente`: os menus de agente, modelo e esforço têm busca, como o `/model` (digite para filtrar, setas, Enter, Esc).

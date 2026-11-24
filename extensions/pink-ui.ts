@@ -521,6 +521,8 @@ export function thothSnapshot({ approvals, cards, calls }, now = Date.now()) {
 }
 
 export function thothLines({ theme, thoth, width }) {
+	// sem o Thoth instalado: uma apresentação curta no lugar da seção (owner 2026-11-24: "propaganda para todos")
+	if (thoth?.ad) return [theme.fg("text", fit(t("Governança e memória", "Gobernanza y memoria", "Governance and memory"), width)), theme.fg("dim", fit(t("para seus agentes:", "para tus agentes:", "for your agents:"), width)), theme.fg("accent", fit("thothdev.ia.br", width))];
 	if (!thoth?.ok) return [theme.fg("dim", thoth?.loading ? t("consultando…", "consultando…", "loading…") : t("Thoth indisponível", "Thoth no disponible", "Thoth unavailable"))];
 	const row = (label, value, tone = "text") => {
 		const left = theme.fg("muted", label);
@@ -608,8 +610,27 @@ export function resetLabel(epoch, now = new Date()) {
 	return `${t("dom,seg,ter,qua,qui,sex,sáb", "dom,lun,mar,mié,jue,vie,sáb", "Sun,Mon,Tue,Wed,Thu,Fri,Sat").split(",")[when.getDay()]} ${hm}`;
 }
 
+// por que a leitura falhou: sem o motivo, "sem dado do plano" numa máquina nova não diz o que fazer
+const PLAN_FAILURE = {
+	missing: t("thoth-client não achado no PATH", "thoth-client no está en el PATH", "thoth-client not on PATH"),
+	slow: t("thoth-client demorou mais de 60 s", "thoth-client tardó más de 60 s", "thoth-client took over 60 s"),
+	old: t("thoth-client antigo: atualize", "thoth-client antiguo: actualiza", "old thoth-client: update it"),
+	bad: t("resposta inválida do thoth-client", "respuesta inválida de thoth-client", "invalid thoth-client output"),
+	failed: t("rode: thoth-client uso estado", "ejecuta: thoth-client uso estado", "run: thoth-client uso estado"),
+};
+export function planFailure(error, stderr = "") {
+	if (error?.code === "ENOENT") return "missing";
+	if (error?.killed || error?.code === "ETIMEDOUT") return "slow";
+	if (/invalid choice|unrecognized arguments|escolha inválida/i.test(String(stderr))) return "old";
+	return "failed";
+}
+
 export function planLines({ theme, plan, width, now = new Date() }) {
-	if (!plan?.ok) return [theme.fg("dim", plan?.loading ? t("consultando…", "consultando…", "loading…") : t("sem dado do plano (thoth-client uso)", "sin dato del plan (thoth-client uso)", "no plan data (thoth-client uso)"))];
+	if (!plan?.ok && plan?.loading) return [theme.fg("dim", t("consultando…", "consultando…", "loading…"))];
+	if (!plan?.ok) {
+		const why = PLAN_FAILURE[plan?.reason];
+		return [theme.fg("dim", t("sem dado do plano", "sin dato del plan", "no plan data")), ...(why ? [theme.fg("warning", fit(why, width))] : [])];
+	}
 	const out = [];
 	for (const [name, usage] of [["Claude", plan.claude], ["Codex", plan.codex]]) {
 		if (usage === undefined) continue;
@@ -670,12 +691,13 @@ export async function readClaudeFromPink(getKey, fetcher = fetch) {
 export function readPlan(run = node("node:child_process")?.execFile) {
 	return new Promise((resolve, reject) => {
 		if (!run) return reject(new Error("no child_process"));
-		run("thoth-client", ["uso", "estado", "--json"], { timeout: 60000, windowsHide: true, maxBuffer: 4 << 20 }, (error, stdout) => {
-			if (error) return reject(error);
+		run("thoth-client", ["uso", "estado", "--json"], { timeout: 60000, windowsHide: true, maxBuffer: 4 << 20 }, (error, stdout, stderr) => {
+			if (error) return reject(Object.assign(error, { reason: planFailure(error, stderr) }));
+			const text = String(stdout ?? "");
 			try {
-				resolve(planSnapshot(JSON.parse(stdout)));
+				resolve(planSnapshot(JSON.parse(text.slice(Math.max(0, text.indexOf("{")))))); // aviso impresso antes do JSON não derruba a leitura
 			} catch (parse) {
-				reject(parse);
+				reject(Object.assign(parse, { reason: "bad" }));
 			}
 		});
 	});
@@ -901,7 +923,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			PINK.plan.busy = true;
 			const [cli, own] = await Promise.allSettled([readPlan(), readClaudeFromPink((provider) => ctx.modelRegistry?.getApiKeyForProvider?.(provider))]);
 			try {
-				const data = cli.status === "fulfilled" ? cli.value : { ok: false };
+				const data = cli.status === "fulfilled" ? cli.value : { ok: false, reason: cli.reason?.reason };
 				// o uso medido pelo login do Pink vale mais que o da linha de status do Claude Code (que só atualiza com ele aberto)
 				PINK.plan.data = own.status === "fulfilled" && own.value ? { ...data, ok: true, claude: own.value } : data;
 			} catch {
@@ -965,7 +987,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (PINK.thothOn) startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : undefined, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)
