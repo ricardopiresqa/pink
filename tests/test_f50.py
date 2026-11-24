@@ -55,7 +55,7 @@ def cli(built: dict, tmp_path_factory: pytest.TempPathFactory) -> Path:
     prefix = tmp_path_factory.mktemp("pink-prefix")
     done = subprocess.run([npm, "install", "--prefix", str(prefix), "--no-audit", "--no-fund", built["tarball"]], capture_output=True, text=True, timeout=600, check=False, stdin=subprocess.DEVNULL)
     assert done.returncode == 0, done.stderr[-400:]
-    path = prefix / "node_modules" / "@thoth" / "pink" / "dist" / "bundle" / "cli.js"
+    path = prefix / "node_modules" / "@thothdev" / "pink" / "dist" / "bundle" / "cli.js"
     assert path.is_file()
     return path
 
@@ -100,7 +100,9 @@ def synthetic(tmp_path: Path) -> Path:
 def test_the_pinned_upstream_has_a_sha512_integrity_a_licence_and_a_version_the_rebrand_extends() -> None:
     assert UPSTREAM["integrity"].startswith("sha512-") and len(UPSTREAM["integrity"]) > 80
     assert UPSTREAM["license"] == "MIT" and UPSTREAM["package"] == "@earendil-works/pi-coding-agent"
-    assert VERSION.startswith(UPSTREAM["version"] + "-pink.")  # a Pink build says which Pi it is built on
+    # a Pink build says which Pi it is built on (since 1.0.0 the Pink version is its own; the base goes in thoth.fork_of)
+    assert REBRAND["package_json"]["set"]["thoth"]["fork_of"] == f"{UPSTREAM['package']}@{UPSTREAM['version']}"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", VERSION), VERSION
     assert REBRAND["package_json"]["set"]["thoth"]["fork_of"] == f"{UPSTREAM['package']}@{UPSTREAM['version']}"
 
 
@@ -165,7 +167,7 @@ def test_package_json_gets_the_pink_identity_and_the_extra_files(tmp_path: Path)
     root = synthetic(tmp_path)
     report = bp.apply_package_json(root, REBRAND["package_json"])
     data = json.loads((root / "package.json").read_text(encoding="utf-8"))
-    assert report["name"] == "@thoth/pink" and data["bin"] == {"pink": "dist/mux/pink.mjs"}  # o multiplexador abre a lateral e chama dist/bundle/cli.js
+    assert report["name"] == "@thothdev/pink" and data["bin"] == {"pink": "dist/mux/pink.mjs"}  # o multiplexador abre a lateral e chama dist/bundle/cli.js
     assert data["piConfig"] == {"name": "pink", "configDir": ".pink"} and {"LICENSE-PI.txt", "NOTICE.md", "dist"} <= set(data["files"])
     bp.apply_package_json(root, REBRAND["package_json"])  # twice: no duplicated entries
     assert json.loads((root / "package.json").read_text(encoding="utf-8"))["files"].count("NOTICE.md") == 1
@@ -223,7 +225,7 @@ def test_what_is_left_as_upstream_is_declared() -> None:
 # ================================================================================================ the built package
 def test_the_built_package_is_pink_and_carries_the_licences(built: dict, package_dir: Path) -> None:
     data = json.loads((package_dir / "package.json").read_text(encoding="utf-8"))
-    assert data["name"] == "@thoth/pink" and data["version"] == VERSION and data["bin"] == {"pink": "dist/mux/pink.mjs"}
+    assert data["name"] == "@thothdev/pink" and data["version"] == VERSION and data["bin"] == {"pink": "dist/mux/pink.mjs"}
     assert data["piConfig"] == {"name": "pink", "configDir": ".pink"}
     assert (package_dir / "LICENSE-PI.txt").is_file() and (package_dir / "NOTICE.md").is_file()
     assert built["tarball_integrity"].startswith("sha512-") and built["upstream_integrity"] == UPSTREAM["integrity"]
@@ -307,7 +309,7 @@ def test_the_build_works_with_relative_output_and_cache_paths_relative_output(bu
     shutil.copy(PINK / ".cache" / f"{UPSTREAM['package'].lstrip('@').replace('/', '-')}-{UPSTREAM['version']}.tgz", cache)
     done = subprocess.run([sys.executable, "-X", "utf8", str(PINK / "build_pink.py"), "--out", "rel-out", "--cache", "cache"], cwd=tmp_path, capture_output=True, text=True, timeout=600, check=False, stdin=subprocess.DEVNULL)
     assert done.returncode == 0, done.stderr[-300:]
-    assert json.loads(done.stdout)["status"] == "BUILT" and list((tmp_path / "rel-out").glob("thoth-pink-*.tgz"))
+    assert json.loads(done.stdout)["status"] == "BUILT" and list((tmp_path / "rel-out").glob("thothdev-pink-*.tgz"))
 
 
 # ================================================================================================ the OpenCode-like interface (F50b)
@@ -796,7 +798,7 @@ def test_the_docs_say_pink_without_breaking_pinks_own_files_links_or_examples(pa
     assert "#configure-pi)" not in everything
     # exemplos que o modelo pode repetir continuam válidos (rodada 2 do Argus)
     assert "the Pink package docs" not in everything and "](the " not in everything
-    assert "npm install -g @thoth/pink" in docs["quickstart.md"] and "curl -fsSL" not in docs["quickstart.md"]
+    assert "npm install -g @thothdev/pink" in docs["quickstart.md"] and "curl -fsSL" not in docs["quickstart.md"]
     assert not re.search(r'"\$schema":\s*"(?!https?://)', everything)
     assert "https://pi.dev/oauth/client.json" in docs["mcp.md"]  # o client ID real do login de MCP (left_as_upstream)
     assert not re.search(r"(?<![\w])PI_[A-Z*]", everything) and "/bug" not in docs["sessions.md"]
@@ -877,7 +879,7 @@ def test_subagents_are_native_the_pi_example_loaded_always(package_dir: Path) ->
 
 
 # atribuição MIT (NOTICE, licença, linha de fork do README, repository do package.json) e o nosso mapa de nomes
-PI_ATTRIBUTION = {"NOTICE.md", "LICENSE-PI.txt", "README.md", "package.json", "npm-shrinkwrap.json", "CHANGELOG.md", "docs/PINK.md"}
+PI_ATTRIBUTION = {"NOTICE.md", "LICENSE", "LICENSE-PI.txt", "README.md", "package.json", "npm-shrinkwrap.json", "CHANGELOG.md", "docs/PINK.md"}
 THIRD_PARTY_LIB = "dist/bundle/chunks/lib-4AVRLBHM.js"  # realce de código: a constante matemática PI, não o produto
 
 
@@ -947,7 +949,7 @@ def test_the_package_no_longer_says_pi_outside_the_declared_exceptions(package_d
     assert (package_dir / "CHANGELOG.md").read_text(encoding="utf-8").startswith("# Changelog do Pink")
     # o modelo e a pessoa leem pink; instalar é o pacote do Pink; o import das extensões segue o nome do módulo
     quickstart = (docs / "quickstart.md").read_text(encoding="utf-8")
-    assert "npm install -g @thoth/pink" in quickstart and "nix profile" not in quickstart and "-g --ignore-scripts @earendil-works" not in quickstart
+    assert "npm install -g @thothdev/pink" in quickstart and "nix profile" not in quickstart and "-g --ignore-scripts @earendil-works" not in quickstart
     assert "operating inside pink, a coding agent harness" in (package_dir / "dist" / "core" / "system-prompt.js").read_text(encoding="utf-8")
     assert "Earendil, the upstream developers," in (package_dir / "dist" / "modes" / "interactive" / "bug-report.js").read_text(encoding="utf-8")
     assert 'from "@earendil-works/pi-coding-agent"' in (docs / "extensions.md").read_text(encoding="utf-8")

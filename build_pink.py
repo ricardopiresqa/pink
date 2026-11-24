@@ -4,7 +4,7 @@
 1. baixa ``@earendil-works/pi-coding-agent@<versao fixada>`` (``npm pack``) e confere o ``integrity`` sha512 de ``upstream.json``;
 2. extrai, aplica ``rebrand.json`` (package.json, arquivos adicionados, renomeacao de variaveis de ambiente, substituicoes de texto) e FALHA se qualquer
    substituicao nao aplicar exatamente o numero de vezes esperado (o codigo do Pi mudou: o patch precisa ser revisto);
-3. empacota ``thoth-pink-<versao>.tgz`` (``npm pack``).
+3. empacota ``thothdev-pink-<versao>.tgz`` (``npm pack``).
 
 O codigo do Pi nunca e copiado para o repositorio: o fork e ESTE patch, reproduzivel e verificavel. Uso:
     python -X utf8 pink/build_pink.py [--out pink/out] [--cache pink/.cache] [--no-pack]

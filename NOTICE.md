@@ -1,6 +1,6 @@
 # Pink é um fork do Pi
 
-Pink (`@thoth/pink`) é um fork do **Pi** (`@earendil-works/pi-coding-agent`, MIT, copyright (c) 2025 Mario Zechner). O texto da licença do Pi está em
+Pink (`@thothdev/pink`) é um fork do **Pi** (`@earendil-works/pi-coding-agent`, MIT, copyright (c) 2025 Mario Zechner). O texto da licença do Pi está em
 `LICENSE-PI.txt` e acompanha este pacote, como a licença exige.
 
 O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está em `rebrand.json`, no repositório do Thoth):
@@ -43,5 +43,6 @@ Onde o nome Pi continua, e por quê (auditoria de 2026-11-15, card 1dfwh7kffk5; 
 - os schemas e o `$schema` dos temas apontam para `https://pink.invalid/...`: não há endereço publicado, então o editor
   não valida pelo link (os schemas vêm na pasta `schemas/`);
 - nomes de bibliotecas de terceiros que não têm a ver com o produto (ex.: a constante matemática `PI` do realce de código);
-- a atribuição exigida pela licença MIT: este arquivo, o `LICENSE-PI.txt`, o campo `repository` do `package.json` e a
-  linha de fork do `README.md`.
+- a atribuição exigida pela licença MIT: este arquivo, o `LICENSE-PI.txt`, a linha do Pi no `LICENSE`, o campo
+  `thoth.fork_of` do `package.json` e a linha de fork do `README.md`. O `repository` do `package.json` aponta para o
+  repositório do Pink.

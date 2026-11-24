@@ -3,9 +3,21 @@
   "upstream": "upstream.json",
   "package_json": {
     "set": {
-      "name": "@thoth/pink",
-      "version": "1.4.0-pink.13",
+      "name": "@thothdev/pink",
+      "version": "1.0.0",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
+      "homepage": "https://pink.thothdev.ia.br",
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ricardopiresqa/pink.git"
+      },
+      "bugs": {
+        "url": "https://github.com/ricardopiresqa/pink/issues"
+      },
+      "publishConfig": {
+        "access": "public",
+        "tag": "latest"
+      },
       "piConfig": {
         "name": "pink",
         "configDir": ".pink"
@@ -28,6 +40,7 @@
       "@xterm/headless": "5.5.0"
     },
     "files_add": [
+      "LICENSE",
       "LICENSE-PI.txt",
       "NOTICE.md",
       "extensions"
@@ -41,6 +54,10 @@
     {
       "from": "theme/extra-themes.json",
       "to": "dist/modes/interactive/theme/extra-themes.json"
+    },
+    {
+      "from": "LICENSE",
+      "to": "LICENSE"
     },
     {
       "from": "LICENSE-PI.txt",
@@ -379,7 +396,7 @@
         "docs/PINK.md"
       ],
       "regex": "curl -fsSL https://pi\\.dev/install\\.sh \\| sh|irm https://pi\\.dev/install\\.ps1 \\| iex",
-      "replace": "npm install -g @thoth/pink",
+      "replace": "npm install -g @thothdev/pink",
       "min_count": 1
     },
     {
@@ -929,7 +946,7 @@
         "docs/PINK.md"
       ],
       "regex": "npm (install|uninstall) -g(?: --ignore-scripts)? @earendil-works/pi-coding-agent",
-      "replace": "npm \\1 -g @thoth/pink",
+      "replace": "npm \\1 -g @thothdev/pink",
       "min_count": 3
     },
     {
@@ -1889,7 +1906,7 @@
       "id": "no-upstream-installer",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "'powershell -c \"irm https://pi.dev/install.ps1 | iex\"':\"curl -fsSL https://pi.dev/install.sh | sh\"",
-      "replace": "\"npm install -g @thoth/pink\":\"npm install -g @thoth/pink\"",
+      "replace": "\"npm install -g @thothdev/pink\":\"npm install -g @thothdev/pink\"",
       "count": 1
     },
     {
@@ -1917,7 +1934,7 @@
       "id": "no-upstream-download",
       "file": "dist/bundle/chunks/chunk-BSS6T6KQ.js",
       "find": "Download from: https://github.com/earendil-works/pi/releases/latest",
-      "replace": "Reinstall with: npm install -g @thoth/pink",
+      "replace": "Reinstall with: npm install -g @thothdev/pink",
       "count": 1
     },
     {

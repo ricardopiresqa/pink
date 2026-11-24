@@ -287,12 +287,12 @@ def sandbox_facts(cli: Path, package_dir: Path, sandbox_base: Path) -> dict:
     assert node, "node not found"
     assert BASH.is_file(), f"bash do Git nao encontrado em {BASH}"
     assert (package_dir / "extensions" / "pink-sandbox.cs").is_file()
-    prefix = cli.parents[5]  # <prefixo>/node_modules/@thoth/pink/dist/bundle/cli.js
+    prefix = cli.parents[5]  # <prefixo>/node_modules/@thothdev/pink/dist/bundle/cli.js
     # o pi-coding-agent e o proprio pacote instalado: um atalho de resolucao, como em test_pink_shell_bg.py
     shim = prefix / "node_modules" / "@earendil-works" / "pi-coding-agent"
     shim.mkdir(parents=True, exist_ok=True)
     (shim / "package.json").write_text(json.dumps({"name": "@earendil-works/pi-coding-agent", "type": "module", "exports": {".": "./index.js"}}), encoding="utf-8")
-    (shim / "index.js").write_text('export * from "../../@thoth/pink/dist/index.js";\n', encoding="utf-8")
+    (shim / "index.js").write_text('export * from "../../@thothdev/pink/dist/index.js";\n', encoding="utf-8")
     ext = prefix / "ext"
     ext.mkdir(exist_ok=True)
     sandbox = ext / "pink-sandbox.ts"

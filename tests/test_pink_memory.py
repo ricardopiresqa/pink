@@ -203,7 +203,7 @@ console.log(JSON.stringify(out));
 def memory_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPathFactory) -> dict:
     node = shutil.which("node")
     assert node, "node not found"
-    prefix = cli.parents[5]  # <prefixo>/node_modules/@thoth/pink/dist/bundle/cli.js
+    prefix = cli.parents[5]  # <prefixo>/node_modules/@thothdev/pink/dist/bundle/cli.js
     ext = prefix / "ext"
     ext.mkdir(exist_ok=True)
     module = ext / "pink-memory.ts"

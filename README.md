@@ -3,7 +3,7 @@
 Agente de código do Thoth. É um **fork do [Pi](https://github.com/earendil-works/pi-mono)** (MIT): tudo que era Pi virou Pink, com tema e interface próprios. O resto, o laço do agente, os provedores, a TUI, as sessões e a compactação, é o do Pi 1.4.0.
 
 ```text
-npm install -g @thoth/pink      # depois da publicação (F47); hoje: npm install -g <arquivo .tgz gerado por build_pink.py>
+npm install -g @thothdev/pink   # instala o comando pink
 pink                            # sessão interativa
 pink -p "explique este repositório"
 pink --help

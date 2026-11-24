@@ -483,7 +483,7 @@ out.natives = await (async () => {
 	fs.unlinkSync(nativesCopy);
 	const bin = path.join(os.tmpdir(), "pink-fake-bin");
 	const cwd = path.join(os.tmpdir(), "pink-fake-project");
-	const here = path.join(os.tmpdir(), "pink-fake-pkg", "node_modules", "@thoth", "pink", "extensions");
+	const here = path.join(os.tmpdir(), "pink-fake-pkg", "node_modules", "@thothdev", "pink", "extensions");
 	const fakePi = (execResult) => {
 		const handlers = {}, servers = {}, commands = {};
 		const pi = {

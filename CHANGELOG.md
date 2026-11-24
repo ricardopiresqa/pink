@@ -3,6 +3,15 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.0] - 2026-11-23
+
+Primeira versão pública: código aberto (MIT) em https://github.com/ricardopiresqa/pink e pacote `@thothdev/pink` no npm. As
+versões abaixo (`1.4.0-pink.N`, com o número do Pi 1.4.0 de base) eram internas.
+
+- Agentes instalados (Claude Code, Codex e os que falam ACP: opencode, cline, copilot, qwen, goose, gemini) como subagentes e
+  no `/agente <nome> [modelo]`, que passa a sessão a eles com continuidade, as regras, as skills e os MCPs do Pink, e o
+  próprio Pink como MCP (`pink_tarefa`).
+
 ## [1.4.0-pink.13] - 2026-11-17
 
 - O logo e o resumo da sessão voltaram a aparecer ao sair (`/quit`, Ctrl+C duas vezes). Desde a lateral de sessões, a

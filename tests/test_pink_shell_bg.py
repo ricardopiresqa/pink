@@ -141,12 +141,12 @@ console.log(JSON.stringify(out));
 def shell_facts(cli: Path, package_dir: Path, tmp_path_factory: pytest.TempPathFactory) -> dict:
     node = shutil.which("node")
     assert node, "node not found"
-    # cli.js fica em <prefixo>/node_modules/@thoth/pink/dist/bundle; o modulo construido vem do package_dir
+    # cli.js fica em <prefixo>/node_modules/@thothdev/pink/dist/bundle; o modulo construido vem do package_dir
     prefix = cli.parents[5]
     shim = prefix / "node_modules" / "@earendil-works" / "pi-coding-agent"
     shim.mkdir(parents=True, exist_ok=True)
     (shim / "package.json").write_text(json.dumps({"name": "@earendil-works/pi-coding-agent", "type": "module", "exports": {".": "./index.js"}}), encoding="utf-8")
-    (shim / "index.js").write_text('export * from "../../@thoth/pink/dist/index.js";\n', encoding="utf-8")
+    (shim / "index.js").write_text('export * from "../../@thothdev/pink/dist/index.js";\n', encoding="utf-8")
     ext = prefix / "ext"
     ext.mkdir(exist_ok=True)
     module = ext / "pink-shell-bg.ts"
