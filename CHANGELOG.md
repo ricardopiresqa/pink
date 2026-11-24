@@ -3,6 +3,12 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.7] - 2026-11-24
+
+- `/agente`: os menus de agente, modelo e esforço têm busca, como o `/model` (digite para filtrar, setas, Enter, Esc).
+- `/agente` com opencode e outros agentes ACP: o agente já liga e abre a sessão quando é escolhido; a primeira mensagem
+  não espera a partida a frio (19 s → 8 s no teste com o opencode).
+
 ## [1.0.6] - 2026-11-24
 
 - `/agente`: ferramentas seguidas viram uma linha de resumo, como no Claude Code (`→ tela · 26 ações: click ×6, ...`,

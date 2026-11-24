@@ -10,7 +10,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { closeKept, externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
+import { closeKept, externalAgents, listModels, pinkExtras, runExternal, warmKept } from "../examples/extensions/subagent/external.ts";
 import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
@@ -167,7 +167,50 @@ const label = (agent: any) => [agent.name, agent.model, agent.effort].filter(Boo
 
 const loadTui = () => Promise.all([import("@earendil-works/pi-tui"), import("@earendil-works/pi-coding-agent")]);
 
-export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge) {
+// menu com busca, como o /model: digitar filtra (busca aproximada), setas escolhem, Enter confirma, Esc cancela.
+// Sem tela interativa (testes, RPC) cai no ui.select de sempre.
+const NAV = ["up", "down", "pageUp", "pageDown", "enter", "escape"] as const;
+export async function pick(ctx: any, title: string, options: string[], load: () => Promise<any[]> = loadTui): Promise<string | undefined> {
+	if (typeof ctx.ui?.custom !== "function" || (ctx.mode && ctx.mode !== "tui")) return ctx.ui.select(title, options);
+	const [tui] = await load();
+	return ctx.ui.custom((screen: any, theme: any, _keys: any, done: (value: string | undefined) => void) => {
+		const input = new tui.Input({ prompt: "> ", placeholder: t("digite para buscar", "escribe para buscar", "type to search"), placeholderStyle: (text: string) => theme.fg("dim", text) });
+		const style = { selectedPrefix: (s: string) => theme.fg("accent", s), selectedText: (s: string) => theme.fg("accent", s), description: (s: string) => theme.fg("muted", s), scrollInfo: (s: string) => theme.fg("dim", s), noMatch: (s: string) => theme.fg("warning", s) };
+		const items = options.map((option) => ({ value: option, label: option }));
+		let list: any;
+		const build = () => {
+			const query = input.getValue().trim();
+			list = new tui.SelectList(query ? tui.fuzzyFilter(items, query, (item) => item.label) : items, 12, style);
+			list.onSelect = (item: any) => done(item.value);
+			list.onCancel = () => done(undefined);
+		};
+		build();
+		return {
+			get focused() {
+				return input.focused;
+			},
+			set focused(value: boolean) {
+				input.focused = value;
+			},
+			render: (width: number) => [theme.fg("accent", title), ...input.render(width), ...list.render(width)],
+			invalidate() {
+				input.invalidate?.();
+				list.invalidate();
+			},
+			handleInput(data: string) {
+				if (NAV.some((key) => tui.matchesKey(data, key))) list.handleInput(data);
+				else {
+					const before = input.getValue();
+					input.handleInput(data);
+					if (input.getValue() !== before) build();
+				}
+				screen.requestRender?.();
+			},
+		};
+	});
+}
+
+export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge, warm: typeof warmKept = run === runExternal ? warmKept : () => undefined) {
 	let screen: ReturnType<typeof telaBridge> | undefined; // pink_tela: aberto no primeiro /agente, fechado ao sair do Pink
 	let screenCtx: any; // a janela deste Pink, onde a tela pede confirmação
 	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[] } | undefined;
@@ -346,7 +389,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 				if (!agents.length) return ctx.ui?.notify?.(t("Nenhum agente instalado encontrado (claude, codex, opencode, cline, copilot, qwen, goose, gemini).", "No se encontró ningún agente instalado (claude, codex, opencode, cline, copilot, qwen, goose, gemini).", "No installed agent found (claude, codex, opencode, cline, copilot, qwen, goose, gemini)."), "warning");
 				// com um agente ligado, o primeiro item volta ao modelo/provedor do Pink (o mesmo que /agente off)
 				const back = active ? t(`Voltar ao Pink (desliga o ${active.agent.name})`, `Volver a Pink (apaga ${active.agent.name})`, `Back to Pink (turns ${active.agent.name} off)`) : undefined;
-				name = ctx.hasUI ? ((await ctx.ui.select(t("Conversar com qual agente?", "¿Con qué agente conversar?", "Talk to which agent?"), [...(back ? [back] : []), ...agents.map((agent) => agent.name)])) ?? "") : "";
+				name = ctx.hasUI ? ((await pick(ctx, t("Conversar com qual agente?", "¿Con qué agente conversar?", "Talk to which agent?"), [...(back ? [back] : []), ...agents.map((agent) => agent.name)], load)) ?? "") : "";
 				if (!name) return;
 				if (name === back) {
 					const was = active?.agent.name;
@@ -372,14 +415,14 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 					const current = choices.find((choice) => choice.current);
 					const keep = t(`Padrão do ${name}${current ? ` (${current.label})` : ""}`, `Predeterminado de ${name}${current ? ` (${current.label})` : ""}`, `${name} default${current ? ` (${current.label})` : ""}`);
 					const shown = choices.map((choice) => (choice.label === choice.id ? choice.id : `${choice.label} — ${choice.id}`));
-					const picked = await ctx.ui.select(t(`Modelo do ${name}`, `Modelo de ${name}`, `${name} model`), [keep, ...shown]);
+					const picked = await pick(ctx, t(`Modelo do ${name}`, `Modelo de ${name}`, `${name} model`), [keep, ...shown], load);
 					if (picked === undefined) return;
 					if (picked !== keep) model = choices[shown.indexOf(picked)]?.id ?? "";
 					// esforço (claude e codex informam os níveis de cada modelo); o primeiro item mantém o padrão dele
 					const chosen = choices.find((choice) => choice.id === model) ?? current;
 					if (chosen?.efforts?.length) {
 						const standard = t(`Padrão do ${name}${chosen.effort ? ` (${chosen.effort})` : ""}`, `Predeterminado de ${name}${chosen.effort ? ` (${chosen.effort})` : ""}`, `${name} default${chosen.effort ? ` (${chosen.effort})` : ""}`);
-						const level = await ctx.ui.select(t(`Esforço do ${name}`, `Esfuerzo de ${name}`, `${name} effort`), [standard, ...chosen.efforts]);
+						const level = await pick(ctx, t(`Esforço do ${name}`, `Esfuerzo de ${name}`, `${name} effort`), [standard, ...chosen.efforts], load);
 						if (level === undefined) return;
 						if (level !== standard) effort = level;
 					}
@@ -387,6 +430,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			}
 			stop(ctx);
 			active = { agent: { ...agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
+			warm(active.agent, ctx.cwd, active.resume); // já liga o agente: a primeira mensagem não espera a partida a frio
 			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model, effort: active.agent.effort }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");

@@ -305,6 +305,9 @@ out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "o
 out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "click", args: { pid: 1, x: 120, y: 340 } } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "type_text", args: { pid: 1, text: "RTX 5070 Ti" } } })];
 const tl = (line) => ({ kind: "tool", line });
 out.compact = mod.compact([tl("tela · list_windows"), tl("tela · get_window_state"), tl("tela · click 1, 2"), tl("tela · get_window_state"), { kind: "text", text: "ok" }, tl("Leu a.ts"), tl("Leu a.ts"), tl("tela · hotkey ctrl+t")]).map((step) => step.line ?? step.text);
+// o menu com busca do /agente: digitar filtra, Enter escolhe, Esc cancela (como o /model)
+const press = (keys) => mod.pick({ mode: "tui", ui: { custom: (factory) => new Promise((resolve) => { const box = factory({ requestRender() {} }, theme, {}, resolve); for (const key of keys) box.handleInput(key); out.pickDrawn ??= box.render(60).join("\n").replace(/\x1b\[[0-9;]*m/g, ""); }) } }, "Modelo do codex", ["Padrão do codex", "gpt-5.5", "gpt-5.4-mini", "o3"], () => Promise.all([import(tuiUrl), import(codingUrl)]));
+out.pick = [await press(["m", "i", "n", "i", "\r"]), await press(["\x1b[B", "\r"]), await press(["\x1b"]), await press(["o", "3", "\x7f", "\x7f", "\r"])];
 const complete = (p) => commands.agente.getArgumentCompletions(p);
 out.completeOff = (await complete(""))?.map((i) => i.value) ?? null;
 await commands.agente.handler("claude opus", ctx);
@@ -456,6 +459,8 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
     assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "tela · list_windows", "tela · click 120, 340", "tela · type_text \"RTX 5070 Ti\""]
     assert session["compact"] == ["tela · 4 ações: list_windows, get_window_state ×2, click", "ok", "Leu a.ts ×2", "tela · hotkey ctrl+t"]  # como o Claude Code: seguidas viram resumo  # nomes do Claude viram os do Pink, caminho relativo
+    assert session["pick"] == ["gpt-5.4-mini", "gpt-5.5", None, "Padrão do codex"]  # busca, setas, Esc, apagar a busca volta à lista
+    assert "Modelo do codex" in session["pickDrawn"] and "> mini" in session["pickDrawn"] and "→ gpt-5.4-mini" in session["pickDrawn"]
 
 
 def test_agente_effort_menu_direct_choice_and_completions(session: dict) -> None:
