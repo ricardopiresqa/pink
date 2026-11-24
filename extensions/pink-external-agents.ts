@@ -188,17 +188,54 @@ export function codexUsage(tokenUsage: any, result: any): void {
 }
 
 // ---------- ACP: atualizações da sessão ----------
-export function applyAcpUpdate(update: any, result: any, state: { text: string }, emit: () => void): void {
+// o tipo da ferramenta no ACP vira o nome da ferramenta do Pink, para a linha sair igual ("Rodou: ...", "Leu ...")
+const ACP_TOOLS: Record<string, string> = { execute: "bash", read: "read", edit: "edit", search: "grep", fetch: "web_fetch", delete: "delete", move: "move" };
+function acpArgs(update: any, before: Record<string, unknown> = {}): Record<string, unknown> {
+	const input = update.rawInput && typeof update.rawInput === "object" ? update.rawInput : {};
+	const where = Array.isArray(update.locations) ? update.locations[0]?.path : undefined;
+	const args: Record<string, unknown> = { ...before };
+	if (update.title) args.title = String(update.title);
+	const pathArg = input.path ?? input.filePath ?? input.file_path ?? where;
+	if (pathArg) args.path = String(pathArg);
+	if (input.command) args.command = String(input.command);
+	if (input.pattern ?? input.query) args.pattern = String(input.pattern ?? input.query);
+	return args;
+}
+const flushThinking = (result: any, state: any) => {
+	if (state.thinking) push(result, [{ type: "thinking", thinking: state.thinking, ms: Date.now() - state.thoughtAt }]);
+	state.thinking = "";
+	state.thoughtAt = undefined;
+};
+export function applyAcpUpdate(update: any, result: any, state: { text: string; thinking?: string; thoughtAt?: number }, emit: () => void): void {
 	if (!update || typeof update !== "object") return;
+	if (update.sessionUpdate === "agent_thought_chunk" && update.content?.type === "text") {
+		state.thoughtAt ??= Date.now();
+		state.thinking = (state.thinking ?? "") + String(update.content.text ?? "");
+		return;
+	}
 	if (update.sessionUpdate === "agent_message_chunk" && update.content?.type === "text") {
+		flushThinking(result, state);
 		state.text += String(update.content.text ?? "");
 		return;
 	}
 	if (update.sessionUpdate === "tool_call") {
+		flushThinking(result, state);
 		if (state.text) push(result, [{ type: "text", text: state.text }]), (state.text = "");
-		const name = typeof update.kind === "string" && update.kind !== "other" ? update.kind : "tool";
-		push(result, [tool(name, { title: String(update.title ?? ""), ...(Array.isArray(update.locations) && update.locations[0]?.path ? { path: update.locations[0].path } : {}) }, String(update.toolCallId ?? ""))]);
+		const name = ACP_TOOLS[update.kind] ?? (typeof update.kind === "string" && update.kind !== "other" ? update.kind : "tool");
+		push(result, [tool(name, acpArgs(update), String(update.toolCallId ?? ""))]);
 		emit();
+		return;
+	}
+	// o opencode manda o comando e o arquivo só na atualização (o tool_call chega com título "shell" e entrada vazia)
+	if (update.sessionUpdate === "tool_call_update" && update.toolCallId) {
+		for (const message of result.messages) {
+			const part = message.content?.find((item: any) => item.type === "toolCall" && item.id === String(update.toolCallId));
+			if (!part) continue;
+			part.arguments = acpArgs(update, part.arguments);
+			if (part.name === "bash" && !part.arguments.command && update.title) part.arguments.command = String(update.title);
+			emit();
+			return;
+		}
 	}
 }
 
@@ -493,6 +530,9 @@ async function runAcp(child: any, name: string, task: string, cwd: string, resul
 		config = session.result?.configOptions ?? [];
 	}
 	if (resume && sessionId) resume.id = sessionId;
+	// sem escolha, o rodapé mostra o modelo que o agente usa de fato (ex.: opencode/big-pickle), não o nome do agente
+	const current = config.find((item: any) => item?.category === "model")?.currentValue;
+	if (!model && typeof current === "string" && current) result.model = current;
 	if (model && sessionId) {
 		const option = config.find((item: any) => item?.category === "model");
 		const set = option ? await client.request("session/set_config_option", { sessionId, configId: option.id, value: model }) : await client.request("session/set_model", { sessionId, modelId: model });

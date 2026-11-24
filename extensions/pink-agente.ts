@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
+import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
 const readJson = (file: string) => {
@@ -41,23 +42,41 @@ const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "
 
 const fresh = () => ({ messages: [] as any[], stderr: "", exitCode: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 } });
 
-// as ferramentas que o agente usou, uma por linha, e depois a resposta
-export function render(result: any): string {
-	const lines: string[] = [];
-	let answer = "";
+// nomes e argumentos de cada agente (Claude: Read/file_path, Glob...) viram os do Pink, para a linha sair igual à nativa
+const NAMES: Record<string, string> = { multiedit: "edit", glob: "find", notebookedit: "edit" };
+export function pinkTool(part: any, cwd = "") {
+	const raw = String(part?.name ?? "tool");
+	const name = NAMES[raw.toLowerCase()] ?? raw.toLowerCase();
+	const args = { ...(part?.arguments ?? {}) };
+	const file = args.path ?? args.file_path ?? args.filePath ?? args.notebook_path;
+	if (file) args.path = cwd && path.isAbsolute(String(file)) ? path.relative(cwd, String(file)) || "." : String(file);
+	const line = toolSummary(name, args);
+	return line === name && args.title ? String(args.title) : line;
+}
+
+// os passos da resposta, na ordem: pensou, ferramentas e textos (o desenho usa; o modelo do Pink lê o texto puro)
+export function steps(result: any, cwd = "") {
+	const out: any[] = [];
 	for (const message of result.messages) {
 		for (const part of message.content ?? []) {
-			if (part.type === "text") answer = part.text;
-			else if (part.type === "toolCall") {
-				const arg = part.arguments?.command ?? part.arguments?.path ?? part.arguments?.file_path ?? part.arguments?.title ?? "";
-				lines.push(`• ${part.name}${arg ? ` ${String(arg).split("\n")[0].slice(0, 120)}` : ""}`);
-			}
+			if (part.type === "text" && part.text?.trim()) out.push({ kind: "text", text: part.text });
+			else if (part.type === "thinking") out.push({ kind: "thinking", ms: part.ms >= 100 ? part.ms : 0 }); // o pensamento chega de uma vez: tempo quase 0 não diz nada
+			else if (part.type === "toolCall") out.push({ kind: "tool", line: pinkTool(part, cwd) });
 		}
 	}
-	const body = [lines.join("\n"), answer].filter(Boolean).join("\n\n");
+	return out;
+}
+
+export function render(result: any, cwd = ""): string {
+	const all = steps(result, cwd);
+	const tools = all.filter((step) => step.kind === "tool").map((step) => `→ ${step.line}`);
+	const answer = all.filter((step) => step.kind === "text").at(-1)?.text ?? "";
+	const body = [tools.join("\n"), answer].filter(Boolean).join("\n\n");
 	if (result.stopReason === "error") return [body, `⚠ ${result.errorMessage}`].filter(Boolean).join("\n\n");
 	return body || t("(sem resposta)", "(sin respuesta)", "(no answer)");
 }
+
+const outputOf = (result: any) => result.usage?.output || result.messages.reduce((sum: number, message: any) => sum + streamedTokens(message), 0);
 
 const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` : agent.name);
 
@@ -68,25 +87,31 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastUi: any;
 
-	// "trabalhando" embaixo da caixa: o carregador do Pink só aparece quando o modelo dele está respondendo
+	// "⠴ Trabalhando · 2s · ↓ 0 tokens" acima da caixa, com o mesmo Loader do Pink: o dele só aparece quando o modelo do Pink
+	// responde, e este ocupa o mesmo lugar
+	let loader: any;
 	const idle = () => {
 		if (ticker) clearInterval(ticker);
 		ticker = undefined;
+		loader?.stop?.();
+		loader = undefined;
 		lastUi?.setWidget?.(WIDGET, undefined);
 	};
-	const busy = (ui: any, name: string, tool: () => string | undefined) => {
+	const busy = (ui: any, output: () => number) => {
 		idle();
 		lastUi = ui;
 		if (!ui?.setWidget) return;
 		const started = Date.now();
-		let frame = 0;
-		const draw = () => {
-			const secs = Math.floor((Date.now() - started) / 1000);
-			const what = tool();
-			ui.setWidget(WIDGET, [`${FRAMES[frame++ % FRAMES.length]} ${name} ${t("trabalhando", "trabajando", "working")} · ${secs}s${what ? ` · ${what}` : ""}   ${t("/agente off cancela", "/agente off cancela", "/agente off cancels")}`], { placement: "belowEditor" });
-		};
-		draw();
-		ticker = setInterval(draw, 120);
+		const message = () => `${t("Trabalhando", "Trabajando", "Working")} · ${runLabel({ ms: Date.now() - started, output: output() })}`;
+		if (tui?.Loader) {
+			ui.setWidget(WIDGET, (screen: any, theme: any) => (loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message())), { placement: "aboveEditor" });
+			ticker = setInterval(() => loader?.setMessage?.(message()), 1000);
+		} else {
+			let frame = 0;
+			const draw = () => ui.setWidget(WIDGET, ["", ` ${FRAMES[frame++ % FRAMES.length]} ${message()}`], { placement: "aboveEditor" });
+			draw();
+			ticker = setInterval(draw, 120);
+		}
 		ticker.unref?.();
 	};
 
@@ -98,7 +123,8 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		ctx?.ui?.setStatus?.(STATUS, undefined);
 	};
 
-	// mensagens desenhadas como as da conversa ("Você → opencode" e "opencode · modelo"), não com o tipo cru
+	// mensagens desenhadas como as do Pink: "> oi", "+ Pensou · 0.4s", "→ Rodou: ...", "● resposta" e o rodapé
+	// "opencode · big-pickle · 7s · ↓ 49 tokens" (mesmas funções do pink-ui)
 	let tui: any;
 	let coding: any;
 	void load().then(([a, b]) => {
@@ -106,19 +132,30 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		coding = b;
 	}).catch(() => undefined);
 	const textOf = (message: any) => (typeof message.content === "string" ? message.content : (message.content ?? []).map((part: any) => part.text ?? "").join(""));
+	const bold = (theme: any, text: string) => (theme.bold ? theme.bold(text) : text);
 	pink.registerMessageRenderer?.("pink-agente-pedido", (message: any, options: any, theme: any) => {
-		if (!tui) return undefined;
-		const details = message.details ?? {};
-		const box = new tui.Box(options.outputPad, 1, (line: string) => theme.bg("userMessageBg", line));
-		box.addChild(new tui.Text(`${theme.fg("accent", theme.bold(`${t("Você", "Tú", "You")} → ${details.agent ?? ""}`))}\n${details.text ?? textOf(message)}`, 0, 0));
-		return box;
+		if (!tui || !coding?.getMarkdownTheme) return undefined;
+		const md = new tui.Markdown(String(message.details?.text ?? textOf(message)), options.outputPad, 1, coding.getMarkdownTheme(), { color: (s: string) => theme.fg("userMessageText", s), bgColor: (s: string) => theme.bg("userMessageBg", s) });
+		return { render: (width: number) => userLines(md.render(Math.max(1, width - 1)), theme.fg("muted", ">")), invalidate: () => md.invalidate?.() };
 	});
 	pink.registerMessageRenderer?.("pink-agente", (message: any, options: any, theme: any) => {
 		if (!tui || !coding?.getMarkdownTheme) return undefined;
 		const details = message.details ?? {};
-		const box = new tui.Box(options.outputPad, 0);
-		box.addChild(new tui.Text(theme.fg(details.error ? "error" : "accent", theme.bold(details.model ? `${details.agent} · ${details.model}` : details.agent ?? t("agente", "agente", "agent"))), 0, 0));
-		box.addChild(new tui.Markdown(textOf(message), 0, 0, coding.getMarkdownTheme()));
+		const pad = options.outputPad ?? 1;
+		const box = new tui.Container();
+		const list = Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }];
+		for (const step of list) {
+			box.addChild(new tui.Spacer(1));
+			if (step.kind === "thinking") box.addChild(new tui.Text(theme.fg("thinkingText", thinkingLabel(step.ms)), pad, 0));
+			else if (step.kind === "tool") box.addChild(new tui.Text(theme.fg("muted", `→ ${step.line}`), pad, 0));
+			else box.addChild(bulleted(new tui.Markdown(String(step.text).trim(), pad, 0, coding.getMarkdownTheme())));
+		}
+		if (details.error) box.addChild(new tui.Spacer(1)), box.addChild(new tui.Text(theme.fg("error", `⚠ ${details.error}`), pad, 0));
+		const footer = [bold(theme, theme.fg("accent", details.agent ?? t("agente", "agente", "agent")))];
+		if (details.model) footer.push(theme.fg("text", shortModel(details.model)));
+		if (details.ms !== undefined) footer.push(theme.fg("muted", runLabel({ ms: details.ms, output: details.output ?? 0 })));
+		box.addChild(new tui.Spacer(1));
+		box.addChild(new tui.Text(footer.join(theme.fg("dim", " · ")), pad, 0));
 		return box;
 	});
 
@@ -129,13 +166,14 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const name = current.agent.name;
 		pink.sendMessage({ customType: "pink-agente-pedido", display: true, content: `› ${name}: ${text}`, details: { agent: name, text } });
 		const result = fresh();
+		const started = Date.now();
 		const lastTool = () => result.messages.at(-1)?.content?.find((part: any) => part.type === "toolCall")?.name;
 		const status = () => {
 			const last = lastTool();
 			ctx.ui?.setStatus?.(STATUS, `${name} ${t("trabalhando", "trabajando", "working")}${last ? `: ${last}` : "…"}`);
 		};
 		status();
-		if (ctx.hasUI) busy(ctx.ui, name, lastTool);
+		if (ctx.hasUI) busy(ctx.ui, () => outputOf(result));
 		(globalThis as any).__pinkExternalAsk = ctx.hasUI ? (title: string, body: string) => ctx.ui.confirm(title, body) : undefined;
 		try {
 			await run(current.agent, text, ctx.cwd, controller.signal, result, status, undefined, undefined, current.resume);
@@ -145,12 +183,41 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		}
 		if (current.controller === controller) current.controller = undefined;
 		if (active === current || !active) idle();
-		if (active === current) ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(current.agent)}`);
-		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result), details: { agent: name, model: result.model, usage: result.usage, error: result.stopReason === "error" } });
+		if (active === current) {
+			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(current.agent)}`);
+			// a caixa passa a mostrar o modelo que o agente usou de fato, em vez de "modelo padrão"
+			if (!current.agent.model && result.model && result.model !== name) (globalThis as any).__pinkExternalAgent = { name, model: result.model };
+		}
+		const error = result.stopReason === "error" ? String(result.errorMessage ?? t("erro", "error", "error")) : undefined;
+		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
+	};
+
+	// "/agente " lista as opções, como os outros comandos: off e os agentes; "/agente codex " lista os modelos dele
+	const modelCache = new Map<string, Promise<any[]>>();
+	const completions = async (prefix: string) => {
+		const text = String(prefix ?? "").replace(/^\s+/, "");
+		const space = text.indexOf(" ");
+		const agents = list();
+		if (space < 0) {
+			const items = [
+				...(active ? [{ value: "off", label: "off", description: t(`volta ao Pink (desliga o ${active.agent.name})`, `vuelve a Pink (apaga ${active.agent.name})`, `back to Pink (turns ${active.agent.name} off)`) }] : []),
+				...agents.map((agent) => ({ value: agent.name, label: agent.name, description: t(`conversar com o ${agent.name}, com o login dele`, `conversar con ${agent.name}, con su login`, `talk to ${agent.name}, with its own login`) })),
+			];
+			const hits = items.filter((item) => item.value.startsWith(text.toLowerCase()));
+			return hits.length ? hits : null;
+		}
+		const agent = agents.find((item) => item.name === text.slice(0, space).toLowerCase());
+		if (!agent) return null;
+		const wanted = text.slice(space + 1).trim();
+		if (!modelCache.has(agent.name)) modelCache.set(agent.name, models(agent, process.cwd()).catch(() => (modelCache.delete(agent.name), [])));
+		const choices = await modelCache.get(agent.name)!;
+		const hits = choices.filter((choice) => choice.id.startsWith(wanted) || String(choice.label).toLowerCase().startsWith(wanted.toLowerCase())).map((choice) => ({ value: `${agent.name} ${choice.id}`, label: choice.id, description: `${choice.label !== choice.id ? choice.label : ""}${choice.current ? ` (${t("padrão", "predeterminado", "default")})` : ""}`.trim() || undefined }));
+		return hits.length ? hits : null;
 	};
 
 	pink.registerCommand("agente", {
 		description: t("Conversa direto com um agente instalado (claude, codex, opencode...) com o login dele; /agente off volta ao Pink", "Conversa directo con un agente instalado (claude, codex, opencode...) con su login; /agente off vuelve a Pink", "Talk straight to an installed agent (claude, codex, opencode...) with its own login; /agente off returns to Pink"),
+		getArgumentCompletions: completions,
 		handler: async (args: string, ctx: any) => {
 			const [first = "", ...rest] = String(args ?? "").trim().split(/\s+/);
 			const wanted = first.toLowerCase();

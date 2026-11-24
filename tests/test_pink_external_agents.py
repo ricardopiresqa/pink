@@ -111,7 +111,7 @@ out.found = found.map((a) => [a.name, a.external, path.basename(a.command), a.ar
 out.missing = ext.externalAgents({ PATH: "C:\\nada" }, (f) => files.has(f), "win32");
 
 const fresh = () => ({ messages: [], stderr: "", exitCode: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 } });
-const parts = (r) => r.messages.map((m) => m.content.map((p) => (p.type === "text" ? `text:${p.text}` : `${p.name}:${p.arguments.path ?? p.arguments.command ?? p.arguments.file_path ?? p.arguments.title ?? ""}`)));
+const parts = (r) => r.messages.map((m) => m.content.map((p) => (p.type === "text" ? `text:${p.text}` : p.type === "thinking" ? `thinking:${p.thinking}` : `${p.name}:${p.arguments.path ?? p.arguments.command ?? p.arguments.file_path ?? p.arguments.title ?? ""}`)));
 const fake = (script) => (cmd, args, opts) => { out.spawned = (out.spawned ?? []).concat([{ cmd, args, shell: opts.shell, cwd: opts.cwd }]); return spawn(process.execPath, [script, ...args], { ...opts, shell: false }); };
 const agent = (name, kind, args, command = `C:\\bin\\${name}.exe`) => ({ name, external: kind, args, command });
 const asked = [];
@@ -174,6 +174,15 @@ out.listCodex = await ext.listModels(agent("codex", "codex", []), root, fake(cod
 out.listAcp = await ext.listModels(agent("opencode", "acp", ["acp"]), root, fake(acpJs));
 out.listClaude = (await ext.listModels(agent("claude", "claude", []), root)).map((m) => m.id);
 out.listSilent = await ext.listModels(agent("codex", "codex", []), root, () => spawn(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], { stdio: ["pipe", "pipe", "pipe"] }), 300).then(() => "ok", (e) => e.message);
+// opencode: o comando e o arquivo chegam no tool_call_update; o pensamento vira "+ Pensou"
+const live = fresh(), st = { text: "" };
+const up = (u) => ext.applyAcpUpdate(u, live, st, () => {});
+up({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "pensando" } });
+up({ sessionUpdate: "tool_call", toolCallId: "x1", title: "shell", kind: "execute", rawInput: {} });
+up({ sessionUpdate: "tool_call_update", toolCallId: "x1", title: "echo ola", rawInput: { command: "echo ola", workdir: "C:\\p" } });
+up({ sessionUpdate: "tool_call", toolCallId: "x2", title: "read", kind: "read", rawInput: {}, locations: [{ path: "C:\\p\\a.txt" }] });
+up({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "pronto" } });
+out.acpLive = { parts: parts(live), text: st.text };
 out.acpOld = ext.acpModels({ models: { currentModelId: "x", availableModels: [{ modelId: "x", name: "X" }, { modelId: "y" }] } });
 
 // o Pink junto: MCPs (sem os thoth*), regras, skills e o próprio Pink como MCP
@@ -227,7 +236,9 @@ const menus = [];
 const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini" }] : [{ id: "opus", label: "opus" }]);
 mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regras do pink" }), () => Promise.all([import(tuiUrl), import(codingUrl)]));
 const answers = [];
-const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), setWidget: (k, v, o) => widgets.push([k, v ? v[0] : null, o?.placement ?? null]), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
+const plain = { fg: (c, s) => s, bold: (s) => s, bg: (c, s) => s };
+const shown = (v) => (typeof v === "function" ? v({ requestRender() {} }, plain).render(80) : v).join("|").trim();
+const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), setWidget: (k, v, o) => widgets.push([k, v ? shown(v) : null, o?.placement ?? null]), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
 answers.push("Padrão do claude");
 const ctx = { hasUI: true, cwd: "C:\\proj", ui };
 const input = (text, c = ctx) => handlers.input({ text, source: "interactive" }, c);
@@ -270,11 +281,16 @@ out.back = [(await input("pro pink")).action, menus.at(-1)[1][0]];
 const theme = { fg: (c, s) => s, bold: (s) => s, bg: (c, s) => s };
 await new Promise((r) => setTimeout(r, 300));
 (await import(codingUrl)).initTheme?.(); // o Pink inicia o tema ao abrir; aqui o driver faz isso
-const draw = (type, message) => renderers[type]?.(message, { outputPad: 1, expanded: false }, theme)?.render(60).join("\n").replace(/\s+$/gm, "") ?? null;
+const draw = (type, message) => renderers[type]?.(message, { outputPad: 1, expanded: false }, theme)?.render(60).join("\n").replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+$/gm, "") ?? null;
 out.renderers = Object.keys(renderers).sort();
 out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: { agent: "claude", text: "oi" } });
-out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "claude", model: "opus" } });
-await commands.agente.handler("claude", ctx);
+const answerSteps = [{ kind: "thinking", ms: 400 }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
+out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } });
+out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } })];
+const complete = (p) => commands.agente.getArgumentCompletions(p);
+out.completeOff = (await complete(""))?.map((i) => i.value) ?? null;
+await commands.agente.handler("claude opus", ctx);
+out.complete = [(await complete(""))?.map((i) => i.value), (await complete("co"))?.map((i) => i.value), (await complete("codex "))?.map((i) => i.value), (await complete("codex gpt-m"))?.map((i) => i.label), await complete("zzz"), await complete("zzz x")];
 await commands.agente.handler("off", ctx);
 out.after = (await input("de volta")).action;
 out.headless = await (async () => {
@@ -342,6 +358,9 @@ def test_acp_agents_run_a_prompt_and_permissions_become_questions(ext: dict) -> 
     assert a["parts"] == [["text:Vou editar. "], ["edit:src/b.ts"], ["text:Escolha: sim"]]
     assert a["usage"]["input"] == 50 and a["usage"]["output"] == 7 and a["usage"]["cacheRead"] == 5
     assert ext["acpNo"] == "Escolha: nao"
+    assert a["model"] == "a/1"  # o modelo que o agente usa (currentValue), não o nome dele
+    live = ext["acpLive"]
+    assert live["parts"] == [["thinking:pensando"], ["bash:echo ola"], ["read:C:\\p\\a.txt"]] and live["text"] == "pronto"
 
 
 def test_questions_name_the_agent_and_the_action(ext: dict) -> None:
@@ -376,7 +395,7 @@ def test_agente_sends_what_the_person_types_to_the_agent_and_keeps_the_conversat
     assert session["slash"] == "continue"  # comandos do Pink seguem funcionando
     assert session["first"] == session["second"] == "handled"
     assert session["runs"][:2] == [["claude", "primeira", "C:\\proj", True], ["claude", "segunda", "C:\\proj", True]]
-    assert session["sent"][:2] == [["pink-agente-pedido", "› claude: primeira"], ["pink-agente", "• bash ls -la\n\nresposta a primeira"]]
+    assert session["sent"][:2] == [["pink-agente-pedido", "› claude: primeira"], ["pink-agente", "→ Rodou: ls -la\n\nresposta a primeira"]]
     assert session["status"][:2] == ["claude: buscando modelos…", "agente: claude"] and session["status"][2].startswith("claude trabalhando")
 
 
@@ -389,7 +408,7 @@ def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_
 
 def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_pink(session: dict) -> None:
     key, line, placement = session["working"]
-    assert key == "pink-agente-trabalhando" and placement == "belowEditor" and "claude trabalhando · 0s" in line and "/agente off cancela" in line
+    assert key == "pink-agente-trabalhando" and placement == "aboveEditor" and "Trabalhando · 0s · ↓ 0 tokens" in line  # o mesmo do Pink, acima da caixa
     assert session["workingEnd"] == ["pink-agente-trabalhando", None, None]  # some quando a resposta chega
     assert session["back"] == ["continue", "Voltar ao Pink (desliga o claude)"]  # 1º item do menu com agente ligado
     assert session["menus"][1][1][0] == "Voltar ao Pink (desliga o claude)"
@@ -397,8 +416,19 @@ def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_
 
 def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(session: dict) -> None:
     assert session["renderers"] == ["pink-agente", "pink-agente-pedido"]
-    assert "Você → claude" in session["drawAsk"] and "oi" in session["drawAsk"] and "pink-agente" not in session["drawAsk"]
-    assert "claude · opus" in session["drawAnswer"] and "olá" in session["drawAnswer"] and "**" not in session["drawAnswer"]
+    ask = [row for row in session["drawAsk"].split("\n") if row.strip()]
+    assert ask == ["> oi"]  # como a mensagem nativa, sem "Você →"
+    rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
+    assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
+    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo"]  # nomes do Claude viram os do Pink, caminho relativo
+
+
+def test_agente_space_lists_agents_then_models(session: dict) -> None:
+    assert session["completeOff"] == ["claude", "codex"]  # sem agente ligado, sem "off"
+    all_items, co, codex_models, filtered, unknown, unknown_models = session["complete"]
+    assert all_items == ["off", "claude", "codex"] and co == ["codex"]
+    assert codex_models == ["codex gpt-5", "codex gpt-mini"] and filtered == ["gpt-mini"]
+    assert unknown is None and unknown_models is None
 
 
 def test_agente_model_menu_direct_choice_and_validation(session: dict) -> None:
