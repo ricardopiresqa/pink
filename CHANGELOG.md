@@ -3,6 +3,13 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.6] - 2026-11-24
+
+- `/agente`: ferramentas seguidas viram uma linha de resumo, como no Claude Code (`→ tela · 26 ações: click ×6, ...`,
+  `→ Leu a.ts ×2`).
+- Pink nativo: a tela tem nome próprio no grupo de ferramentas (`Usou a tela (26 ações), leu 1 arquivo`).
+- A 1.0.5 ficou presa no npm (staged) e não foi publicada; o que estava nela vem nesta.
+
 ## [1.0.5] - 2026-11-24
 
 - `/agente`: escolha do esforço (`/agente codex gpt-5.5 high`, ou o menu depois do modelo) no Claude e no codex; o
