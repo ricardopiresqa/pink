@@ -3,6 +3,13 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.2] - 2026-11-24
+
+- `/agente`: a conversa fica igual à do Pink: "> oi", "+ Pensou", "→ Rodou: ...", "→ Leu ...", "●" e o rodapé
+  "opencode · big-pickle · 7s · ↓ 49 tokens"; "Trabalhando · 2s · ↓ 0 tokens" acima da caixa, como o do Pink.
+- `/agente` + espaço lista `off` e os agentes instalados; `/agente codex ` lista os modelos dele.
+- Agentes ACP (opencode e outros): o comando e o arquivo de cada ferramenta, o pensamento e o modelo de verdade aparecem.
+
 ## [1.0.1] - 2026-11-23
 
 - `/agente`: aparece "<agente> trabalhando · Ns" embaixo da caixa enquanto o agente responde; com um agente ligado, o
