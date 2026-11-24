@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { closeKept, externalAgents, listModels, pinkExtras, runExternal, warmKept } from "../examples/extensions/subagent/external.ts";
-import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
+import { bulleted, fit, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
 const readJson = (file: string) => {
@@ -85,6 +85,9 @@ export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR 
 
 const STATUS = "pink-agente";
 const WIDGET = "pink-agente-trabalhando";
+const QUEUE = "pink-agente-fila";
+// fila como no Claude Code (owner 2026-11-24): cada mensagem esperando aparece em cinza acima da caixa, numa linha
+export const queueLines = (queue: string[], width: number) => queue.map((text) => fit(`> ${String(text).replace(/\s+/g, " ").trim()}`, width));
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const fresh = () => ({ messages: [] as any[], stderr: "", exitCode: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 } });
@@ -250,7 +253,12 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		ticker.unref?.();
 	};
 
+	const showQueue = (ui: any) => {
+		const queue = [...(active?.queue ?? [])];
+		ui?.setWidget?.(QUEUE, queue.length ? (_screen: any, theme: any) => ({ render: (width: number) => queueLines(queue, width).map((line) => theme.fg("dim", line)), invalidate() {} }) : undefined, { placement: "aboveEditor" });
+	};
 	const stop = (ctx?: any) => {
+		(ctx?.ui ?? lastUi)?.setWidget?.(QUEUE, undefined); // a fila é descartada junto
 		active?.controller?.abort();
 		closeKept(active?.resume); // fecha o processo do agente que ficou aberto entre as mensagens
 		active = undefined;
@@ -334,6 +342,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (active === current && current.queue?.length) {
 			const next = current.queue.join("\n\n");
 			current.queue = [];
+			showQueue(ctx.ui); // sai de cima da caixa: agora vira a mensagem enviada
 			await send(next, ctx);
 		}
 	};
@@ -442,8 +451,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (active.controller) {
 			// fila (owner 2026-11-24): o que chega enquanto o agente responde vai junto, numa mensagem só, quando ele terminar
 			active.queue = [...(active.queue ?? []), String(event.text)];
-			const waiting = active.queue.length;
-			ctx.ui?.notify?.(t(`Na fila: vai para o ${active.agent.name} quando ele terminar (${waiting} esperando; /agente off descarta).`, `En cola: va a ${active.agent.name} cuando termine (${waiting} en espera; /agente off la descarta).`, `Queued: goes to ${active.agent.name} when it finishes (${waiting} waiting; /agente off drops it).`), "info");
+			showQueue(ctx.ui);
 			return { action: "handled" };
 		}
 		const done = send(String(event.text), ctx);

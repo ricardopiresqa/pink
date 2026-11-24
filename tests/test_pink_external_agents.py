@@ -271,11 +271,14 @@ out.sent = sent.map((m) => [m.customType, m.content]);
 out.runs = runs.map((r) => [r.agent, r.text, r.cwd, r.sameResume]);
 input("devagar");
 await new Promise((r) => setTimeout(r, 20));
-out.busy = [(await input("outra")).action, notes.at(-1), (await input("e mais")).action];
-out.working = widgets.filter((w) => w[1]).at(-1);
+const notesBefore = notes.length;
+out.busy = [(await input("outra")).action, notes.length - notesBefore, (await input("e mais")).action];
+out.queueShown = widgets.filter((w) => w[0] === "pink-agente-fila").at(-1);
+out.working = widgets.filter((w) => w[0] === "pink-agente-trabalhando" && w[1]).at(-1);
 release();
 await new Promise((r) => setTimeout(r, 20));
-out.workingEnd = widgets.at(-1);
+out.workingEnd = widgets.filter((w) => w[0] === "pink-agente-trabalhando").at(-1);
+out.queueEnd = widgets.filter((w) => w[0] === "pink-agente-fila").at(-1);
 out.queued = runs.slice(-2).map((r) => r.text); // a fila saiu depois do "devagar", numa mensagem só
 out.status = status.filter(Boolean).slice(0, 3);
 answers.push("codex", "GPT mini — gpt-mini", "high");
@@ -435,7 +438,10 @@ def test_agente_sends_what_the_person_types_to_the_agent_and_keeps_the_conversat
 
 
 def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_off(session: dict) -> None:
-    assert session["busy"] == ["handled", "info", "handled"]  # ocupado: entra na fila, sem aviso de erro
+    assert session["busy"] == ["handled", 0, "handled"]  # ocupado: entra na fila, sem aviso nenhum
+    # a fila aparece em cinza acima da caixa, como no Claude Code (owner 2026-11-24), e some quando é enviada
+    assert session["queueShown"] == ["pink-agente-fila", "> outra|> e mais", "aboveEditor"]
+    assert session["queueEnd"] == ["pink-agente-fila", None, "aboveEditor"]
     assert session["queued"] == ["devagar", "outra\n\ne mais"]  # a fila sai quando ele termina, numa mensagem só
     assert session["picked"] == ["codex", "gpt-mini", "high"]
     assert session["after"] == "continue"

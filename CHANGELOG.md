@@ -8,6 +8,10 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 - COTA: quando o uso do plano não chega, a lateral diz o motivo (`thoth-client` fora do PATH, antigo, lento ou com
   resposta inválida) em vez de só "sem dado do plano"; um aviso impresso antes do JSON não quebra mais a leitura.
 - THOTH: sem o Thoth instalado, a seção mostra uma apresentação curta com o site (thothdev.ia.br).
+- Versão nova: ao abrir, o Pink avisa quando há versão mais nova no npm e diz para rodar `pink update` (com o Pink
+  fechado); o link do changelog leva ao CHANGELOG no GitHub. `PI_SKIP_VERSION_CHECK=1` desliga a consulta.
+- `/agente`: a mensagem enviada enquanto o agente trabalha aparece em cinza acima da caixa, como no Claude Code, no
+  lugar do aviso "Na fila"; ela some quando é enviada.
 
 ## [1.0.7] - 2026-11-24
 

@@ -216,6 +216,10 @@ def test_the_privacy_patches_are_in_the_spec() -> None:
     assert {"privacy-telemetry-off", "privacy-version-url", "privacy-installer-url", "privacy-report-url"} <= ids
     urls = " ".join(item["replace"] for item in REBRAND["replacements"] if item["id"].startswith("privacy-"))
     assert "pi.dev" not in urls and "pink.invalid" in urls  # a reserved TLD: the call cannot reach anyone
+    # owner 2026-11-24 ("como eu sei quando é necessário atualizar?"): a versão nova vem do registro do npm, de onde o
+    # pink update instala; telemetria e instalador continuam sem destino
+    version = next(item["replace"] for item in REBRAND["replacements"] if item["id"] == "privacy-version-url")
+    assert version == "https://registry.npmjs.org/@thothdev/pink/latest"
 
 
 def test_what_is_left_as_upstream_is_declared() -> None:

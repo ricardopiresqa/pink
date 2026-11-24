@@ -1903,7 +1903,7 @@
       "id": "no-upstream-changelog-link",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "changelogUrl=\"https://pi.dev/changelog\"",
-      "replace": "changelogUrl=\"pink --version\"",
+      "replace": "changelogUrl=\"https://github.com/ricardopiresqa/pink/blob/main/CHANGELOG.md\"",
       "count": 1
     },
     {
@@ -2272,7 +2272,7 @@
       "id": "privacy-version-url",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "https://pi.dev/api/latest-version",
-      "replace": "https://pink.invalid/api/latest-version",
+      "replace": "https://registry.npmjs.org/@thothdev/pink/latest",
       "count": 1
     },
     {
