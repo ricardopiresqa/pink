@@ -43,7 +43,8 @@ export function pinkExtras({ mcp = {}, rules = "", skills = [], server }: { mcp?
 	const parts = ["# Pink", "Você está sendo usado pelo Pink (comando /agente). Além das suas regras, ferramentas e skills, valem as do Pink abaixo."];
 	if (rules.trim()) parts.push("## Regras do Pink (AGENTS.md)", rules.trim().slice(0, 20000));
 	if (skills.length) parts.push("## Skills do Pink", "Quando o assunto da tarefa bater com uma destas, leia o SKILL.md dela antes de agir e siga-o:", ...skills.map((skill) => `- ${skill.name}: ${(skill.description ?? "").replace(/\s+/g, " ").slice(0, 200)}${skill.path ? ` (${skill.path})` : ""}`));
-	if (server) parts.push("## Ferramentas do Pink", "O MCP \"pink\" tem a ferramenta pink_tarefa: entrega uma tarefa ao Pink, que tem o que só ele tem (controlar a tela com /tela, a memória do Pink, os subagentes e os MCPs dele). Use quando a tarefa precisar disso.");
+	if (server) parts.push("## Ferramentas do Pink", "O MCP \"pink\" tem a ferramenta pink_tarefa: entrega uma tarefa ao Pink, que tem o que só ele tem (a memória do Pink, os subagentes e os MCPs dele). Use quando a tarefa precisar disso.");
+	if (server?.args?.includes("--tela")) parts.push("Para ver ou controlar a tela do PC use a ferramenta pink_tela do MCP \"pink\" (não o pink_tarefa): ela usa a tela que a pessoa ligou com /tela ligar no Pink, e cada clique ou digitação pede a confirmação dela lá. Se responder que a tela está desligada, peça à pessoa para rodar /tela ligar no Pink e tente de novo depois.");
 	return { mcp: servers, instructions: parts.join("\n\n") };
 }
 
@@ -199,6 +200,7 @@ function acpArgs(update: any, before: Record<string, unknown> = {}): Record<stri
 	if (pathArg) args.path = String(pathArg);
 	if (input.command) args.command = String(input.command);
 	if (input.pattern ?? input.query) args.pattern = String(input.pattern ?? input.query);
+	if (typeof input.code === "string") args.code = input.code; // opencode chama MCP por código: tools.pink.pink_tela({...})
 	return args;
 }
 const flushThinking = (result: any, state: any) => {
@@ -420,7 +422,7 @@ export async function runExternal(agent: ExternalAgent, task: string, cwd: strin
 		fs.writeFileSync(rulesFile, agent.extras.instructions, { mode: 0o600 });
 		if (Object.keys(agent.extras.mcp).length) extra.push("--mcp-config", mcpFile);
 		// no -p o claude recusa ferramenta não liberada; libera só a do Pink (os outros MCPs seguem as permissões do claude)
-		if (agent.extras.mcp.pink) extra.push("--allowedTools", "mcp__pink__pink_tarefa");
+		if (agent.extras.mcp.pink) extra.push("--allowedTools", "mcp__pink__pink_tarefa,mcp__pink__pink_tela"); // a tela confirma cada ação no Pink
 		extra.push("--append-system-prompt-file", rulesFile);
 	}
 	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...extra, ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;

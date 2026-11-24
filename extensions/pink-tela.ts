@@ -646,5 +646,6 @@ export function createTela(pink: any, { env = process.env, run = mcpRun as Run, 
 }
 
 export default function (pink: any) {
-	createTela(pink);
+	// o /agente empresta esta tela ao agente instalado (pink_tela): mesma checagem de ligada e mesmas confirmações
+	Reflect.set(globalThis, "__pinkTela", createTela(pink));
 }

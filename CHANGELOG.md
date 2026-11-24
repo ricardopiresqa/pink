@@ -9,6 +9,11 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 - `/agente` com opencode e os outros agentes ACP: o programa do agente fica aberto entre as mensagens. Só a primeira
   demora (~15 s para subir e abrir a sessão); as seguintes levam ~2 a 4 s. Fecha no `/agente off`, ao trocar de agente,
   ao cancelar, se der erro e ao sair do Pink.
+- "Trabalhando… (6s · ↓ 306 tokens)", com parênteses como no Claude Code, colado na caixa (sem a linha em branco entre
+  os dois), no Pink e no `/agente`.
+- `/agente`: o agente usa a tela do Pink pela ferramenta `pink_tela` (MCP do Pink): vale a tela que você ligou com
+  `/tela ligar`, e cada clique ou digitação pede confirmação na janela do Pink. Antes ele ia pelo `pink_tarefa`, que roda
+  outro Pink com a tela desligada. A linha da ferramenta mostra o nome dela (ex.: `→ pink_tela`), não `→ execute`.
 
 ## [1.0.2] - 2026-11-24
 

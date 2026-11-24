@@ -996,7 +996,7 @@ def test_each_request_shows_its_time_and_output_tokens_like_claude_code(ui_facts
     assert run["estimate"] == 153  # (400 + 200 + len('{"path":"a"}')) / 4: o provedor só manda usage.output no fim do passo
     assert run["retry"] == {"kept": True, "late": True, "ok": True}
     wiring = ui_facts["wiring"]
-    assert wiring["live"] == "Trabalhando · 0s · ↓ 1k tokens"  # estimativa ao vivo, não o 1 token parcial do provedor
+    assert wiring["live"] == "Trabalhando… (0s · ↓ 1k tokens)"  # estimativa ao vivo, não o 1 token parcial do provedor
     assert wiring["cleared"] is None  # setWorkingMessage() volta ao texto padrão
     assert wiring["final"] == 2000  # 1200 + 300 (erro) + 500 (nova tentativa); o toolResult não conta
     assert wiring["fresh"] == 7 and wiring["timerStopped"] is True

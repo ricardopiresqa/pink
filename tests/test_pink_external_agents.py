@@ -298,7 +298,7 @@ out.renderers = Object.keys(renderers).sort();
 out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: { agent: "claude", text: "oi" } });
 const answerSteps = [{ kind: "thinking", ms: 400 }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
 out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } });
-out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } })];
+out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } })];
 const complete = (p) => commands.agente.getArgumentCompletions(p);
 out.completeOff = (await complete(""))?.map((i) => i.value) ?? null;
 await commands.agente.handler("claude opus", ctx);
@@ -428,7 +428,7 @@ def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_
 
 def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_pink(session: dict) -> None:
     key, line, placement = session["working"]
-    assert key == "pink-agente-trabalhando" and placement == "aboveEditor" and "Trabalhando · 0s · ↓ 0 tokens" in line  # o mesmo do Pink, acima da caixa
+    assert key == "pink-agente-trabalhando" and placement == "aboveEditor" and line.startswith("⠋ Trabalhando… (0s · ↓ 0 tokens)")  # o mesmo do Pink, acima da caixa, sem linha vazia própria
     assert session["workingEnd"] == ["pink-agente-trabalhando", None, None]  # some quando a resposta chega
     assert session["back"] == ["continue", "Voltar ao Pink (desliga o claude)"]  # 1º item do menu com agente ligado
     assert session["menus"][1][1][0] == "Voltar ao Pink (desliga o claude)"
@@ -441,7 +441,7 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + Pensou")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
     rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
     assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
-    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo"]  # nomes do Claude viram os do Pink, caminho relativo
+    assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "pink_tela"]  # nomes do Claude viram os do Pink, caminho relativo
 
 
 def test_agente_space_lists_agents_then_models(session: dict) -> None:
@@ -498,11 +498,11 @@ def test_each_agent_receives_the_pink_side(ext: dict, session: dict) -> None:
 
 
 MCP_DRIVER = r"""
-const [url, fakePink] = process.argv.slice(1);
+const [url, fakePink, agenteUrl] = process.argv.slice(1);
 const { spawn } = await import("node:child_process");
 const file = (await import("node:url")).fileURLToPath(url);
-const talk = (env, lines) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [file], { env: { ...process.env, PINK_MCP_BIN: fakePink, ...env }, stdio: ["pipe", "pipe", "inherit"] });
+const talk = (env, lines, extra = []) => new Promise((resolve) => {
+  const child = spawn(process.execPath, [file, ...extra], { env: { ...process.env, PINK_MCP_BIN: fakePink, ...env }, stdio: ["pipe", "pipe", "inherit"] });
   let buf = "";
   const got = [];
   child.stdout.on("data", (d) => {
@@ -529,6 +529,23 @@ out.empty = byId[4].result.isError;
 out.unknown = byId[5].error.code;
 const nested = await talk({ PINK_MCP_DEPTH: "1" }, [{ id: 1, method: "tools/call", params: { name: "pink_tarefa", arguments: { tarefa: "x" } } }]);
 out.nested = nested[0].result;
+// pink_tela: o MCP do Pink usa a tela do Pink que abriu o /agente, pelo pipe com chave
+const agente = await import(agenteUrl);
+let screenOn = true;
+const fakeTela = { execute: async (id, params, signal, update, ctx) => (screenOn ? { content: [{ type: "text", text: `fez ${params.action} ${JSON.stringify(params.args)} ui=${ctx.hasUI}` }, { type: "image", data: "QUJD", mimeType: "image/png" }], isError: false } : { content: [{ type: "text", text: "A tela está desligada." }], isError: true }) };
+const bridge = agente.telaBridge(() => ({ hasUI: true }), () => fakeTela);
+const calls = [
+  { id: 1, method: "tools/list" },
+  { id: 2, method: "tools/call", params: { name: "pink_tela", arguments: { action: "list_windows" } } },
+  { id: 3, method: "tools/call", params: { name: "pink_tela", arguments: { action: "click", args: { pid: 1, x: 2, y: 3 } } } },
+];
+const viaTela = Object.fromEntries((await talk({}, calls, ["--tela", bridge.pipe, bridge.key])).map((m) => [m.id, m.result]));
+out.tela = { tools: viaTela[1].tools.map((t) => t.name), list: viaTela[2], click: viaTela[3].content[0].text };
+screenOn = false;
+out.telaOff = (await talk({}, [calls[1]], ["--tela", bridge.pipe, bridge.key]))[0].result;
+out.telaWrongKey = (await talk({}, [calls[1]], ["--tela", bridge.pipe, "x".repeat(bridge.key.length)]))[0].result;
+bridge.close();
+out.telaClosed = (await talk({}, [calls[1]], ["--tela", bridge.pipe, bridge.key]))[0].result.isError;
 console.log(JSON.stringify(out));
 """
 
@@ -537,13 +554,31 @@ def test_the_pink_mcp_server_runs_a_task_in_pink_and_refuses_to_chain(package_di
     fake = tmp_path / "pink.mjs"
     fake.write_text('console.log("pink fez: " + process.argv.slice(2).join(" | ") + " depth=" + process.env.PINK_MCP_DEPTH);\n', encoding="utf-8")
     url = (package_dir / "extensions" / "pink-mcp-server.mjs").as_uri()
-    done = subprocess.run(["node", "--input-type=module", "-e", MCP_DRIVER, url, str(fake)], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
+    agente = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    done = subprocess.run(["node", "--input-type=module", "-e", MCP_DRIVER, url, str(fake), agente], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
     assert done.returncode == 0, done.stderr[-2000:]
     out = json.loads(done.stdout.strip().splitlines()[-1])
     assert out["server"] == "pink" and out["tools"] == ["pink_tarefa"]
     assert out["call"] == {"content": [{"type": "text", "text": "pink fez: -p | tire um print depth=1"}], "isError": False}
     assert out["empty"] is True and out["unknown"] == -32602
     assert out["nested"]["isError"] is True and "em cadeia" in out["nested"]["content"][0]["text"]
+
+
+def test_the_agent_uses_the_screen_of_the_pink_that_opened_it(package_dir: Path, tmp_path: Path) -> None:
+    """Owner 2026-11-24: /tela ligar no Pink vale para o agente do /agente (pink_tela), com as confirmações do Pink."""
+    fake = tmp_path / "pink.mjs"
+    fake.write_text("console.log(1)\n", encoding="utf-8")
+    url = (package_dir / "extensions" / "pink-mcp-server.mjs").as_uri()
+    agente = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    done = subprocess.run(["node", "--input-type=module", "-e", MCP_DRIVER, url, str(fake), agente], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert out["tela"]["tools"] == ["pink_tarefa", "pink_tela"]
+    assert out["tela"]["list"] == {"content": [{"type": "text", "text": "fez list_windows {} ui=true"}, {"type": "image", "data": "QUJD", "mimeType": "image/png"}], "isError": False}
+    assert out["tela"]["click"] == "fez click {\"pid\":1,\"x\":2,\"y\":3} ui=true"  # a confirmação é do execute da tela, na janela do Pink
+    assert out["telaOff"]["isError"] is True and "desligada" in out["telaOff"]["content"][0]["text"]
+    assert out["telaWrongKey"] == {"content": [{"type": "text", "text": "Chave errada."}], "isError": True}
+    assert out["telaClosed"] is True  # Pink fechado: erro claro, sem travar
 
 
 def test_the_subagent_patches_are_in_the_package(package_dir: Path) -> None:

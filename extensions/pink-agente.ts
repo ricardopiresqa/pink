@@ -4,12 +4,14 @@
 // thread/resume, ACP session/load). /agente off volta ao modelo do Pink, que vê a conversa (as mensagens ficam na sessão).
 // O transporte é o mesmo dos subagentes externos (examples/extensions/subagent/external.ts, cards 1dfwh7kgf8g/h/j).
 import { t } from "./pink-i18n.ts";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { closeKept, externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
-import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines } from "./pink-ui.ts";
+import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
 const readJson = (file: string) => {
@@ -19,7 +21,52 @@ const readJson = (file: string) => {
 		return undefined;
 	}
 };
-export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR || path.join(os.homedir(), ".pink", "agent")) {
+// pink_tela (owner 2026-11-24): o agente instalado usa a tela DESTE Pink, a que a pessoa ligou com /tela ligar, pelo MCP
+// do Pink. Pipe local com uma chave aleatória (o nome do pipe outros usuários conseguem listar; a chave só vai nos argumentos
+// do MCP, que só o próprio usuário lê). Cada pedido passa pelo execute da tela: desligada recusa, agir pede confirmação aqui.
+export function telaBridge(getCtx: () => any, tela: () => any = () => Reflect.get(globalThis, "__pinkTela")) {
+	const key = crypto.randomUUID();
+	const id = crypto.randomUUID();
+	const pipe = process.platform === "win32" ? `\\\\.\\pipe\\pink-agente-tela-${id}` : path.join(os.tmpdir(), `pink-agente-tela-${id}.sock`);
+	const fail = (text: string) => ({ content: [{ type: "text", text }], isError: true });
+	const answer = async (request: any) => {
+		const given = Buffer.from(String(request?.key ?? ""));
+		if (given.length !== key.length || !crypto.timingSafeEqual(given, Buffer.from(key))) return fail("Chave errada.");
+		const screen = tela();
+		if (!screen?.execute) return fail(t("A tela do Pink não está disponível neste Pink.", "La pantalla de Pink no está disponible en este Pink.", "Pink's screen is not available in this Pink."));
+		const args = request.args && typeof request.args === "object" && !Array.isArray(request.args) ? request.args : {};
+		const done = await screen.execute("pink-agente", { action: String(request.action ?? ""), args }, undefined, undefined, getCtx() ?? { hasUI: false });
+		return { content: done?.content ?? [], isError: Boolean(done?.isError) };
+	};
+	const server = net.createServer((socket) => {
+		let buffer = "";
+		socket.setEncoding("utf8");
+		socket.on("error", () => undefined);
+		socket.on("data", (chunk: string) => {
+			buffer += chunk;
+			if (buffer.length > 1_000_000) return void socket.destroy();
+			const end = buffer.indexOf("\n");
+			if (end < 0) return;
+			let request: any;
+			try {
+				request = JSON.parse(buffer.slice(0, end));
+			} catch {
+				return void socket.destroy();
+			}
+			buffer = "";
+			answer(request).then(
+				(value) => socket.end(`${JSON.stringify(value)}\n`),
+				(error) => socket.end(`${JSON.stringify(fail(String(error?.message ?? error)))}\n`),
+			);
+		});
+	});
+	server.on("error", () => undefined);
+	server.listen(pipe);
+	server.unref();
+	return { pipe, key, close: () => server.close() };
+}
+
+export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR || path.join(os.homedir(), ".pink", "agent"), tela?: { pipe: string; key: string }) {
 	let rules = "";
 	try {
 		rules = fs.readFileSync(path.join(dir, "AGENTS.md"), "utf8");
@@ -32,7 +79,7 @@ export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR 
 	} catch {
 		/* sem skills */
 	}
-	const server = { command: process.execPath, args: [path.join(path.dirname(fileURLToPath(import.meta.url)), "pink-mcp-server.mjs")] };
+	const server = { command: process.execPath, args: [path.join(path.dirname(fileURLToPath(import.meta.url)), "pink-mcp-server.mjs"), ...(tela ? ["--tela", tela.pipe, tela.key] : [])] };
 	return pinkExtras({ mcp: readJson(path.join(dir, "mcp.json"))?.mcpServers ?? {}, rules, skills, server });
 }
 
@@ -50,6 +97,9 @@ export function pinkTool(part: any, cwd = "") {
 	const args = { ...(part?.arguments ?? {}) };
 	const file = args.path ?? args.file_path ?? args.filePath ?? args.notebook_path;
 	if (file) args.path = cwd && path.isAbsolute(String(file)) ? path.relative(cwd, String(file)) || "." : String(file);
+	// o "execute" do opencode roda código que chama ferramentas MCP (tools.pink.pink_tela(...)): mostra as ferramentas
+	const called = [...new Set([...String(args.code ?? "").matchAll(/tools\.[\w$-]+\.([\w$-]+)\s*\(/g)].map((match) => match[1]))];
+	if (called.length) return called.join(", ");
 	const line = toolSummary(name, args);
 	return line === name && args.title ? String(args.title) : line;
 }
@@ -82,7 +132,9 @@ const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` :
 
 const loadTui = () => Promise.all([import("@earendil-works/pi-tui"), import("@earendil-works/pi-coding-agent")]);
 
-export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: () => any = () => gatherExtras(pink), load: () => Promise<any[]> = loadTui) {
+export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge) {
+	let screen: ReturnType<typeof telaBridge> | undefined; // pink_tela: aberto no primeiro /agente, fechado ao sair do Pink
+	let screenCtx: any; // a janela deste Pink, onde a tela pede confirmação
 	let active: { agent: any; resume: { id?: string }; controller?: AbortController } | undefined;
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastUi: any;
@@ -102,13 +154,18 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		lastUi = ui;
 		if (!ui?.setWidget) return;
 		const started = Date.now();
-		const message = () => `${t("Trabalhando", "Trabajando", "Working")} · ${runLabel({ ms: Date.now() - started, output: output() })}`;
+		const message = () => workingLabel({ ms: Date.now() - started, output: output() });
+		// a área dos widgets já deixa uma linha em branco antes: a linha vazia do topo do Loader sai
 		if (tui?.Loader) {
-			ui.setWidget(WIDGET, (screen: any, theme: any) => (loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message())), { placement: "aboveEditor" });
+			ui.setWidget(WIDGET, (screen: any, theme: any) => {
+				loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message());
+				const own = loader;
+				return { render: (width: number) => own.render(width).slice(1), invalidate: () => own.invalidate?.() };
+			}, { placement: "aboveEditor" });
 			ticker = setInterval(() => loader?.setMessage?.(message()), 1000);
 		} else {
 			let frame = 0;
-			const draw = () => ui.setWidget(WIDGET, ["", ` ${FRAMES[frame++ % FRAMES.length]} ${message()}`], { placement: "aboveEditor" });
+			const draw = () => ui.setWidget(WIDGET, [` ${FRAMES[frame++ % FRAMES.length]} ${message()}`], { placement: "aboveEditor" });
 			draw();
 			ticker = setInterval(draw, 120);
 		}
@@ -163,6 +220,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 
 	const send = async (text: string, ctx: any) => {
 		const current = active!;
+		screenCtx = ctx;
 		const controller = new AbortController();
 		current.controller = controller;
 		const name = current.agent.name;
@@ -267,7 +325,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 				}
 			}
 			stop(ctx);
-			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras() }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
+			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras((screen ??= bridge(() => screenCtx))) }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
 			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
@@ -285,5 +343,9 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		return { action: "handled" };
 	});
 
-	pink.on("session_shutdown", () => stop());
+	pink.on("session_shutdown", () => {
+		stop();
+		screen?.close();
+		screen = undefined;
+	});
 }

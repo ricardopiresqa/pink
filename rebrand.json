@@ -2661,6 +2661,13 @@
       "count": 1
     },
     {
+      "id": "working-close-to-editor",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "spacerWhenEmpty&&container.addChild(new Spacer(1));return}leadingSpacer&&container.addChild(new Spacer(1));",
+      "replace": "spacerWhenEmpty&&container.addChild({render:()=>this.activeStatusIndicator&&!this.activeWorkingIndicatorEmbedded?[]:[\"\"],invalidate(){}});return}leadingSpacer&&container.addChild({render:()=>this.activeStatusIndicator&&!this.activeWorkingIndicatorEmbedded?[]:[\"\"],invalidate(){}});",
+      "count": 1
+    },
+    {
       "id": "thinking-label",
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "thinkingComponent=hidden?new Text(theme.italic(theme.fg(\"thinkingText\",this.hiddenThinkingLabel)),this.outputPad,0)",

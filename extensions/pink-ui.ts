@@ -1254,6 +1254,8 @@ export function tokenLabel(n) {
 }
 
 export const runLabel = ({ ms, output }) => `${elapsedLabel(ms)} · ↓ ${tokenLabel(output)} tokens`;
+// "Trabalhando… (6s · ↓ 306 tokens)", como o "Thinking… (...)" do Claude Code; o /agente usa o mesmo
+export const workingLabel = (run) => `${t("Trabalhando", "Trabajando", "Working")}… (${runLabel(run)})`;
 
 // os provedores só mandam usage.output no fim de cada passo: durante o passo, estima pelo texto que já chegou (~4 caracteres/token)
 export function streamedTokens(message) {
@@ -1450,7 +1452,7 @@ function registerOpenCodeFunctions(pink) {
 		const run = (PINK.run = continueRun(PINK.lastRun, PINK.lastRunEnd) ?? createRun());
 		const show = () => {
 			try {
-				ctx.ui.setWorkingMessage?.(`${t("Trabalhando", "Trabajando", "Working")} · ${runLabel(run.summary())}`);
+				ctx.ui.setWorkingMessage?.(workingLabel(run.summary()));
 			} catch {
 				clearInterval(PINK.runTimer);  // ctx velho (sessão trocada): para o relógio
 			}
