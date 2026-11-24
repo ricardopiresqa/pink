@@ -418,6 +418,7 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert session["renderers"] == ["pink-agente", "pink-agente-pedido"]
     ask = [row for row in session["drawAsk"].split("\n") if row.strip()]
     assert ask == ["> oi"]  # como a mensagem nativa, sem "Você →"
+    assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + Pensou")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
     rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
     assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
     assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo"]  # nomes do Claude viram os do Pink, caminho relativo

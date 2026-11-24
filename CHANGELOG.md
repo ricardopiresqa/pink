@@ -3,6 +3,10 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.3] - 2026-11-24
+
+- `/agente`: só uma linha em branco entre o pedido e a resposta do agente (eram três).
+
 ## [1.0.2] - 2026-11-24
 
 - `/agente`: a conversa fica igual à do Pink: "> oi", "+ Pensou", "→ Rodou: ...", "→ Leu ...", "●" e o rodapé

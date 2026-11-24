@@ -135,7 +135,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 	const bold = (theme: any, text: string) => (theme.bold ? theme.bold(text) : text);
 	pink.registerMessageRenderer?.("pink-agente-pedido", (message: any, options: any, theme: any) => {
 		if (!tui || !coding?.getMarkdownTheme) return undefined;
-		const md = new tui.Markdown(String(message.details?.text ?? textOf(message)), options.outputPad, 1, coding.getMarkdownTheme(), { color: (s: string) => theme.fg("userMessageText", s), bgColor: (s: string) => theme.bg("userMessageBg", s) });
+		const md = new tui.Markdown(String(message.details?.text ?? textOf(message)), options.outputPad, 0, coding.getMarkdownTheme(), { color: (s: string) => theme.fg("userMessageText", s), bgColor: (s: string) => theme.bg("userMessageBg", s) });
 		return { render: (width: number) => userLines(md.render(Math.max(1, width - 1)), theme.fg("muted", ">")), invalidate: () => md.invalidate?.() };
 	});
 	pink.registerMessageRenderer?.("pink-agente", (message: any, options: any, theme: any) => {
@@ -144,8 +144,9 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const pad = options.outputPad ?? 1;
 		const box = new tui.Container();
 		const list = Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }];
-		for (const step of list) {
-			box.addChild(new tui.Spacer(1));
+		// o Pink já põe uma linha em branco antes de cada mensagem: entre o pedido e a resposta fica só ela, como no Claude Code
+		for (const [index, step] of list.entries()) {
+			if (index) box.addChild(new tui.Spacer(1));
 			if (step.kind === "thinking") box.addChild(new tui.Text(theme.fg("thinkingText", thinkingLabel(step.ms)), pad, 0));
 			else if (step.kind === "tool") box.addChild(new tui.Text(theme.fg("muted", `→ ${step.line}`), pad, 0));
 			else box.addChild(bulleted(new tui.Markdown(String(step.text).trim(), pad, 0, coding.getMarkdownTheme())));
