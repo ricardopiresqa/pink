@@ -661,6 +661,9 @@ def test_hooks_run_commands_like_claude_code_block_feed_back_and_respect_trust(u
 def test_notification_when_done_out_of_focus_and_undo_survives_reopening_the_session(ui_facts: dict, package_dir: Path) -> None:
     """Owner 2026-11-17 (card 1dfwh7kfmqr): aviso do sistema como o Claude Code/Codex; o ponto do /undo fica na sessão."""
     n = ui_facts["notify"]
+    # /sugestao (owner 2026-11-23): abre a página de ideias pelo navegador do sistema, o texto codificado no título
+    base = "https://github.com/ricardopiresqa/pink/discussions/new?category=ideas"
+    assert n["idea"] == {"opener": "explorer", "url": f"{base}&title=modo%20escuro%20%26%20%3B%20rm%20-rf", "empty": base}
     assert n["modes"] == ["\x1b[?1004h", "\x1b[?1004l"]  # pede os avisos de foco e devolve o terminal como estava
     assert n["unknownShort"] == 0 and n["unknownLong"] == 1  # terminal que não avisa foco: só pedido longo
     assert n["consumed"] == {"consume": True} and n["mixed"] == {"data": "abc"}  # o aviso de foco não vira texto no editor

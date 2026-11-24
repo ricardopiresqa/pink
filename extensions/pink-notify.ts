@@ -99,8 +99,25 @@ export function notifyExtension(pink, deps = {}) {
 			ctx.ui.notify?.(on ? t("Notificações ligadas", "Notificaciones activadas", "Notifications on") : t("Notificações desligadas", "Notificaciones desactivadas", "Notifications off"), "info");
 		},
 	});
+	// /sugestao [texto]: abre a página de ideias do Pink no navegador, com o texto como título (owner 2026-11-23)
+	pink.registerCommand?.("sugestao", {
+		description: t("Abre a página de sugestões do Pink no GitHub; o texto depois do comando vira o título", "Abre la página de sugerencias de Pink en GitHub; el texto después del comando se vuelve el título", "Opens Pink's suggestions page on GitHub; the text after the command becomes the title"),
+		handler: async (args, ctx) => {
+			const url = ideaUrl(args);
+			const opener = platform === "win32" ? "explorer" : platform === "darwin" ? "open" : "xdg-open";
+			try { run(opener, [url], { windowsHide: true }, () => {}); } catch { /* sem navegador: o endereço fica na mensagem */ }
+			ctx.ui.notify?.(t(`Abrindo as sugestões do Pink: ${url}`, `Abriendo las sugerencias de Pink: ${url}`, `Opening Pink's suggestions: ${url}`), "info");
+		},
+	});
 	return { state, send, isOn: () => on };
 }
+
+export const IDEAS_URL = "https://github.com/ricardopiresqa/pink/discussions/new?category=ideas";
+// o texto vai codificado na URL e como argumento (sem shell): não vira comando
+export const ideaUrl = (text = "") => {
+	const title = String(text ?? "").trim().slice(0, 200);
+	return title ? `${IDEAS_URL}&title=${encodeURIComponent(title)}` : IDEAS_URL;
+};
 
 export default function (pink) {
 	notifyExtension(pink);

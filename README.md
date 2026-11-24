@@ -15,6 +15,12 @@
 </p>
 
 <p align="center">
+  <a href="https://ko-fi.com/thothdev">♥ Support Pink on Ko-fi</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/ricardopiresqa/pink/discussions/new?category=ideas">💡 Suggest an idea</a>
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/ricardopiresqa/pink/main/docs/images/pink-screen.png" alt="Pink in the terminal: sessions on the left, the conversation in the middle, context, plan and changed files on the right" width="900">
 </p>
 
@@ -66,6 +72,12 @@ pink --help
 | `/undo` / `/redo` | Undo / redo the last message and its file changes |
 | `/sessions`, `/themes`, `/mcp` | Switch session, pick a theme, manage MCP servers |
 | `/lateral` | Hide or show the side columns |
+| `/sugestao [text]` | Open the ideas page on GitHub, with your text as the title |
+
+## Support and ideas
+
+Pink is free and open source. If it saves you time, you can [buy us a coffee on Ko-fi](https://ko-fi.com/thothdev).
+Ideas and requests go to [GitHub Discussions](https://github.com/ricardopiresqa/pink/discussions/categories/ideas), where others can vote on them; bugs go to [issues](https://github.com/ricardopiresqa/pink/issues).
 
 ## Configuration
 

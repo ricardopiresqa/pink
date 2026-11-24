@@ -9,6 +9,8 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   primeiro item do menu é "Voltar ao Pink" (o mesmo que `/agente off`); as mensagens aparecem como "Você → opencode" e
   "opencode · modelo", em vez dos tipos crus `[pink-agente-pedido]` e `[pink-agente]`.
 - README em inglês, com o logo e a tela.
+- `/sugestao [texto]` abre a página de ideias do Pink (GitHub Discussions), com o texto como título. Doação pelo Ko-fi
+  (`npm fund @thothdev/pink` e o botão Sponsor do GitHub).
 
 ## [1.0.0] - 2026-11-23
 

@@ -786,6 +786,9 @@ out.notify = await (async () => {
 	const focusedRun = await run(a, { blur: false, ms: 60_000 }), blurredRun = await run(a, { blur: true }), abortedRun = await run(a, { blur: true, aborted: true });
 	await a.commands.notificacoes.handler("", a.ctx);
 	const offRun = await run(a, { blur: true });
+	const before = a.runs.length;
+	await a.commands.sugestao.handler("modo escuro & ; rm -rf", a.ctx);
+	const idea = { opener: a.runs.length - before === 1 ? a.runs.at(-1)[0] : null, url: n.ideaUrl("modo escuro & ; rm -rf"), empty: n.ideaUrl("   ") };
 	await a.ev("session_shutdown");
 	const offFile = make({}, JSON.stringify({ on: false }));
 	await offFile.ev("session_start");
@@ -796,7 +799,7 @@ out.notify = await (async () => {
 	print.ctx.mode = "print";
 	await print.ev("session_start");
 	return {
-		modes: [a.writes[0], a.writes.at(-1)], unknownShort, unknownLong, consumed, mixed, focusedRun, blurredRun, abortedRun, toast: a.runs[0],
+		idea, modes: [a.writes[0], a.writes.at(-1)], unknownShort, unknownLong, consumed, mixed, focusedRun, blurredRun, abortedRun, toast: a.runs[0],
 		saved: a.written[0], offRun, offFile: await run(offFile, { blur: true }), envOff: await run(envOff, { blur: true }),
 		child: Object.keys(child.commands).length, print: print.hasInput() || print.writes.length,
 		mac: n.notifyCommand("Pink", "ok", { platform: "darwin", env: {} })[0], linux: n.notifyCommand("Pink", "ok", { platform: "linux", env: {}, has: (b) => b === "notify-send" })[0],
