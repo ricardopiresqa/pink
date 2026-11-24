@@ -167,6 +167,10 @@
     {
       "from": "extensions/pink-agente.ts",
       "to": "extensions/pink-agente.ts"
+    },
+    {
+      "from": "extensions/pink-mcp-server.mjs",
+      "to": "extensions/pink-mcp-server.mjs"
     }
   ],
   "env_rename": {

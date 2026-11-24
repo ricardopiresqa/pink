@@ -8,6 +8,7 @@
 // Copiado para examples/extensions/subagent/external.ts pelo build (rebrand.json); agents.ts e index.ts o importam.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export type Kind = "claude" | "codex" | "acp";
@@ -22,6 +23,42 @@ export interface ExternalAgent {
 	command: string;
 	args: string[];
 	model?: string; // escolhido no /agente (card 1dfwh7kgfjf); sem ele vale o padrão do agente
+	extras?: Extras; // o Pink junto (card 1dfwh7kgfjx): MCPs, regras e skills do Pink
+}
+
+// MCP no formato do mcp.json do Pink (o mesmo do Claude): stdio {command, args, env} ou http {type, url, headers}
+export type McpServer = { command?: string; args?: string[]; env?: Record<string, string>; type?: string; url?: string; headers?: Record<string, string> };
+export type Extras = { mcp: Record<string, McpServer>; instructions: string };
+
+// shortcut: os MCPs thoth* ficam de fora porque o thoth-client já os instala em cada agente; ler a config de cada agente
+// se aparecer outro repetido
+export function pinkExtras({ mcp = {}, rules = "", skills = [], server }: { mcp?: Record<string, McpServer>; rules?: string; skills?: { name: string; description?: string; path?: string }[]; server?: McpServer }): Extras {
+	const servers: Record<string, McpServer> = {};
+	for (const [name, config] of Object.entries(mcp)) {
+		if (/^thoth/i.test(name) || !config || typeof config !== "object") continue;
+		const { command, args, env, type, url, headers } = config as McpServer; // só o que os agentes entendem (sem exposure, timeout)
+		servers[name] = JSON.parse(JSON.stringify({ command, args, env, type, url, headers }));
+	}
+	if (server) servers.pink = server;
+	const parts = ["# Pink", "Você está sendo usado pelo Pink (comando /agente). Além das suas regras, ferramentas e skills, valem as do Pink abaixo."];
+	if (rules.trim()) parts.push("## Regras do Pink (AGENTS.md)", rules.trim().slice(0, 20000));
+	if (skills.length) parts.push("## Skills do Pink", "Quando o assunto da tarefa bater com uma destas, leia o SKILL.md dela antes de agir e siga-o:", ...skills.map((skill) => `- ${skill.name}: ${(skill.description ?? "").replace(/\s+/g, " ").slice(0, 200)}${skill.path ? ` (${skill.path})` : ""}`));
+	if (server) parts.push("## Ferramentas do Pink", "O MCP \"pink\" tem a ferramenta pink_tarefa: entrega uma tarefa ao Pink, que tem o que só ele tem (controlar a tela com /tela, a memória do Pink, os subagentes e os MCPs dele). Use quando a tarefa precisar disso.");
+	return { mcp: servers, instructions: parts.join("\n\n") };
+}
+
+// formatos de cada agente
+// o codex abre o MCP com um ambiente mínimo: sem as variáveis do Pink (chave do provedor, PINK_*) o Pink de dentro cai em
+// outro provedor. env_vars repassa pelo nome, sem o valor ir na configuração
+export function codexMcpConfig(mcp: Record<string, McpServer>, names: string[] = Object.keys(process.env)): Record<string, unknown> {
+	const config: Record<string, unknown> = {};
+	for (const [name, server] of Object.entries(mcp)) config[`mcp_servers.${name}`] = server.url ? { url: server.url, ...(server.headers ? { http_headers: server.headers } : {}) } : { command: server.command, args: server.args ?? [], ...(server.env ? { env: server.env } : {}), env_vars: names };
+	return config;
+}
+
+export function acpMcpServers(mcp: Record<string, McpServer>, http: boolean): any[] {
+	const pairs = (value?: Record<string, string>) => Object.entries(value ?? {}).map(([name, item]) => ({ name, value: String(item) }));
+	return Object.entries(mcp).flatMap(([name, server]) => (server.url ? (http ? [{ type: "http", name, url: server.url, headers: pairs(server.headers) }] : []) : [{ name, command: String(server.command ?? ""), args: server.args ?? [], env: pairs(server.env) }]));
 }
 
 interface Spec {
@@ -279,8 +316,26 @@ export function acpModels(session: any): ModelChoice[] {
 // resume: a conversa continua entre chamadas (sessão inteira no agente, card 1dfwh7kgf8k); o id é gravado nele
 export async function runExternal(agent: ExternalAgent, task: string, cwd: string, signal: AbortSignal | undefined, result: any, emit: () => void, start: typeof spawn = spawn, ask: () => Ask | undefined = asker, resume?: { id?: string }): Promise<any> {
 	result.model = result.model ?? agent.model ?? agent.name;
-	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;
+	// claude: MCPs e regras do Pink por arquivo (os cabeçalhos podem ter chave: nunca na linha de comando); apagados no fim
+	let scratch: string | undefined;
+	const extra: string[] = [];
+	if (agent.external === "claude" && agent.extras) {
+		scratch = fs.mkdtempSync(path.join(os.tmpdir(), "pink-agente-"));
+		const mcpFile = path.join(scratch, "mcp.json");
+		const rulesFile = path.join(scratch, "regras.md");
+		fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: agent.extras.mcp }), { mode: 0o600 });
+		fs.writeFileSync(rulesFile, agent.extras.instructions, { mode: 0o600 });
+		if (Object.keys(agent.extras.mcp).length) extra.push("--mcp-config", mcpFile);
+		// no -p o claude recusa ferramenta não liberada; libera só a do Pink (os outros MCPs seguem as permissões do claude)
+		if (agent.extras.mcp.pink) extra.push("--allowedTools", "mcp__pink__pink_tarefa");
+		extra.push("--append-system-prompt-file", rulesFile);
+	}
+	const args = agent.external === "claude" ? [...agent.args, ...(agent.model ? ["--model", agent.model] : []), ...extra, ...(resume?.id ? ["--resume", resume.id] : [])] : agent.args;
 	const child = spawnAgent(agent, args, cwd, start);
+	if (scratch) {
+		const dir = scratch;
+		child.on?.("close", () => fs.rmSync(dir, { recursive: true, force: true }));
+	}
 	let aborted = false;
 	const killChild = () => {
 		aborted = true;
@@ -322,8 +377,8 @@ export async function runExternal(agent: ExternalAgent, task: string, cwd: strin
 			});
 			child.stdin.end(task);
 			result.exitCode = await exited;
-		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume, agent.model);
-		else result.exitCode = await runAcp(child, agent.name, task, cwd, result, emit, ask, exited, resume, agent.model);
+		} else if (agent.external === "codex") result.exitCode = await runCodex(child, task, cwd, result, emit, ask, exited, resume, agent.model, agent.extras);
+		else result.exitCode = await runAcp(child, agent.name, task, cwd, result, emit, ask, exited, resume, agent.model, agent.extras);
 	} finally {
 		signal?.removeEventListener?.("abort", killChild);
 		if (child.exitCode == null) killChild();
@@ -342,7 +397,7 @@ const failed = (result: any, name: string, message: string) => {
 	return 1;
 };
 
-async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string): Promise<number> {
+async function runCodex(child: any, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras): Promise<number> {
 	let done: (code: number) => void = () => {};
 	const finished = new Promise<number>((resolve) => (done = resolve));
 	const client = rpc(
@@ -375,13 +430,20 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 				const ok = confirm ? await confirm("O Codex quer alterar arquivos", [params?.reason, params?.grantRoot && `pasta: ${params.grantRoot}`].filter(Boolean).join("\n") || "Alterar arquivos nesta pasta.") : false;
 				return { decision: ok ? "accept" : "decline" };
 			}
+			if (method === "mcpServer/elicitation/request") {
+				// o codex pede licença para usar ferramenta MCP; a do próprio Pink (pink_tarefa) vem do /agente e já está liberada
+				if (params?.mode === "url") return { action: "decline", content: null, _meta: null };
+				const ok = params?.serverName === "pink" || (confirm ? await confirm(`O Codex quer usar o MCP ${params?.serverName ?? ""}`, String(params?.message ?? "")) : false);
+				return { action: ok ? "accept" : "decline", content: ok ? {} : null, _meta: null };
+			}
 			return undefined; // o resto (pergunta ao usuário, login) o Pink não trata: o Codex recebe erro
 		},
 	);
 	const init = await client.request("initialize", { clientInfo: { name: "pink", version: "1" } });
 	if (init.error) return failed(result, "codex", String(init.error.message ?? "initialize falhou"));
 	client.notify("initialized");
-	const options = { cwd, approvalPolicy: "on-request", sandbox: "workspace-write", ...(model ? { model } : {}) };
+	const pinkSide = extras ? { developerInstructions: extras.instructions, ...(Object.keys(extras.mcp).length ? { config: codexMcpConfig(extras.mcp) } : {}) } : {};
+	const options = { cwd, approvalPolicy: "on-request", sandbox: "workspace-write", ...(model ? { model } : {}), ...pinkSide };
 	const thread = await client.request(resume?.id ? "thread/resume" : "thread/start", resume?.id ? { threadId: resume.id, ...options } : options);
 	if (thread.error) return failed(result, "codex", String(thread.error.message ?? "thread/start falhou"));
 	if (typeof thread.result?.model === "string") result.model = thread.result.model;
@@ -391,7 +453,7 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 	return Promise.race([finished, exited.then((code) => (result.stopReason ? code : failed(result, "codex", result.errorMessage || `o codex saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}`)))]);
 }
 
-async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string): Promise<number> {
+async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras): Promise<number> {
 	const state = { text: "", loading: false };
 	let config: any[] = [];
 	const client = rpc(
@@ -414,17 +476,20 @@ async function runAcp(child: any, name: string, task: string, cwd: string, resul
 	const init = await client.request("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
 	if (init.error) return failed(result, name, String(init.error.message ?? "initialize falhou"));
 	let sessionId: string | undefined;
+	let fresh = false;
+	const mcpServers = extras ? acpMcpServers(extras.mcp, Boolean(init.result?.agentCapabilities?.mcpCapabilities?.http)) : [];
 	if (resume?.id && init.result?.agentCapabilities?.loadSession) {
 		state.loading = true;
-		const loaded = await client.request("session/load", { sessionId: resume.id, cwd, mcpServers: [] });
+		const loaded = await client.request("session/load", { sessionId: resume.id, cwd, mcpServers });
 		state.loading = false;
 		if (!loaded.error) (sessionId = resume.id), (config = loaded.result?.configOptions ?? []);
 	}
 	if (!sessionId) {
 		// shortcut: agente sem loadSession recomeça a conversa a cada mensagem; manter o processo vivo resolveria
-		const session = await client.request("session/new", { cwd, mcpServers: [] });
+		const session = await client.request("session/new", { cwd, mcpServers });
 		if (session.error) return failed(result, name, String(session.error.message ?? "session/new falhou"));
 		sessionId = session.result?.sessionId;
+		fresh = true;
 		config = session.result?.configOptions ?? [];
 	}
 	if (resume && sessionId) resume.id = sessionId;
@@ -434,7 +499,9 @@ async function runAcp(child: any, name: string, task: string, cwd: string, resul
 		if (set.error) return failed(result, name, `O ${name} recusou o modelo ${model}: ${set.error.message ?? "erro"}`);
 		result.model = model;
 	}
-	const prompt = client.request("session/prompt", { sessionId, prompt: [{ type: "text", text: task }] });
+	// ACP não tem instrução de sistema: as regras do Pink vão antes da primeira mensagem de cada sessão nova
+	const blocks = fresh && extras?.instructions ? [{ type: "text", text: extras.instructions }, { type: "text", text: task }] : [{ type: "text", text: task }];
+	const prompt = client.request("session/prompt", { sessionId, prompt: blocks });
 	const answer = await Promise.race([prompt, exited.then((code) => ({ error: { message: `o ${name} saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}` } }))]);
 	if (answer.error) return failed(result, name, String(answer.error.message ?? "session/prompt falhou"));
 	const usage = answer.result?.usage;

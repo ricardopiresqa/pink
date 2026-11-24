@@ -4,7 +4,36 @@
 // thread/resume, ACP session/load). /agente off volta ao modelo do Pink, que vê a conversa (as mensagens ficam na sessão).
 // O transporte é o mesmo dos subagentes externos (examples/extensions/subagent/external.ts, cards 1dfwh7kgf8g/h/j).
 import { t } from "./pink-i18n.ts";
-import { externalAgents, listModels, runExternal } from "../examples/extensions/subagent/external.ts";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
+
+// o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
+const readJson = (file: string) => {
+	try {
+		return JSON.parse(fs.readFileSync(file, "utf8"));
+	} catch {
+		return undefined;
+	}
+};
+export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR || path.join(os.homedir(), ".pink", "agent")) {
+	let rules = "";
+	try {
+		rules = fs.readFileSync(path.join(dir, "AGENTS.md"), "utf8");
+	} catch {
+		/* sem regras globais */
+	}
+	let skills: any[] = [];
+	try {
+		skills = (pink.getCommands?.() ?? []).filter((command: any) => command.source === "skill" && String(command.name).startsWith("skill:")).map((command: any) => ({ name: command.name.slice(6), description: command.description, path: command.sourceInfo?.path }));
+	} catch {
+		/* sem skills */
+	}
+	const server = { command: process.execPath, args: [path.join(path.dirname(fileURLToPath(import.meta.url)), "pink-mcp-server.mjs")] };
+	return pinkExtras({ mcp: readJson(path.join(dir, "mcp.json"))?.mcpServers ?? {}, rules, skills, server });
+}
 
 const STATUS = "pink-agente";
 
@@ -30,7 +59,7 @@ export function render(result: any): string {
 
 const label = (agent: any) => (agent.model ? `${agent.name} · ${agent.model}` : agent.name);
 
-export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels) {
+export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: () => any = () => gatherExtras(pink)) {
 	let active: { agent: any; resume: { id?: string }; controller?: AbortController } | undefined;
 
 	const stop = (ctx?: any) => {
@@ -106,7 +135,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 				}
 			}
 			stop(ctx);
-			active = { agent: model ? { ...agent, model } : agent, resume: {} };
+			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras() }, resume: {} };
 			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");

@@ -35,10 +35,12 @@ process.stdin.on("end", () => {
 
 FAKE_CODEX = r"""
 const rl = (await import("node:readline")).createInterface({ input: process.stdin });
+const fs = await import("node:fs");
 const say = (m) => process.stdout.write(JSON.stringify(m) + "\n");
 let task = "";
 rl.on("line", (line) => {
   const m = JSON.parse(line);
+  if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ agent: "codex", ...m }) + "\n");
   if (m.method === "initialize") return say({ id: m.id, result: { userAgent: "fake" } });
   if (m.method === "initialized") return;
   if (m.method === "model/list") return say({ id: m.id, result: { data: [{ id: "a", model: "gpt-5", displayName: "GPT-5", isDefault: true, hidden: false }, { id: "h", model: "oculto", displayName: "x", hidden: true }, { id: "m", model: "gpt-mini", displayName: "GPT mini", hidden: false }], nextCursor: null } });
@@ -47,9 +49,11 @@ rl.on("line", (line) => {
   if (m.method === "turn/start") {
     task = m.params.input[0].text;
     say({ id: m.id, result: { turn: { id: "t1" } } });
+    if (task.startsWith("mcp:")) return say({ id: 98, method: "mcpServer/elicitation/request", params: { threadId: "th1", turnId: "t1", serverName: task.slice(4), mode: "form", message: "Permitir a ferramenta?", requestedSchema: {} } });
     if (task.includes("sem login")) return say({ method: "turn/completed", params: { turn: { id: "t1", status: "failed", items: [], error: { message: "401 Unauthorized: please sign in" } } } });
     return say({ id: 99, method: "item/commandExecution/requestApproval", params: { command: "rm -rf build", cwd: "C:\\proj", reason: "limpar" } });
   }
+  if (m.id === 98) return say({ method: "turn/completed", params: { turn: { id: "t1", status: "completed", items: [{ type: "agentMessage", id: "e", text: `mcp ${m.result.action}` }] } } });
   if (m.id === 99) {
     say({ method: "item/started", params: { item: { type: "commandExecution", id: "c1", command: "rm -rf build" } } });
     say({ method: "item/completed", params: { item: { type: "commandExecution", id: "c1", command: "rm -rf build" } } });
@@ -64,10 +68,12 @@ rl.on("line", (line) => {
 
 FAKE_ACP = r"""
 const rl = (await import("node:readline")).createInterface({ input: process.stdin });
+const fs = await import("node:fs");
 const say = (m) => process.stdout.write(JSON.stringify(m) + "\n");
 let promptId;
 rl.on("line", (line) => {
   const m = JSON.parse(line);
+  if (process.env.FAKE_LOG) fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify({ agent: "acp", ...m }) + "\n");
   if (m.method === "initialize") return say({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true } } });
   if (m.method === "session/load") {
     say({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "HISTORICO" } } } });
@@ -169,6 +175,35 @@ out.listAcp = await ext.listModels(agent("opencode", "acp", ["acp"]), root, fake
 out.listClaude = (await ext.listModels(agent("claude", "claude", []), root)).map((m) => m.id);
 out.listSilent = await ext.listModels(agent("codex", "codex", []), root, () => spawn(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], { stdio: ["pipe", "pipe", "pipe"] }), 300).then(() => "ok", (e) => e.message);
 out.acpOld = ext.acpModels({ models: { currentModelId: "x", availableModels: [{ modelId: "x", name: "X" }, { modelId: "y" }] } });
+
+// o Pink junto: MCPs (sem os thoth*), regras, skills e o próprio Pink como MCP
+const extras = ext.pinkExtras({
+  mcp: { thoth: { type: "http", url: "https://x", headers: { Authorization: "segredo" }, exposure: "direct" }, "thoth-board": { command: "py" }, playwright: { command: "node", args: ["pw.js"], timeout: 5 }, web: { type: "http", url: "https://w", headers: { K: "v" } } },
+  rules: "Responda em português.",
+  skills: [{ name: "deploy", description: "Publica\no site", path: "C:\\skills\\deploy\\SKILL.md" }],
+  server: { command: "node", args: ["pink-mcp-server.mjs"] },
+});
+out.extras = { names: Object.keys(extras.mcp), playwright: extras.mcp.playwright, instructions: extras.instructions };
+out.codexConfig = ext.codexMcpConfig(extras.mcp, ["PATH", "THOTH_TOKEN"]);
+const elicit = async (server, ask) => (await ext.runExternal(agent("codex", "codex", []), `mcp:${server}`, root, undefined, fresh(), () => {}, fake(codexJs), ask)).messages.at(-1).content[0].text;
+out.elicit = [await elicit("pink", () => undefined), await elicit("outro", () => undefined), await elicit("outro", say(true))];
+out.acpServers = [ext.acpMcpServers(extras.mcp, true), ext.acpMcpServers(extras.mcp, false).map((s) => s.name)];
+const fsx = await import("node:fs");
+process.env.FAKE_LOG = path.join(root, "log.jsonl");
+r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), extras }, "x", root, undefined, fresh(), () => {}, fake(claudeJs));
+const echoed = r.messages.at(-1).content[0].text.split("args=")[1].split(" ");
+const mcpFile = echoed[echoed.indexOf("--mcp-config") + 1];
+out.claudeExtras = { flags: echoed.filter((a) => a.startsWith("--")), mcpGone: !fsx.existsSync(mcpFile) };
+await ext.runExternal({ ...agent("codex", "codex", []), extras }, "arrumar build", root, undefined, fresh(), () => {}, fake(codexJs), say(true));
+const k1 = {};
+await ext.runExternal({ ...agent("opencode", "acp", ["acp"]), extras }, "primeira", root, undefined, fresh(), () => {}, fake(acpJs), say(true), k1);
+const log = fsx.readFileSync(process.env.FAKE_LOG, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+const ts = log.find((m) => m.method === "thread/start").params;
+out.codexExtras = { dev: ts.developerInstructions === extras.instructions, config: Object.keys(ts.config ?? {}) };
+const sn = log.find((m) => m.method === "session/new").params;
+const sp = log.find((m) => m.method === "session/prompt").params;
+out.acpExtras = { servers: sn.mcpServers.map((s) => s.name), first: sp.prompt.map((b) => b.text.slice(0, 6)) };
+delete process.env.FAKE_LOG;
 console.log(JSON.stringify(out));
 """
 
@@ -180,6 +215,7 @@ const pi = { registerCommand: (name, spec) => (commands[name] = spec), on: (even
 const agents = [{ name: "claude", external: "claude" }, { name: "codex", external: "codex" }];
 let release;
 const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) => {
+  out.extrasSeen = agent.extras?.instructions ?? null;
   runs.push({ agent: agent.name, model: agent.model ?? null, text, cwd, sameResume: runs.length ? resume === runs[0].resume : true, resume });
   resume.id = resume.id ?? "sess-1";
   if (text === "devagar") await new Promise((r) => (release = r));
@@ -189,7 +225,7 @@ const run = async (agent, text, cwd, signal, result, emit, start, ask, resume) =
 };
 const menus = [];
 const models = async (agent) => (agent.name === "codex" ? [{ id: "gpt-5", label: "GPT-5", current: true }, { id: "gpt-mini", label: "GPT mini" }] : [{ id: "opus", label: "opus" }]);
-mod.default(pi, () => agents, run, models);
+mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regras do pink" }));
 const answers = [];
 const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
 answers.push("Padrão do claude");
@@ -358,6 +394,76 @@ def test_model_lists_come_from_each_agent(ext: dict) -> None:
     assert ext["listClaude"] == ["opus", "sonnet", "haiku"]
     assert "não respondeu" in ext["listSilent"]
     assert ext["acpOld"] == [{"id": "x", "label": "X", "current": True}, {"id": "y", "label": "y", "current": False}]
+
+
+def test_pink_extras_skip_thoth_servers_and_carry_rules_skills_and_the_pink_server(ext: dict) -> None:  # card 1dfwh7kgfjx
+    e = ext["extras"]
+    assert e["names"] == ["playwright", "web", "pink"]  # thoth* o agente já tem pelo thoth-client
+    assert e["playwright"] == {"command": "node", "args": ["pw.js"]}  # timeout e exposure são do Pink
+    assert "Responda em português." in e["instructions"] and "- deploy: Publica o site (C:\\skills\\deploy\\SKILL.md)" in e["instructions"] and "pink_tarefa" in e["instructions"]
+    assert ext["codexConfig"]["mcp_servers.playwright"] == {"command": "node", "args": ["pw.js"], "env_vars": ["PATH", "THOTH_TOKEN"]}  # só os nomes, nunca os valores
+    assert ext["codexConfig"]["mcp_servers.web"] == {"url": "https://w", "http_headers": {"K": "v"}}
+    with_http, without_http = ext["acpServers"]
+    assert with_http[0] == {"name": "playwright", "command": "node", "args": ["pw.js"], "env": []}
+    assert with_http[1] == {"type": "http", "name": "web", "url": "https://w", "headers": [{"name": "K", "value": "v"}]}
+    assert without_http == ["playwright", "pink"]  # agente sem http não recebe o servidor http
+
+
+def test_each_agent_receives_the_pink_side(ext: dict, session: dict) -> None:
+    assert ext["claudeExtras"] == {"flags": ["--mcp-config", "--allowedTools", "--append-system-prompt-file"], "mcpGone": True}  # arquivo com cabeçalhos apagado no fim
+    assert ext["codexExtras"] == {"dev": True, "config": ["mcp_servers.playwright", "mcp_servers.web", "mcp_servers.pink"]}
+    assert ext["acpExtras"] == {"servers": ["playwright", "pink"], "first": ["# Pink", "primei"]}  # sem http no agente; regras antes da 1ª mensagem
+    assert session["extrasSeen"] == "regras do pink"  # o /agente liga o agente com o Pink junto
+    assert ext["elicit"] == ["mcp accept", "mcp decline", "mcp accept"]  # só o MCP do Pink passa sem perguntar; outro pergunta, sem tela recusa
+
+
+MCP_DRIVER = r"""
+const [url, fakePink] = process.argv.slice(1);
+const { spawn } = await import("node:child_process");
+const file = (await import("node:url")).fileURLToPath(url);
+const talk = (env, lines) => new Promise((resolve) => {
+  const child = spawn(process.execPath, [file], { env: { ...process.env, PINK_MCP_BIN: fakePink, ...env }, stdio: ["pipe", "pipe", "inherit"] });
+  let buf = "";
+  const got = [];
+  child.stdout.on("data", (d) => {
+    buf += d;
+    for (let n = buf.indexOf("\n"); n >= 0; n = buf.indexOf("\n")) { got.push(JSON.parse(buf.slice(0, n))); buf = buf.slice(n + 1); }
+    if (got.length === lines.filter((l) => l.id != null).length) { child.kill(); resolve(got); }
+  });
+  for (const l of lines) child.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...l }) + "\n");
+});
+const out = {};
+const r = await talk({}, [
+  { id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } },
+  { method: "notifications/initialized" },
+  { id: 2, method: "tools/list" },
+  { id: 3, method: "tools/call", params: { name: "pink_tarefa", arguments: { tarefa: "tire um print" } } },
+  { id: 4, method: "tools/call", params: { name: "pink_tarefa", arguments: {} } },
+  { id: 5, method: "tools/call", params: { name: "outra", arguments: {} } },
+]);
+const byId = Object.fromEntries(r.map((m) => [m.id, m]));
+out.server = byId[1].result.serverInfo.name;
+out.tools = byId[2].result.tools.map((t) => t.name);
+out.call = byId[3].result;
+out.empty = byId[4].result.isError;
+out.unknown = byId[5].error.code;
+const nested = await talk({ PINK_MCP_DEPTH: "1" }, [{ id: 1, method: "tools/call", params: { name: "pink_tarefa", arguments: { tarefa: "x" } } }]);
+out.nested = nested[0].result;
+console.log(JSON.stringify(out));
+"""
+
+
+def test_the_pink_mcp_server_runs_a_task_in_pink_and_refuses_to_chain(package_dir: Path, tmp_path: Path) -> None:
+    fake = tmp_path / "pink.mjs"
+    fake.write_text('console.log("pink fez: " + process.argv.slice(2).join(" | ") + " depth=" + process.env.PINK_MCP_DEPTH);\n', encoding="utf-8")
+    url = (package_dir / "extensions" / "pink-mcp-server.mjs").as_uri()
+    done = subprocess.run(["node", "--input-type=module", "-e", MCP_DRIVER, url, str(fake)], capture_output=True, text=True, encoding="utf-8", timeout=120, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert out["server"] == "pink" and out["tools"] == ["pink_tarefa"]
+    assert out["call"] == {"content": [{"type": "text", "text": "pink fez: -p | tire um print depth=1"}], "isError": False}
+    assert out["empty"] is True and out["unknown"] == -32602
+    assert out["nested"]["isError"] is True and "em cadeia" in out["nested"]["content"][0]["text"]
 
 
 def test_the_subagent_patches_are_in_the_package(package_dir: Path) -> None:
