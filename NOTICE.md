@@ -8,7 +8,7 @@ O que o Pink muda em relação ao Pi 1.4.0 (a lista completa e verificada está 
 - o nome: tudo que é Pi vira Pink (comando, título, diretório de configuração `~/.pink/agent` e `.pink/` no projeto, variáveis `PINK_*`, mensagens e prompt de sistema);
 - o tema `pink` como tema padrão: texto do agente quase branco, mensagem do usuário em rosa, pensamento em cinza, rosa
   como cor da marca e dos destaques (2026-10-13; antes era tudo rosa);
-- por privacidade, o Pink **não** envia a telemetria de instalação nem consulta versões no servidor do Pi: os endereços `pi.dev/api/*` foram trocados por `pink.invalid`, exceto a consulta de versão nova, que pergunta ao registro do npm (`registry.npmjs.org/@thothdev/pink/latest`), de onde a atualização vem; `PI_SKIP_VERSION_CHECK=1` desliga
+- por privacidade, o Pink **não** envia a telemetria de instalação nem consulta versões no servidor do Pi: os endereços `pi.dev/api/*` foram trocados por `pink.invalid`, exceto a consulta de versão nova, que pergunta ao registro do npm (`registry.npmjs.org/@thothdev/pink/latest`), de onde a atualização vem; `PINK_SKIP_VERSION_CHECK=1` desliga
   e a telemetria de instalação vem desligada por padrão;
 - a interface no estilo do OpenCode, na extensão `extensions/pink-ui.ts` (código do Pink, MIT), que o pacote carrega por padrão. Ela traz tela inicial, caixa de digitar,
   moldura de tela cheia (topo, colunas de sessões e de contexto, rodapé), fechamento, paleta de comandos, agentes Build e Plano, `/undo` e `/redo` com arquivos, lista de tarefas (`todowrite`), `/sessions`, `/themes`, `/init` e `/details`;

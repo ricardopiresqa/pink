@@ -28,9 +28,9 @@ out.header = { rows24: header(24).length, rows50: header(50).length, topBlank24:
 
 // -- the input box
 const box = ui.inputBox({ theme: plain, content: ["abc", "def"], width: 40, label: "thoth  provider" });
-out.box = { lines: box.length, widths: box.map(ui.visible), starts: box.map((l) => l[0]), hasContent: box.some((l) => l.includes("abc")), label: box.at(-2).slice(1).trim(), last: box.at(-1).trim() };
+out.box = { lines: box.length, widths: box.map(ui.visible), starts: box.map((l) => l[0]), hasContent: box.some((l) => l.includes("abc")), label: box.at(-3).slice(1).trim(), last: box.at(-2).trim(), bottom: box.at(-1).slice(1).trim() };
 const wideBox = ui.inputBox({ theme: plain, content: ["abc"], width: 100, label: "Build · thoth (automatico, gratuito)" });
-out.boxWide = { lines: wideBox.length, last: wideBox.at(-1).slice(1).trim() };  // cabe: rótulo e dicas na mesma linha
+out.boxWide = { lines: wideBox.length, last: wideBox.at(-2).slice(1).trim(), bottom: wideBox.at(-1).slice(1).trim() };  // cabe: rótulo e dicas na mesma linha
 const styled = ui.inputBox({ theme, content: ["x"], width: 30, label: "m" });
 out.boxStyled = { bar: styled.every((line) => line.startsWith("<accent>▌</>")), panel: styled[1].includes("[userMessageBg]") };
 const inlineBox = ui.inputBox({ theme: plain, content: ["abc"], width: 60, label: "Build · thoth", inline: true });

@@ -100,10 +100,11 @@ export function inputBox({ theme, content, width, label, inline = false, hints =
 	const lines = inline && label ? [footerLine({ theme, width: text, left: content[0] ?? "", right: label }), ...content.slice(1)] : content;
 	if (!inline && label && visible(label) + 1 + visible(tip) > text) {
 		// rótulo e dicas não cabem juntos: o rótulo ganha a linha dele, em vez de cortar as dicas
-		return [row(""), ...lines.map(row), row(""), row(theme.fg("muted", label)), row(footerLine({ theme, width: text, left: "", right: tip }))];
+		return [row(""), ...lines.map(row), row(""), row(theme.fg("muted", label)), row(footerLine({ theme, width: text, left: "", right: tip })), row("")];
 	}
 	const last = inline || !label ? footerLine({ theme, width: text, left: "", right: tip }) : footerLine({ theme, width: text, left: theme.fg("muted", label), right: tip });
-	return [row(""), ...lines.map(row), row(""), row(last)];
+	// linha vazia também embaixo do rótulo, como a caixa do OpenCode (owner 2026-11-24)
+	return [row(""), ...lines.map(row), row(""), row(last), row("")];
 }
 
 export function footerLine({ theme, width, left, right }) {

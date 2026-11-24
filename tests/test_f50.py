@@ -254,7 +254,8 @@ def test_telemetry_is_off_by_default_and_the_pi_dev_endpoints_are_unreachable_in
     defaults = (package_dir / DEFAULTS_CHUNK).read_text(encoding="utf-8")
     assert "enableInstallTelemetry:!1" in defaults and "enableInstallTelemetry:!0" not in defaults
     text = (package_dir / MAIN_CHUNK).read_text(encoding="utf-8")
-    assert "https://pi.dev/api" not in text and "https://pink.invalid/api/latest-version" in text
+    # a versão nova vem do registro do npm (owner 2026-11-24); o servidor do Pi segue fora
+    assert "https://pi.dev/api" not in text and "https://registry.npmjs.org/@thothdev/pink/latest" in text
 
 
 # ================================================================================================ the real thing: install and run
@@ -345,13 +346,15 @@ def test_the_home_header_sits_in_the_vertical_middle_and_moves_with_the_terminal
 
 
 def test_the_input_box_is_exactly_as_wide_as_asked_with_a_pink_bar_on_every_line_and_never_overflows(ui_facts: dict) -> None:
-    assert set(ui_facts["box"]["widths"]) == {40} and ui_facts["box"]["starts"] == ["▌"] * 6 and ui_facts["box"]["hasContent"]  # barra rosa cheia à esquerda (pink.3, como o OpenCode)
+    assert set(ui_facts["box"]["widths"]) == {40} and ui_facts["box"]["starts"] == ["▌"] * 7 and ui_facts["box"]["hasContent"]  # barra rosa cheia à esquerda (pink.3, como o OpenCode)
     assert set(ui_facts["boxTight"]["widths"]) == {20}  # an 80-column line inside a 20-column box is cut, not wrapped past the edge
     # rótulo + dicas não cabem em 40 colunas: o rótulo ganha a linha dele e as dicas não são cortadas (owner 2026-11-15)
     assert ui_facts["boxStyled"] == {"bar": True, "panel": True} and ui_facts["box"]["label"] == "thoth  provider"
     assert "Enter enviar" in ui_facts["box"]["last"]
     wide = ui_facts["boxWide"]  # cabendo, rótulo à esquerda e dicas à direita na mesma linha
-    assert wide["lines"] == 4 and wide["last"].startswith("Build · thoth (automatico, gratuito)") and wide["last"].endswith("ver pensamento")
+    # linha vazia embaixo do rótulo, como a caixa do OpenCode (owner 2026-11-24)
+    assert ui_facts["box"]["bottom"] == "" and wide["bottom"] == ""
+    assert wide["lines"] == 5 and wide["last"].startswith("Build · thoth (automatico, gratuito)") and wide["last"].endswith("ver pensamento")
     inline = ui_facts["boxInline"]  # com espaço, o rótulo vai à direita da primeira linha e as dicas reais ficam na última
     assert set(inline["widths"]) == {60} and inline["first"].startswith("▌ abc") and inline["first"].endswith("Build · thoth ")
     assert inline["last"].rstrip().endswith("Enter enviar · shift+tab pensar · ctrl+t ver pensamento")
