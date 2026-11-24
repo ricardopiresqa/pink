@@ -6,6 +6,9 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 ## [1.0.3] - 2026-11-24
 
 - `/agente`: só uma linha em branco entre o pedido e a resposta do agente (eram três).
+- `/agente` com opencode e os outros agentes ACP: o programa do agente fica aberto entre as mensagens. Só a primeira
+  demora (~15 s para subir e abrir a sessão); as seguintes levam ~2 a 4 s. Fecha no `/agente off`, ao trocar de agente,
+  ao cancelar, se der erro e ao sair do Pink.
 
 ## [1.0.2] - 2026-11-24
 

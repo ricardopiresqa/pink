@@ -160,6 +160,18 @@ out.codexResume = { id: cx.id, model: r.model };
 const ac2 = { id: "s-antiga" };
 r = await ext.runExternal(agent("opencode", "acp", ["acp"]), "c", root, undefined, fresh(), () => {}, fake(acpJs), say(true), ac2);
 out.acpResume = { id: ac2.id, parts: parts(r) };
+// /agente: o processo ACP fica aberto entre as mensagens (keep) e fecha no closeKept; cancelar fecha e a próxima reabre
+const before = out.spawned.length, kept = { keep: true };
+await ext.runExternal(agent("opencode", "acp", ["acp"]), "um", root, undefined, fresh(), () => {}, fake(acpJs), say(true), kept);
+r = await ext.runExternal(agent("opencode", "acp", ["acp"]), "dois", root, undefined, fresh(), () => {}, fake(acpJs), say(true), kept);
+const keptChild = kept.live.child;
+const keptAc = new AbortController();
+keptAc.abort();
+const cancelled = await ext.runExternal(agent("opencode", "acp", ["acp"]), "tres", root, keptAc.signal, fresh(), () => {}, fake(acpJs), say(true), kept).then(() => "terminou", (e) => e.message);
+out.kept = { spawns: out.spawned.length - before, id: kept.id, last: r.messages.at(-1).content[0].text, model: r.model, stop: r.stopReason, cancelled, closed: kept.live === undefined, killed: keptChild.killed };
+await ext.runExternal(agent("opencode", "acp", ["acp"]), "quatro", root, undefined, fresh(), () => {}, fake(acpJs), say(true), kept);
+out.kept.reopened = [out.spawned.length - before, kept.id];
+ext.closeKept(kept);
 
 // modelo escolhido no /agente
 r = await ext.runExternal({ ...agent("claude", "claude", ["-p"]), model: "opus" }, "m", root, undefined, fresh(), () => {}, fake(claudeJs));
@@ -378,6 +390,14 @@ def test_the_conversation_continues_between_calls(ext: dict) -> None:
     assert ext["claudeResume"]["id"] == "claude-sess" and ext["claudeResume"]["last"].endswith("args=-p --resume claude-sess")
     assert ext["codexResume"] == {"id": "th1", "model": "gpt-retomado"}
     assert ext["acpResume"]["id"] == "s-antiga" and all("HISTORICO" not in str(p) for p in ext["acpResume"]["parts"])  # o histórico repetido não aparece
+
+
+def test_agente_keeps_the_acp_process_open_between_messages(ext: dict) -> None:
+    k = ext["kept"]
+    assert k["spawns"] == 1 and k["id"] == "s-ok"  # 2 mensagens, 1 processo, a mesma sessão
+    assert k["last"] == "Escolha: sim" and k["stop"] == "stop" and k["model"] == "a/1"
+    assert k["cancelled"] == "Subagent was aborted" and k["closed"] and k["killed"]  # cancelar fecha o processo
+    assert k["reopened"] == [2, "s-ok"]  # a próxima reabre e retoma a sessão pelo id
 
 
 @pytest.fixture(scope="module")

@@ -351,8 +351,64 @@ export function acpModels(session: any): ModelChoice[] {
 }
 
 // resume: a conversa continua entre chamadas (sessão inteira no agente, card 1dfwh7kgf8k); o id é gravado nele
-export async function runExternal(agent: ExternalAgent, task: string, cwd: string, signal: AbortSignal | undefined, result: any, emit: () => void, start: typeof spawn = spawn, ask: () => Ask | undefined = asker, resume?: { id?: string }): Promise<any> {
+// /agente com ACP (opencode, cline...): o processo fica aberto entre as mensagens (keep), porque subir o agente e abrir a
+// sessão custa ~10 s e uma mensagem no processo aberto ~3 s; fecha com closeKept (off, troca, cancelar, erro, saída do Pink)
+export type Resume = { id?: string; keep?: boolean; live?: AcpConn };
+export function closeKept(resume?: Resume) {
+	const conn = resume?.live;
+	if (resume) resume.live = undefined;
+	if (!conn) return;
+	try {
+		conn.child.stdin?.end?.(); // fim da entrada: o agente sai sozinho (o kill do .cmd do npm pega só o shell)
+		conn.child.kill();
+	} catch {
+		/* já saiu */
+	}
+}
+
+async function runAcpKept(agent: ExternalAgent, task: string, cwd: string, signal: AbortSignal | undefined, result: any, emit: () => void, start: typeof spawn, ask: () => Ask | undefined, resume: Resume): Promise<any> {
+	let conn = resume.live;
+	if (!conn || conn.child.exitCode != null || conn.child.killed) {
+		const child = spawnAgent(agent, agent.args, cwd, start);
+		const exited = new Promise<number>((resolve) => {
+			child.on("close", (code: number | null) => resolve(code ?? 0));
+			child.on("error", (error: any) => {
+				if (conn?.turn) conn.turn.result.stderr += String(error?.message ?? error);
+				resolve(1);
+			});
+		});
+		conn = resume.live = acpOpen(child, agent.name, exited);
+		const opened = conn;
+		child.stderr?.on?.("data", (data: any) => {
+			const target = opened.turn?.result;
+			if (target && target.stderr.length < 8000) target.stderr += String(data);
+		});
+	}
+	let aborted = false;
+	const stop = () => {
+		aborted = true;
+		closeKept(resume); // a próxima mensagem abre de novo e retoma a sessão pelo id
+	};
+	if (signal?.aborted) stop();
+	else signal?.addEventListener?.("abort", stop, { once: true });
+	try {
+		result.exitCode = aborted ? 1 : await runAcp(conn.child, agent.name, task, cwd, result, emit, ask, conn.exited, resume, agent.model, agent.extras, conn);
+	} finally {
+		signal?.removeEventListener?.("abort", stop);
+	}
+	if (aborted) throw new Error("Subagent was aborted");
+	if (result.stopReason === "error" || result.exitCode !== 0) {
+		closeKept(resume); // processo em estado desconhecido: recomeça limpo na próxima
+		if (!result.stopReason) (result.stopReason = "error"), (result.errorMessage = `${agent.name} saiu com código ${result.exitCode}.${loginHint(agent.name, result.stderr)}`);
+	}
+	return result;
+}
+
+export async function runExternal(agent: ExternalAgent, task: string, cwd: string, signal: AbortSignal | undefined, result: any, emit: () => void, start: typeof spawn = spawn, ask: () => Ask | undefined = asker, resume?: Resume): Promise<any> {
 	result.model = result.model ?? agent.model ?? agent.name;
+	if (resume?.keep && agent.external !== "claude" && agent.external !== "codex") {
+		return runAcpKept(agent, task, cwd, signal, result, emit, start, ask, resume);
+	}
 	// claude: MCPs e regras do Pink por arquivo (os cabeçalhos podem ter chave: nunca na linha de comando); apagados no fim
 	let scratch: string | undefined;
 	const extra: string[] = [];
@@ -490,55 +546,79 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 	return Promise.race([finished, exited.then((code) => (result.stopReason ? code : failed(result, "codex", result.errorMessage || `o codex saiu (código ${code}) antes de terminar.${result.stderr ? `\n${result.stderr.slice(-400)}` : ""}`)))]);
 }
 
-async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras): Promise<number> {
-	const state = { text: "", loading: false };
-	let config: any[] = [];
-	const client = rpc(
+// a ligação com um agente ACP: o processo, a sessão aberta e a mensagem em andamento (turn), para servir várias mensagens
+type AcpTurn = { result: any; state: { text: string; loading: boolean }; emit: () => void; ask: () => Ask | undefined };
+type AcpConn = { child: any; client: ReturnType<typeof rpc>; exited: Promise<number>; turn?: AcpTurn; sessionId?: string; model?: string };
+function acpOpen(child: any, name: string, exited: Promise<number>): AcpConn {
+	const conn = { child, exited } as AcpConn;
+	conn.client = rpc(
 		child,
 		name,
 		(method, params) => {
-			if (method === "session/update" && !state.loading) applyAcpUpdate(params?.update, result, state, emit); // session/load repete o histórico: não mostrar de novo
+			const turn = conn.turn;
+			if (method === "session/update" && turn && !turn.state.loading) applyAcpUpdate(params?.update, turn.result, turn.state, turn.emit); // session/load repete o histórico: não mostrar de novo
 		},
 		async (method, params) => {
 			if (method !== "session/request_permission") return undefined; // sem fs nem terminal do cliente: o agente usa os dele
 			const options: any[] = Array.isArray(params?.options) ? params.options : [];
 			const allow = options.find((option) => option?.kind === "allow_once") ?? options.find((option) => String(option?.kind).startsWith("allow"));
 			const reject = options.find((option) => option?.kind === "reject_once") ?? options.find((option) => String(option?.kind).startsWith("reject"));
-			const confirm = ask();
+			const confirm = conn.turn?.ask();
 			const ok = Boolean(allow && confirm && (await confirm(`O ${name} pede permissão`, String(params?.toolCall?.title ?? "Executar uma ação."))));
 			if (ok) return { outcome: { outcome: "selected", optionId: allow.optionId } };
 			return reject ? { outcome: { outcome: "selected", optionId: reject.optionId } } : { outcome: { outcome: "cancelled" } };
 		},
 	);
-	const init = await client.request("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
-	if (init.error) return failed(result, name, String(init.error.message ?? "initialize falhou"));
-	let sessionId: string | undefined;
+	return conn;
+}
+
+async function runAcp(child: any, name: string, task: string, cwd: string, result: any, emit: () => void, ask: () => Ask | undefined, exited: Promise<number>, resume?: { id?: string }, model?: string, extras?: Extras, kept?: AcpConn): Promise<number> {
+	const conn = kept ?? acpOpen(child, name, exited);
+	const state = { text: "", loading: false };
+	conn.turn = { result, state, emit, ask };
+	try {
+		return await acpTurn(conn, name, task, cwd, result, state, emit, resume, model, extras);
+	} finally {
+		conn.turn = undefined;
+	}
+}
+
+async function acpTurn(conn: AcpConn, name: string, task: string, cwd: string, result: any, state: AcpTurn["state"], emit: () => void, resume?: { id?: string }, model?: string, extras?: Extras): Promise<number> {
+	const { client, exited } = conn;
 	let fresh = false;
-	const mcpServers = extras ? acpMcpServers(extras.mcp, Boolean(init.result?.agentCapabilities?.mcpCapabilities?.http)) : [];
-	if (resume?.id && init.result?.agentCapabilities?.loadSession) {
-		state.loading = true;
-		const loaded = await client.request("session/load", { sessionId: resume.id, cwd, mcpServers });
-		state.loading = false;
-		if (!loaded.error) (sessionId = resume.id), (config = loaded.result?.configOptions ?? []);
+	if (!conn.sessionId) {
+		let config: any[] = [];
+		const init = await client.request("initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "pink", version: "1" } });
+		if (init.error) return failed(result, name, String(init.error.message ?? "initialize falhou"));
+		let sessionId: string | undefined;
+		const mcpServers = extras ? acpMcpServers(extras.mcp, Boolean(init.result?.agentCapabilities?.mcpCapabilities?.http)) : [];
+		if (resume?.id && init.result?.agentCapabilities?.loadSession) {
+			state.loading = true;
+			const loaded = await client.request("session/load", { sessionId: resume.id, cwd, mcpServers });
+			state.loading = false;
+			if (!loaded.error) (sessionId = resume.id), (config = loaded.result?.configOptions ?? []);
+		}
+		if (!sessionId) {
+			const session = await client.request("session/new", { cwd, mcpServers });
+			if (session.error) return failed(result, name, String(session.error.message ?? "session/new falhou"));
+			sessionId = session.result?.sessionId;
+			fresh = true;
+			config = session.result?.configOptions ?? [];
+		}
+		if (resume && sessionId) resume.id = sessionId;
+		// sem escolha, o rodapé mostra o modelo que o agente usa de fato (ex.: opencode/big-pickle), não o nome do agente
+		const current = config.find((item: any) => item?.category === "model")?.currentValue;
+		if (!model && typeof current === "string" && current) conn.model = current;
+		if (model && sessionId) {
+			const option = config.find((item: any) => item?.category === "model");
+			const set = option ? await client.request("session/set_config_option", { sessionId, configId: option.id, value: model }) : await client.request("session/set_model", { sessionId, modelId: model });
+			if (set.error) return failed(result, name, `O ${name} recusou o modelo ${model}: ${set.error.message ?? "erro"}`);
+			conn.model = model;
+		}
+		conn.sessionId = sessionId;
 	}
-	if (!sessionId) {
-		// shortcut: agente sem loadSession recomeça a conversa a cada mensagem; manter o processo vivo resolveria
-		const session = await client.request("session/new", { cwd, mcpServers });
-		if (session.error) return failed(result, name, String(session.error.message ?? "session/new falhou"));
-		sessionId = session.result?.sessionId;
-		fresh = true;
-		config = session.result?.configOptions ?? [];
-	}
-	if (resume && sessionId) resume.id = sessionId;
-	// sem escolha, o rodapé mostra o modelo que o agente usa de fato (ex.: opencode/big-pickle), não o nome do agente
-	const current = config.find((item: any) => item?.category === "model")?.currentValue;
-	if (!model && typeof current === "string" && current) result.model = current;
-	if (model && sessionId) {
-		const option = config.find((item: any) => item?.category === "model");
-		const set = option ? await client.request("session/set_config_option", { sessionId, configId: option.id, value: model }) : await client.request("session/set_model", { sessionId, modelId: model });
-		if (set.error) return failed(result, name, `O ${name} recusou o modelo ${model}: ${set.error.message ?? "erro"}`);
-		result.model = model;
-	}
+	if (conn.model) result.model = conn.model;
+	const sessionId = conn.sessionId;
 	// ACP não tem instrução de sistema: as regras do Pink vão antes da primeira mensagem de cada sessão nova
 	const blocks = fresh && extras?.instructions ? [{ type: "text", text: extras.instructions }, { type: "text", text: task }] : [{ type: "text", text: task }];
 	const prompt = client.request("session/prompt", { sessionId, prompt: blocks });

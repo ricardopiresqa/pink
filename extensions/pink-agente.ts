@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
+import { closeKept, externalAgents, listModels, pinkExtras, runExternal } from "../examples/extensions/subagent/external.ts";
 import { bulleted, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
@@ -117,6 +117,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 
 	const stop = (ctx?: any) => {
 		active?.controller?.abort();
+		closeKept(active?.resume); // fecha o processo do agente que ficou aberto entre as mensagens
 		active = undefined;
 		idle();
 		(globalThis as any).__pinkExternalAgent = undefined; // o rótulo da caixa volta a "Build · modelo" (pink-ui)
@@ -266,7 +267,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 				}
 			}
 			stop(ctx);
-			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras() }, resume: {} };
+			active = { agent: { ...agent, ...(model ? { model } : {}), extras: extras() }, resume: { keep: true } }; // keep: o processo do agente ACP fica aberto entre as mensagens
 			(globalThis as any).__pinkExternalAgent = { name: active.agent.name, model: active.agent.model }; // rótulo da caixa (pink-ui)
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele. /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota. /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota. /agente off returns to Pink.`), "info");
