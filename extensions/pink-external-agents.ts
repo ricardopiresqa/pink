@@ -583,6 +583,24 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 // a ligação com um agente ACP: o processo, a sessão aberta e a mensagem em andamento (turn), para servir várias mensagens
 type AcpTurn = { result: any; state: { text: string; loading: boolean }; emit: () => void; ask: () => Ask | undefined };
 type AcpConn = { child: any; client: ReturnType<typeof rpc>; exited: Promise<number>; turn?: AcpTurn; sessionId?: string; model?: string; setup?: Promise<string | undefined>; fresh?: boolean; loading?: boolean };
+// o que o agente quer fazer, em palavras: o título do ACP sozinho às vezes é só "bash" ou "edit" (owner 2026-11-25:
+// "permitindo no escuro"). Junta o tipo, o comando ou os arquivos e diz que o sim vale só para esta vez.
+const PERMISSION_KINDS: Record<string, string> = { read: "Ler arquivo", edit: "Editar arquivo", delete: "Apagar arquivo", move: "Mover arquivo", search: "Buscar nos arquivos", execute: "Rodar um comando", fetch: "Acessar a internet", think: "Pensar", other: "Outra ação" };
+export function permissionText(call: any): string {
+	const input = call?.rawInput && typeof call.rawInput === "object" ? call.rawInput : {};
+	const title = String(call?.title ?? "").trim();
+	const kind = PERMISSION_KINDS[String(call?.kind ?? "")];
+	const command = [input.command, input.cmd].find((v) => typeof v === "string" && v.trim()) ?? (Array.isArray(input.command) ? input.command.join(" ") : "");
+	const files = [...new Set([...(Array.isArray(call?.locations) ? call.locations.map((l: any) => l?.path) : []), input.filePath, input.file_path, input.path, input.url].filter((v) => typeof v === "string" && v.trim()))];
+	const lines = [kind && kind.toLowerCase() !== title.toLowerCase() ? `${kind}: ${title || "?"}` : title || kind || "Executar uma ação."];
+	if (command && !title.includes(command)) lines.push(`Comando: ${command}`);
+	for (const file of files.slice(0, 5)) if (!title.includes(file)) lines.push(`Arquivo: ${file}`);
+	if (typeof input.description === "string" && input.description.trim()) lines.push(`Motivo: ${input.description.trim()}`);
+	if (!title && !kind && !command && !files.length) lines.push("O agente não disse mais nada sobre esta ação.");
+	lines.push("Sim vale só para esta vez.");
+	return lines.join("\n");
+}
+
 function acpOpen(child: any, name: string, exited: Promise<number>): AcpConn {
 	const conn = { child, exited } as AcpConn;
 	conn.client = rpc(
@@ -598,7 +616,7 @@ function acpOpen(child: any, name: string, exited: Promise<number>): AcpConn {
 			const allow = options.find((option) => option?.kind === "allow_once") ?? options.find((option) => String(option?.kind).startsWith("allow"));
 			const reject = options.find((option) => option?.kind === "reject_once") ?? options.find((option) => String(option?.kind).startsWith("reject"));
 			const confirm = conn.turn?.ask();
-			const ok = Boolean(allow && confirm && (await confirm(`O ${name} pede permissão`, String(params?.toolCall?.title ?? "Executar uma ação."))));
+			const ok = Boolean(allow && confirm && (await confirm(`O ${name} pede permissão`, permissionText(params?.toolCall))));
 			if (ok) return { outcome: { outcome: "selected", optionId: allow.optionId } };
 			return reject ? { outcome: { outcome: "selected", optionId: reject.optionId } } : { outcome: { outcome: "cancelled" } };
 		},

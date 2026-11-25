@@ -2571,6 +2571,20 @@
       "count": 1
     },
     {
+      "id": "confirm-yes-no-translated",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "${message}`,[\"Yes\",\"No\"],opts,{kind:\"permission\",message:title})===\"Yes\"}",
+      "replace": "${message}`,[globalThis.__pinkT?.(\"Sim\",\"Sí\",\"Yes\")??\"Sim\",globalThis.__pinkT?.(\"Não\",\"No\",\"No\")??\"Não\"],opts,{kind:\"permission\",message:title})===(globalThis.__pinkT?.(\"Sim\",\"Sí\",\"Yes\")??\"Sim\")}",
+      "count": 1
+    },
+    {
+      "id": "thinking-toggle-tells-agente",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "toggleThinkingBlockVisibility(){this.hideThinkingBlock=!this.hideThinkingBlock,",
+      "replace": "toggleThinkingBlockVisibility(){this.hideThinkingBlock=!this.hideThinkingBlock,globalThis.__pinkThinkingShown=!this.hideThinkingBlock,",
+      "count": 1
+    },
+    {
       "id": "thinking-collapsed-every-session-module",
       "file": "dist/core/settings-manager.js",
       "find": "return this.settings.hideThinkingBlock ?? SETTINGS_DEFAULTS.hideThinkingBlock;",

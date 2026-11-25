@@ -9,6 +9,13 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   mesmo modelo do OpenBot, NVIDIA Parakeet TDT 0.6B v3, rodando local com o sherpa-onnx. Na tela cheia, a caixa de
   digitar ganha o botão "◉ falar": a fala aparece ao vivo na caixa, e "‖ pausar", "■ parar" (o texto fica na caixa)
   e "➤ enviar" (manda ao agente). O áudio não sai da máquina; sem instalar, nada muda.
+- /agente como o OpenCode: o trabalho antes da resposta vira uma linha "+ 2 comandos, 3 pensamentos" que abre com
+  clique; cada "+ Pensou · 5.3s" abre e mostra o raciocínio. Ctrl+T abre o de todas.
+- /agente: as mensagens na fila ficam em cima do "Trabalhando", com uma linha vazia até a caixa. Ctrl+Enter interrompe
+  o agente e manda na hora, junto com a fila. A caixa mostra "esc interromper · ctrl+enter enviar agora".
+- Permissão pedida pelo agente (opencode e os outros ACP) diz o que ele quer fazer: tipo, comando, arquivos e motivo.
+  As opções aparecem como "Sim / Não".
+- A lista de comandos não some mais no meio da palavra (digitando /resume, ela sumia no "/resu").
 - Inclui tudo da 1.0.9 (a 1.0.9 também está no npm).
 
 ## [1.0.9] - 2026-11-24

@@ -294,6 +294,8 @@ export const RIGHT_WIDTH = 36; // com a borda
 export const THREE_COLUMNS = 150; // >= 150: sessões, conversa e contexto
 export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: só a conversa
 export const PLACEHOLDER = t("Peça a próxima etapa...", "Pide el siguiente paso...", "Ask for the next step...");
+// enquanto o agente trabalha, como o "esc interrupt" do OpenCode (owner 2026-11-25)
+export const WORK_HINTS = t("esc interromper · ctrl+enter enviar agora", "esc interrumpir · ctrl+enter enviar ya", "esc interrupt · ctrl+enter send now");
 export const BOX_HINTS = t("Enter enviar · shift+tab pensar · ctrl+t ver pensamento", "Enter enviar · shift+tab pensar · ctrl+t ver razonamiento", "Enter send · shift+tab think · ctrl+t show thinking");
 
 export function frameColumns(width, { home = false, on = true, sessions = true } = {}) {
@@ -831,6 +833,12 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (matchesKey?.(data, "ctrl+n")) return void runCommand("/new");
 			const step = matchesKey?.(data, "alt+up") ? -1 : matchesKey?.(data, "alt+down") ? 1 : 0;
 			if (step && !this.pinkKeys?.matches?.(data, "app.message.dequeue")) return void openNeighbour(step);
+			// ctrl+enter: com o /agente trabalhando, interrompe e manda já (com a fila); no Pink, é o Enter, que já entra no meio
+			if (matchesKey?.(data, "ctrl+enter")) {
+				const text = String(this.getText?.() ?? "");
+				if (globalThis.__pinkAgentSendNow?.(text)) return void this.setText("");
+				return void super.handleInput("\r");
+			}
 			super.handleInput(data);
 		}
 
@@ -868,12 +876,16 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			// ~35 colunas na tela inicial (owner 2026-11-15)
 			const inline = false;
 			const raw = super.render(Math.max(1, text));
-			let content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
+			// the built-in editor draws its own top and bottom borders; the autocomplete list comes AFTER the bottom border, so
+			// cutting the last line ate the last suggestion (with one match, "/resu", the whole list vanished; owner 2026-11-25)
+			const below = Math.max(0, Math.min(raw.length - 2, Number(this.renderedAutocompleteHeight) || 0));
+			let content = raw.length >= 3 ? [...raw.slice(1, raw.length - 1 - below), ...raw.slice(raw.length - below)] : raw;
 			if (typeof this.getText === "function" && this.getText() === "" && content.length) content = [`${content[0].replace(/\s+$/, "")}${theme.fg("dim", PLACEHOLDER)}`, ...content.slice(1)];
 			// o botão do microfone só aparece instalado e na tela cheia (fora dela o terminal não entrega o clique)
 			const mic = globalThis.__pinkMicrofone;
 			const bar = framed() && mic ? micBar(theme, mic.view()) : undefined;
-			const box = inputBox({ theme, content, width: outer, label, inline, mic: bar?.text });
+			const working = globalThis.__pinkAgentBusy === true || (typeof ctx.isIdle === "function" && !ctx.isIdle());
+			const box = inputBox({ theme, content, width: outer, label, inline, mic: bar?.text, ...(working ? { hints: WORK_HINTS } : {}) });
 			state.micHits = bar && box.micAt ? { y: box.micAt.y, spans: bar.spans.map((span) => ({ ...span, from: margin + box.micAt.x + span.from, to: margin + box.micAt.x + span.to })) } : undefined;
 			const lines = box.map((line) => " ".repeat(margin) + line);
 			if (!state.home) return lines;

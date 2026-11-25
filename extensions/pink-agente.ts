@@ -93,6 +93,21 @@ export const lastAgentSession = (entries: any[] | undefined, name: string): stri
 // fila como no Claude Code (owner 2026-11-24): cada mensagem esperando aparece em cinza acima da caixa, numa linha
 export const queueLines = (queue: string[], width: number) => queue.map((text) => fit(`> ${String(text).replace(/\s+/g, " ").trim()}`, width));
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const THOUGHT_MAX = 8000; // o pensamento guardado na sessão, por passo
+// como o OpenCode: o trabalho antes da resposta vira uma linha "+ 4 comandos, 4 pensamentos" que abre com clique
+export function workSummary(list: any[]) {
+	const tools = list.filter((step) => step.kind === "tool").reduce((sum, step) => sum + (Number(String(step.line).match(/ ×(\d+)$/)?.[1]) || 1), 0);
+	const thoughts = list.filter((step) => step.kind === "thinking").length;
+	const parts = [];
+	if (tools) parts.push(`${tools} ${tools === 1 ? t("comando", "comando", "command") : t("comandos", "comandos", "commands")}`);
+	if (thoughts) parts.push(`${thoughts} ${thoughts === 1 ? t("pensamento", "pensamiento", "thought") : t("pensamentos", "pensamientos", "thoughts")}`);
+	return parts.join(", ");
+}
+// a resposta final fica de fora do grupo; o que vem antes dela (pensamentos, ferramentas e textos do meio) entra
+export function splitWork(list: any[]) {
+	const last = list.map((step) => step.kind).lastIndexOf("text");
+	return last < 0 ? { work: list, answer: [] } : { work: list.slice(0, last), answer: list.slice(last) };
+}
 
 const fresh = () => ({ messages: [] as any[], stderr: "", exitCode: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 } });
 
@@ -129,7 +144,8 @@ export function steps(result: any, cwd = "") {
 	for (const message of result.messages) {
 		for (const part of message.content ?? []) {
 			if (part.type === "text" && part.text?.trim()) out.push({ kind: "text", text: part.text });
-			else if (part.type === "thinking") out.push({ kind: "thinking", ms: part.ms >= 100 ? part.ms : 0 }); // o pensamento chega de uma vez: tempo quase 0 não diz nada
+			// o pensamento chega de uma vez: tempo quase 0 não diz nada; o texto fica para abrir com clique ou ctrl+t (owner 2026-11-25)
+			else if (part.type === "thinking") out.push({ kind: "thinking", ms: part.ms >= 100 ? part.ms : 0, text: String(part.thinking ?? "").trim().slice(0, THOUGHT_MAX) });
 			else if (part.type === "toolCall") out.push({ kind: "tool", line: pinkTool(part, cwd) });
 		}
 	}
@@ -233,36 +249,50 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		loader?.stop?.();
 		loader = undefined;
 		lastUi?.setWidget?.(WIDGET, undefined);
+		(globalThis as any).__pinkAgentBusy = false; // a caixa volta às dicas de sempre (pink-ui)
 	};
+	// a fila em cinza fica em cima do "Trabalhando" e uma linha vazia o separa da caixa (owner 2026-11-25, como o Claude Code)
+	const around = (lines: string[], width: number, theme: any) => [...queueLines(active?.queue ?? [], width).map((line) => theme.fg("dim", line)), ...lines, ""];
 	const busy = (ui: any, output: () => number) => {
 		idle();
 		lastUi = ui;
 		if (!ui?.setWidget) return;
 		const started = Date.now();
 		const message = () => workingLabel({ ms: Date.now() - started, output: output() });
+		(globalThis as any).__pinkAgentBusy = true; // a caixa mostra "esc interromper · ctrl+enter envia agora" (pink-ui)
 		// a área dos widgets já deixa uma linha em branco antes: a linha vazia do topo do Loader sai
 		if (tui?.Loader) {
 			ui.setWidget(WIDGET, (screen: any, theme: any) => {
+				screenRef = screen;
+				loader?.stop?.(); // a fábrica pode ser chamada de novo: o Loader anterior para de girar
 				loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message());
 				const own = loader;
-				return { render: (width: number) => own.render(width).slice(1), invalidate: () => own.invalidate?.() };
+				return { render: (width: number) => around(own.render(width).slice(1), width, theme), invalidate: () => own.invalidate?.() };
 			}, { placement: "aboveEditor" });
 			ticker = setInterval(() => loader?.setMessage?.(message()), 1000);
 		} else {
 			let frame = 0;
-			const draw = () => ui.setWidget(WIDGET, [` ${FRAMES[frame++ % FRAMES.length]} ${message()}`], { placement: "aboveEditor" });
+			const draw = () => ui.setWidget(WIDGET, (_screen: any, theme: any) => ({ render: (width: number) => around([` ${FRAMES[frame % FRAMES.length]} ${message()}`], width, theme), invalidate() {} }), { placement: "aboveEditor" });
 			draw();
-			ticker = setInterval(draw, 120);
+			ticker = setInterval(() => (frame++, draw()), 120);
 		}
 		ticker.unref?.();
 	};
 
-	const showQueue = (ui: any) => {
-		const queue = [...(active?.queue ?? [])];
-		ui?.setWidget?.(QUEUE, queue.length ? (_screen: any, theme: any) => ({ render: (width: number) => queueLines(queue, width).map((line) => theme.fg("dim", line)), invalidate() {} }) : undefined, { placement: "aboveEditor" });
+	// a fila é desenhada dentro do widget do "Trabalhando" (around): aqui só pede o redesenho
+	let screenRef: any;
+	const showQueue = (_ui: any) => screenRef?.requestRender?.();
+	// ctrl+enter com o agente trabalhando: o texto entra na fila e o agente é interrompido; a fila sai na hora, numa mensagem
+	(globalThis as any).__pinkAgentSendNow = (text: string) => {
+		if (!active?.controller) return false;
+		const value = String(text ?? "").trim();
+		if (value) (active.queue ??= []).push(value);
+		active.controller.abort();
+		return true;
 	};
 	const stop = (ctx?: any) => {
-		(ctx?.ui ?? lastUi)?.setWidget?.(QUEUE, undefined); // a fila é descartada junto
+		(ctx?.ui ?? lastUi)?.setWidget?.(QUEUE, undefined); // fila de versões antigas do widget (a de agora some junto com o agente)
+		if (active) active.queue = []; // a fila é descartada junto
 		active?.controller?.abort();
 		closeKept(active?.resume); // fecha o processo do agente que ficou aberto entre as mensagens
 		active = undefined;
@@ -290,23 +320,68 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (!tui || !coding?.getMarkdownTheme) return undefined;
 		const details = message.details ?? {};
 		const pad = options.outputPad ?? 1;
-		const box = new tui.Container();
 		const list = compact(Array.isArray(details.steps) ? details.steps : [{ kind: "text", text: textOf(message) }]);
-		// o Pink já põe uma linha em branco antes de cada mensagem: entre o pedido e a resposta fica só ela, como no Claude Code
-		for (const [index, step] of list.entries()) {
-			// ferramentas seguidas ficam juntas (uma busca na tela são dezenas de chamadas: com linha em branco virava uma tela inteira)
-			if (index && !(step.kind === "tool" && list[index - 1]?.kind === "tool")) box.addChild(new tui.Spacer(1));
-			if (step.kind === "thinking") box.addChild(new tui.Text(theme.fg("thinkingText", thinkingLabel(step.ms)), pad, 0));
-			else if (step.kind === "tool") box.addChild(new tui.Text(theme.fg("muted", `→ ${step.line}`), pad, 0));
-			else box.addChild(bulleted(new tui.Markdown(String(step.text).trim(), pad, 0, coding.getMarkdownTheme())));
-		}
-		if (details.error) box.addChild(new tui.Spacer(1)), box.addChild(new tui.Text(theme.fg("error", `⚠ ${details.error}`), pad, 0));
-		const footer = [bold(theme, theme.fg("accent", details.agent ?? t("agente", "agente", "agent")))];
-		if (details.model) footer.push(theme.fg("text", shortModel(details.model)));
-		if (details.ms !== undefined) footer.push(theme.fg("muted", runLabel({ ms: details.ms, output: details.output ?? 0 })));
-		box.addChild(new tui.Spacer(1));
-		box.addChild(new tui.Text(footer.join(theme.fg("dim", " · ")), pad, 0));
-		return box;
+		const { work, answer } = splitWork(list);
+		const summary = workSummary(work);
+		const grouped = work.length >= 2 && Boolean(summary);
+		// aberto pelo clique (esta mensagem) ou por ctrl+t (todas: o Pink avisa em __pinkThinkingShown)
+		const opened = { work: false, thoughts: new Set<number>() };
+		const all = () => (globalThis as any).__pinkThinkingShown === true;
+		const MouseRegion = tui.MouseRegion;
+		let current: any;
+		let drawnWithAll = all();
+		const clickable = (child: any, toggle: () => void) =>
+			MouseRegion
+				? new MouseRegion(child, (event: any) => {
+						if (event?.type !== "click" || event.button !== "left") return undefined;
+						toggle();
+						current = build();
+						return { handled: true };
+					})
+				: child;
+		const thought = (box: any, step: any, index: number) => {
+			const open = all() || opened.thoughts.has(index);
+			const head = open && step.text ? `− ${thinkingLabel(step.ms).slice(2)}` : thinkingLabel(step.ms);
+			box.addChild(clickable(new tui.Text(theme.fg("thinkingText", head), pad, 0), () => (opened.thoughts.has(index) ? opened.thoughts.delete(index) : opened.thoughts.add(index))));
+			if (open && step.text) box.addChild(new tui.Text(theme.italic ? theme.italic(theme.fg("thinkingText", step.text)) : theme.fg("thinkingText", step.text), pad + 2, 0));
+		};
+		const drawSteps = (box: any, steps: any[], offset: number) => {
+			for (const [index, step] of steps.entries()) {
+				// ferramentas seguidas ficam juntas (uma busca na tela são dezenas de chamadas: com linha em branco virava uma tela inteira)
+				if (index && !(step.kind === "tool" && steps[index - 1]?.kind === "tool")) box.addChild(new tui.Spacer(1));
+				if (step.kind === "thinking") thought(box, step, offset + index);
+				else if (step.kind === "tool") box.addChild(new tui.Text(theme.fg("muted", `→ ${step.line}`), pad, 0));
+				else box.addChild(bulleted(new tui.Markdown(String(step.text).trim(), pad, 0, coding.getMarkdownTheme())));
+			}
+		};
+		const build = () => {
+			drawnWithAll = all();
+			const box = new tui.Container();
+			// o Pink já põe uma linha em branco antes de cada mensagem: entre o pedido e a resposta fica só ela, como no Claude Code
+			if (grouped) {
+				const open = opened.work || all();
+				box.addChild(clickable(new tui.Text(theme.fg("muted", `${open ? "−" : "+"} ${summary}`), pad, 0), () => (opened.work = !opened.work)));
+				if (open) box.addChild(new tui.Spacer(1)), drawSteps(box, work, 0);
+				if (answer.length) box.addChild(new tui.Spacer(1));
+				drawSteps(box, answer, work.length);
+			} else drawSteps(box, list, 0);
+			if (details.error) box.addChild(new tui.Spacer(1)), box.addChild(new tui.Text(theme.fg("error", `⚠ ${details.error}`), pad, 0));
+			const footer = [bold(theme, theme.fg("accent", details.agent ?? t("agente", "agente", "agent")))];
+			if (details.model) footer.push(theme.fg("text", shortModel(details.model)));
+			if (details.ms !== undefined) footer.push(theme.fg("muted", runLabel({ ms: details.ms, output: details.output ?? 0 })));
+			box.addChild(new tui.Spacer(1));
+			box.addChild(new tui.Text(footer.join(theme.fg("dim", " · ")), pad, 0));
+			return box;
+		};
+		current = build();
+		return {
+			render: (width: number) => {
+				if (all() !== drawnWithAll) current = build(); // ctrl+t abriu ou fechou o pensamento de todas
+				return current.render(width);
+			},
+			invalidate: () => current.invalidate?.(),
+			handleMouse: (event: any) => current.handleMouse?.(event),
+		};
 	});
 
 	const send = async (text: string, ctx: any) => {

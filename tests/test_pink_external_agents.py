@@ -261,7 +261,8 @@ mod.default(pi, () => agents, run, models, () => ({ mcp: {}, instructions: "regr
 const answers = [];
 const plain = { fg: (c, s) => s, bold: (s) => s, bg: (c, s) => s };
 const shown = (v) => (typeof v === "function" ? v({ requestRender() {} }, plain).render(80) : v).join("|").trim();
-const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), setWidget: (k, v, o) => widgets.push([k, v ? shown(v) : null, o?.placement ?? null]), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
+const factories = {};
+const ui = { notify: (text, level) => notes.push(level), setStatus: (k, v) => status.push(v ?? null), setWidget: (k, v, o) => (factories[k] = v, widgets.push([k, v ? shown(v) : null, o?.placement ?? null])), select: async (title, options) => (menus.push([title, options]), answers.shift()), confirm: async () => true };
 answers.push("Padrão do claude");
 const ctx = { hasUI: true, cwd: "C:\\proj", ui };
 const input = (text, c = ctx) => handlers.input({ text, source: "interactive" }, c);
@@ -281,14 +282,23 @@ input("devagar");
 await new Promise((r) => setTimeout(r, 20));
 const notesBefore = notes.length;
 out.busy = [(await input("outra")).action, notes.length - notesBefore, (await input("e mais")).action];
-out.queueShown = widgets.filter((w) => w[0] === "pink-agente-fila").at(-1);
+out.queueShown = shown(factories["pink-agente-trabalhando"]); // a fila desenhada agora, dentro do "Trabalhando"
+out.sendNowIdle = globalThis.__pinkAgentBusy;
 out.working = widgets.filter((w) => w[0] === "pink-agente-trabalhando" && w[1]).at(-1);
 release();
 await new Promise((r) => setTimeout(r, 20));
 out.workingEnd = widgets.filter((w) => w[0] === "pink-agente-trabalhando").at(-1);
-out.queueEnd = widgets.filter((w) => w[0] === "pink-agente-fila").at(-1);
+out.queueEnd = globalThis.__pinkAgentBusy;
 out.queued = runs.slice(-2).map((r) => r.text); // a fila saiu depois do "devagar", numa mensagem só
 out.status = status.filter(Boolean).slice(0, 3);
+input("devagar");
+await new Promise((r) => setTimeout(r, 20));
+await input("fila antes");
+out.sendNow = globalThis.__pinkAgentSendNow("agora");
+release(); // o run falso ignora o sinal; solta o "devagar" como o abort faria
+await new Promise((r) => setTimeout(r, 20));
+out.afterSendNow = runs.slice(-2).map((r) => r.text);
+out.sendNowNoAgent = (() => { const saved = globalThis.__pinkAgentSendNow; return typeof saved; })();
 answers.push("codex", "GPT mini — gpt-mini", "high");
 await commands.agente.handler("", ctx);
 out.picked = runs.length && (await input("pelo menu"), await new Promise((r) => setTimeout(r, 20)), [runs.at(-1).agent, runs.at(-1).model, runs.at(-1).effort]);
@@ -311,7 +321,16 @@ await new Promise((r) => setTimeout(r, 300));
 const draw = (type, message) => renderers[type]?.(message, { outputPad: 1, expanded: false }, theme)?.render(60).join("\n").replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+$/gm, "") ?? null;
 out.renderers = Object.keys(renderers).sort();
 out.drawAsk = draw("pink-agente-pedido", { content: "› claude: oi", details: { agent: "claude", text: "oi" } });
-const answerSteps = [{ kind: "thinking", ms: 400 }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
+const answerSteps = [{ kind: "thinking", ms: 400, text: "vou listar" }, { kind: "tool", line: "Rodou: echo ola" }, { kind: "text", text: "**olá**" }];
+const strip = (rows) => rows.join("\n").replace(/\x1b\[[0-9;]*m/g, "").replace(/\s+$/gm, "");
+const answer = renderers["pink-agente"]?.({ content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } }, { outputPad: 1, expanded: false }, theme);
+const clickRow = (text) => { const rows = answer.render(60).map((r) => r.replace(/\x1b\[[0-9;]*m/g, "")); const y = rows.findIndex((r) => r.includes(text)); return answer.handleMouse({ type: "click", button: "left", x: 2, y, width: 60, height: rows.length, screenX: 2, screenY: y }); };
+out.clickGroup = [clickRow("1 comando"), strip(answer.render(60))];
+clickRow("Pensou");
+out.clickThought = strip(answer.render(60));
+globalThis.__pinkThinkingShown = true;
+out.ctrlT = strip(renderers["pink-agente"]({ content: "x", details: { agent: "opencode", steps: answerSteps } }, { outputPad: 1 }, theme).render(60));
+globalThis.__pinkThinkingShown = undefined;
 out.drawAnswer = draw("pink-agente", { content: "**olá**", details: { agent: "opencode", model: "opencode/big-pickle", steps: answerSteps, ms: 7200, output: 49 } });
 out.tools = [mod.pinkTool({ name: "Read", arguments: { file_path: "C:\\proj\\src\\a.ts" } }, "C:\\proj"), mod.pinkTool({ name: "Glob", arguments: { pattern: "*.ts" } }), mod.pinkTool({ name: "tool", arguments: { title: "Algo" } }), mod.pinkTool({ name: "tool", arguments: { title: "execute", code: 'return await tools.pink.pink_tela({ action: "list_windows" });' } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "click", args: { pid: 1, x: 120, y: 340 } } }), mod.pinkTool({ name: "mcp__pink__pink_tela", arguments: { action: "type_text", args: { pid: 1, text: "RTX 5070 Ti" } } })];
 const tl = (line) => ({ kind: "tool", line });
@@ -426,7 +445,19 @@ def test_acp_agents_run_a_prompt_and_permissions_become_questions(ext: dict) -> 
 def test_questions_name_the_agent_and_the_action(ext: dict) -> None:
     titles = [q["title"] for q in ext["asked"]]
     assert titles == ["O Codex quer rodar um comando", "O Codex quer rodar um comando", "O opencode pede permissão", "O opencode pede permissão"]
-    assert ext["asked"][0]["body"] == "rm -rf build\nem C:\\proj\nlimpar" and ext["asked"][2]["body"] == "Editar src/b.ts"
+    assert ext["asked"][0]["body"] == "rm -rf build\nem C:\\proj\nlimpar" and ext["asked"][2]["body"] == "Editar src/b.ts\nSim vale só para esta vez."
+
+
+def test_permission_says_what_the_agent_wants_to_do(package_dir: Path) -> None:
+    # owner 2026-11-25: o opencode pedia permissão só com "bash", e a pessoa permitia no escuro
+    url = (package_dir / "examples" / "extensions" / "subagent" / "external.ts").as_uri()
+    code = "const m = await import(process.argv[1]); console.log(JSON.stringify([m.permissionText({ title: 'bash', kind: 'execute', rawInput: { command: 'npm i left-pad', description: 'Instala a dependência' } }), m.permissionText({ title: 'edit', kind: 'edit', locations: [{ path: 'C:/p/a.ts' }] }), m.permissionText(undefined)]));"
+    done = subprocess.run(["node", "--input-type=module", "-e", code, url], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    bash, edit, empty = json.loads(done.stdout.strip().splitlines()[-1])
+    assert bash == "Rodar um comando: bash\nComando: npm i left-pad\nMotivo: Instala a dependência\nSim vale só para esta vez."
+    assert edit == "Editar arquivo: edit\nArquivo: C:/p/a.ts\nSim vale só para esta vez."
+    assert empty == "Executar uma ação.\nO agente não disse mais nada sobre esta ação.\nSim vale só para esta vez."
 
 
 def test_a_dying_agent_gives_a_clear_error_and_cancel_kills_it(ext: dict) -> None:
@@ -470,12 +501,20 @@ def test_agente_sends_what_the_person_types_to_the_agent_and_keeps_the_conversat
 def test_agente_refuses_a_second_message_while_busy_picks_from_a_menu_and_turns_off(session: dict) -> None:
     assert session["busy"] == ["handled", 0, "handled"]  # ocupado: entra na fila, sem aviso nenhum
     # a fila aparece em cinza acima da caixa, como no Claude Code (owner 2026-11-24), e some quando é enviada
-    assert session["queueShown"] == ["pink-agente-fila", "> outra|> e mais", "aboveEditor"]
-    assert session["queueEnd"] == ["pink-agente-fila", None, "aboveEditor"]
+    # owner 2026-11-25: a fila fica em cima do "Trabalhando", e uma linha vazia separa da caixa
+    rows = session["queueShown"].split("|")
+    assert rows[:2] == ["> outra", "> e mais"] and rows[2].strip().startswith("⠋ Trabalhando…") and rows[3] == ""
+    assert session["sendNowIdle"] is True and session["queueEnd"] is False  # a caixa sabe quando o agente trabalha (dicas esc/ctrl+enter)
     assert session["queued"] == ["devagar", "outra\n\ne mais"]  # a fila sai quando ele termina, numa mensagem só
     assert session["picked"] == ["codex", "gpt-mini", "high"]
     assert session["after"] == "continue"
     assert session["headless"] == 2
+
+
+def test_agente_ctrl_enter_interrupts_and_sends_the_queue_now(session: dict) -> None:
+    # owner 2026-11-25: ctrl+enter com o agente trabalhando interrompe e manda já, junto com o que estava na fila
+    assert session["sendNow"] is True
+    assert session["afterSendNow"] == ["devagar", "fila antes\n\nagora"]
 
 
 def test_agente_resumes_the_agents_conversation_when_the_pink_session_is_reopened(session: dict) -> None:
@@ -487,7 +526,7 @@ def test_agente_resumes_the_agents_conversation_when_the_pink_session_is_reopene
 
 def test_agente_shows_working_while_the_agent_answers_and_the_menu_goes_back_to_pink(session: dict) -> None:
     key, line, placement = session["working"]
-    assert key == "pink-agente-trabalhando" and placement == "aboveEditor" and line.startswith("⠋ Trabalhando… (0s · ↓ 0 tokens)")  # o mesmo do Pink, acima da caixa, sem linha vazia própria
+    assert key == "pink-agente-trabalhando" and placement == "aboveEditor" and line.startswith("⠋ Trabalhando… (0s · ↓ 0 tokens)") and line.endswith("|")  # o mesmo do Pink, com uma linha vazia antes da caixa
     assert session["workingEnd"] == ["pink-agente-trabalhando", None, None]  # some quando a resposta chega
     assert session["back"] == ["continue", "Voltar ao Pink (desliga o claude)"]  # 1º item do menu com agente ligado
     assert session["menus"][1][1][0] == "Voltar ao Pink (desliga o claude)"
@@ -497,9 +536,16 @@ def test_agente_messages_are_drawn_like_the_conversation_not_with_the_raw_type(s
     assert session["renderers"] == ["pink-agente", "pink-agente-pedido"]
     ask = [row for row in session["drawAsk"].split("\n") if row.strip()]
     assert ask == ["> oi"]  # como a mensagem nativa, sem "Você →"
-    assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + Pensou")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
+    assert session["drawAsk"] == "> oi" and session["drawAnswer"].startswith(" + 1 comando")  # sem linha em branco a mais: o Pink já põe uma antes de cada mensagem
     rows = [row.strip() for row in session["drawAnswer"].split("\n") if row.strip()]
-    assert rows == ["+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
+    # como o OpenCode (owner 2026-11-25): o trabalho antes da resposta vira uma linha que abre com clique
+    assert rows == ["+ 1 comando, 1 pensamento", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
+    handled, opened = session["clickGroup"]
+    assert handled["handled"] is True
+    assert [r.strip() for r in opened.split("\n") if r.strip()] == ["− 1 comando, 1 pensamento", "+ Pensou · 0.4s", "→ Rodou: echo ola", "● olá", "opencode · big-pickle · 7s · ↓ 49 tokens"]
+    thought = [r.strip() for r in session["clickThought"].split("\n") if r.strip()]
+    assert thought[1:3] == ["− Pensou · 0.4s", "vou listar"]  # o clique no "+ Pensou" mostra o raciocínio
+    assert "vou listar" in session["ctrlT"] and "− 1 comando" in session["ctrlT"]  # ctrl+t abre o de todas
     assert session["tools"] == ["Leu src/a.ts", "Procurou *.ts", "Algo", "tela · list_windows", "tela · click 120, 340", "tela · type_text \"RTX 5070 Ti\""]
     assert session["compact"] == ["tela · 4 ações: list_windows, get_window_state ×2, click", "ok", "Leu a.ts ×2", "tela · hotkey ctrl+t"]  # como o Claude Code: seguidas viram resumo  # nomes do Claude viram os do Pink, caminho relativo
     assert session["pick"] == ["gpt-5.4-mini", "gpt-5.5", None, "Padrão do codex"]  # busca, setas, Esc, apagar a busca volta à lista
