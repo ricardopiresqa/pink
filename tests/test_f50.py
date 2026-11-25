@@ -732,6 +732,7 @@ def test_the_sidebar_lists_running_subagents_and_only_the_latest_changes(ui_fact
     assert s["tracked"] == 1 and s["cleared"] == 0 and s["none"] is False
     text = s["text"]
     assert "SUBAGENTES  3" in text and "● cloud implementa" in text and "2m 5s" in text and "● tifa testa o login" in text and "1m 5s" in text
+    assert text.index("SESSÃO") < text.index("SUBAGENTES")  # owner 2026-11-25: abaixo da SESSÃO, no espaço livre
     assert "ALTERAÇÕES  8" in text and "+3 anteriores" in text and "f7.py" in text and "f2.py" not in text
 
 

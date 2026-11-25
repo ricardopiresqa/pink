@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { closeKept, externalAgents, listModels, pinkExtras, runExternal, warmKept } from "../examples/extensions/subagent/external.ts";
-import { bulleted, fit, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
+import { bulleted, elapsedLabel, fit, runLabel, shortModel, streamedTokens, thinkingLabel, toolSummary, userLines, workingLabel } from "./pink-ui.ts";
 
 // o Pink junto (card 1dfwh7kgfjx): MCPs do mcp.json, AGENTS.md e skills do Pink, mais o próprio Pink como MCP
 const readJson = (file: string) => {
@@ -84,7 +84,70 @@ export function gatherExtras(pink: any, dir = process.env.PINK_CODING_AGENT_DIR 
 }
 
 const STATUS = "pink-agente";
+// subagentes do opencode (owner 2026-11-25: "ta usando subagente, mas eu não vejo"): pelo ACP só chega a chamada da
+// ferramenta; cada subagente é uma sessão filha no banco do opencode, com a última mensagem dizendo se terminou
+export function opencodeDb(env: NodeJS.ProcessEnv = process.env, home = os.homedir()) {
+	return path.join(env.XDG_DATA_HOME || path.join(home, ".local", "share"), "opencode", "opencode.db");
+}
+const tree = (table: string) => `WITH RECURSIVE tree(id, depth) AS (SELECT id, 1 FROM ${table} WHERE parent_id = ? UNION ALL SELECT s.id, depth + 1 FROM ${table} s JOIN tree ON s.parent_id = tree.id WHERE depth < 3)`;
+// opencode 2.x: session_v2 diz o estado (ocupado, ocioso com o resultado, suspenso)
+const CHILDREN_SQL = `${tree("session_v2")}
+SELECT s.title, s.agent, s.time_created AS created, s.time_updated AS updated, s.time_busy AS busy, s.time_idle AS idle, s.idle_outcome AS outcome, s.time_suspended AS suspended
+FROM session_v2 s JOIN tree ON s.id = tree.id WHERE s.time_updated > ? ORDER BY s.time_created`;
+// opencode 1.x (até 14/10): a última mensagem diz se terminou
+const LEGACY_SQL = `${tree("session")}
+SELECT s.title, s.agent, s.time_created AS created, s.time_updated AS updated, (SELECT data FROM message m WHERE m.session_id = s.id ORDER BY m.time_created DESC LIMIT 1) AS last
+FROM session s JOIN tree ON s.id = tree.id WHERE s.time_updated > ? ORDER BY s.time_created`;
+export const CHILD_DONE_SHOWN_MS = 15000;
+function childState(row: any): { state: "running" | "paused" | "done" | "failed" | "stopped"; end?: number } {
+	if (row.last === undefined) {
+		const busy = Number(row.busy) || 0;
+		const idle = Number(row.idle) || 0;
+		if (idle && idle >= busy) return { state: row.outcome === "failed" ? "failed" : row.outcome === "interrupted" ? "stopped" : "done", end: idle };
+		if (row.suspended && Number(row.suspended) >= busy) return { state: "paused" };
+		return { state: "running" };
+	}
+	let last: any = {};
+	try {
+		last = row.last ? JSON.parse(row.last) : {};
+	} catch {}
+	if (last.error) return { state: "failed", end: Number(row.updated) };
+	const done = last.role === "assistant" && Boolean(last.time?.completed) && Boolean(last.finish) && last.finish !== "tool-calls";
+	return done ? { state: "done", end: Number(row.updated) } : { state: "running" };
+}
+const CHILD_MARK: Record<string, string | undefined> = { running: undefined, paused: "‖", done: "✓", failed: "✗", stopped: "−" };
+export function childAgents(rows: any[], now: number) {
+	const out: any[] = [];
+	for (const row of rows ?? []) {
+		const { state, end } = childState(row);
+		if (end && now - end > CHILD_DONE_SHOWN_MS) continue; // terminou há tempo: sai da lista
+		if (!end && now - Number(row.updated) > 10 * 60000) continue; // parado há 10 min: o processo morreu
+		const title = String(row.title ?? "");
+		const named = title.match(/^(.*?)\s*\(@([\w.-]+) subagent\)\s*$/);
+		out.push({ agent: named?.[2] ?? (row.agent || "subagente"), task: (named?.[1] ?? title).trim(), started: Number(row.created), mark: CHILD_MARK[state], clock: end ? `${Math.round((end - Number(row.created)) / 1000)}s` : state === "paused" ? t("pausado", "pausado", "paused") : undefined, running: !end });
+	}
+	return out;
+}
+export function readChildren(file: string, rootId: string, now = Date.now(), open = (f: string) => new (process.getBuiltinModule?.("node:sqlite") as any).DatabaseSync(f, { readOnly: true })) {
+	if (!rootId || !fs.existsSync(file)) return [];
+	let db: any;
+	try {
+		db = open(file);
+		const since = now - 10 * 60000;
+		const has = (table: string) => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
+		const rows = [...(has("session_v2") ? db.prepare(CHILDREN_SQL).all(rootId, since) : []), ...(has("session") ? db.prepare(LEGACY_SQL).all(rootId, since) : [])];
+		return childAgents(rows, now);
+	} catch {
+		return []; // banco trancado, versão sem a tabela ou Node sem node:sqlite: só não mostra
+	} finally {
+		try {
+			db?.close?.();
+		} catch {}
+	}
+}
+
 const WIDGET = "pink-agente-trabalhando";
+const CHILDREN = "pink-agente-subagentes";
 const QUEUE = "pink-agente-fila";
 // o id da conversa do agente fica nos detalhes de cada resposta gravada na sessão do Pink: reabrir a sessão e escolher o
 // mesmo agente retoma a conversa dele (claude --resume, codex thread/resume, ACP session/load)
@@ -279,6 +342,38 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		ticker.unref?.();
 	};
 
+	// subagentes do opencode acima da caixa, a cada 2 s, enquanto a mensagem roda ou algum subagente segue vivo (os de
+	// segundo plano continuam depois da resposta, como no Claude Code)
+	let childTimer: ReturnType<typeof setInterval> | undefined;
+	const stopChildren = (ui?: any) => {
+		if (childTimer) clearInterval(childTimer);
+		childTimer = undefined;
+		(globalThis as any).__pinkAgentChildren = undefined;
+		(ui ?? lastUi)?.setWidget?.(CHILDREN, undefined);
+	};
+	const watchChildren = (ui: any, read = readChildren, dbFile = opencodeDb()) => {
+		if (childTimer || !ui?.setWidget) return;
+		const tick = () => {
+			const opencode = /opencode/i.test(String(active?.agent?.external ?? active?.agent?.name ?? ""));
+			const items = opencode && active?.resume?.id ? read(dbFile, active.resume.id) : [];
+			(globalThis as any).__pinkAgentChildren = items; // a lateral mostra em SUBAGENTES, abaixo da SESSÃO
+			if (!items.length && !active?.controller) return stopChildren(ui);
+			const side = Date.now() - Number((globalThis as any).__pinkSideAt ?? 0) < 5000; // lateral desenhada há pouco: está na tela
+			ui.setWidget(CHILDREN, items.length && !side ? (_screen: any, theme: any) => ({
+				render: (width: number) => items.map((item: any) => {
+					const clock = item.clock ?? elapsedLabel(Date.now() - item.started);
+					const mark = theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●");
+					return fit(` ${mark} ${theme.fg("text", item.agent)} ${theme.fg("muted", item.task)}  ${theme.fg("dim", clock)}`, width);
+				}),
+				invalidate() {},
+			}) : undefined, { placement: "aboveEditor" });
+			screenRef?.requestRender?.(); // a lateral relê a lista mesmo com a conversa parada
+		};
+		tick();
+		childTimer = setInterval(tick, 2000);
+		childTimer.unref?.();
+	};
+
 	// a fila é desenhada dentro do widget do "Trabalhando" (around): aqui só pede o redesenho
 	let screenRef: any;
 	const showQueue = (_ui: any) => screenRef?.requestRender?.();
@@ -297,6 +392,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		closeKept(active?.resume); // fecha o processo do agente que ficou aberto entre as mensagens
 		active = undefined;
 		idle();
+		stopChildren(ctx?.ui);
 		(globalThis as any).__pinkExternalAgent = undefined; // o rótulo da caixa volta a "Build · modelo" (pink-ui)
 		ctx?.ui?.setStatus?.(STATUS, undefined);
 	};
@@ -400,6 +496,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		};
 		status();
 		if (ctx.hasUI) busy(ctx.ui, () => outputOf(result));
+		if (ctx.hasUI) watchChildren(ctx.ui);
 		(globalThis as any).__pinkExternalAsk = ctx.hasUI ? (title: string, body: string) => ctx.ui.confirm(title, body) : undefined;
 		try {
 			await run(current.agent, text, ctx.cwd, controller.signal, result, status, undefined, undefined, current.resume);

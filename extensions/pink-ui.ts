@@ -382,15 +382,6 @@ export function rightColumn({ theme, width, height, data }) {
 	} else {
 		out.push(theme.fg("dim", t("ainda sem medida", "todavía sin medir", "not measured yet")));
 	}
-	const agents = data.agents ?? [];
-	if (agents.length) {
-		out.push("", rule(theme, inner), heading(theme, t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS"), theme.fg("muted", `  ${agents.length}`)));
-		for (const item of agents) {
-			const clock = theme.fg("dim", item.clock ?? elapsedLabel((data.now ?? Date.now()) - item.started));
-			const text = `${theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
-			out.push(footerLine({ theme, width: inner, left: fit(text, Math.max(1, inner - visible(clock) - 1)), right: clock }));
-		}
-	}
 	if (data.thoth) out.push("", rule(theme, inner), heading(theme, "THOTH"), ...thothLines({ theme, thoth: data.thoth, width: inner }));
 	if (data.plan) out.push("", rule(theme, inner), heading(theme, t("COTA", "CUOTA", "QUOTA")), ...planLines({ theme, plan: data.plan, width: inner }));
 	if (data.mcp) {
@@ -422,6 +413,16 @@ export function rightColumn({ theme, width, height, data }) {
 	if (data.models?.length) out.push(theme.fg("muted", `${t("modelo", "modelo", "model")} ${data.models.map(shortModel).join(", ")}`));
 	if (data.cost > 0) out.push(theme.fg("muted", `$${data.cost.toFixed(2)} ${t("gasto", "gastado", "spent")}`));
 	if (data.project) out.push(theme.fg("muted", `${t("projeto", "proyecto", "project")} ${data.project}`));
+	// SUBAGENTES por último, abaixo da SESSÃO (owner 2026-11-25): a lista cresce no espaço livre do fim da coluna
+	const agents = data.agents ?? [];
+	if (agents.length) {
+		out.push("", rule(theme, inner), heading(theme, t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS"), theme.fg("muted", `  ${agents.length}`)));
+		for (const item of agents) {
+			const clock = theme.fg("dim", item.clock ?? elapsedLabel((data.now ?? Date.now()) - item.started));
+			const text = `${theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
+			out.push(footerLine({ theme, width: inner, left: fit(text, Math.max(1, inner - visible(clock) - 1)), right: clock }));
+		}
+	}
 	const lines = out.slice(0, height).map((line) => pad(fit(line, inner), inner));
 	return [...lines, ...Array(Math.max(0, height - lines.length)).fill(" ".repeat(inner))].map((line) => `${theme.fg("borderMuted", "│")} ${line} `);
 }
@@ -1060,7 +1061,8 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (PINK.thothOn) startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: [...runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs), ...dagAgentsCached(ctx.cwd)] } });
+			globalThis.__pinkSideAt = Date.now(); // pink-agente: com a lateral na tela, os subagentes ficam só nela
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: [...runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs), ...dagAgentsCached(ctx.cwd), ...(globalThis.__pinkAgentChildren ?? [])] } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)

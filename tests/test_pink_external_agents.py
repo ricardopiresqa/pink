@@ -460,6 +460,47 @@ def test_permission_says_what_the_agent_wants_to_do(package_dir: Path) -> None:
     assert empty == "Executar uma ação.\nO agente não disse mais nada sobre esta ação.\nSim vale só para esta vez."
 
 
+def test_opencode_subagents_are_read_from_its_child_sessions(package_dir: Path, tmp_path: Path) -> None:
+    # owner 2026-11-25: "ta usando subagente, mas eu não vejo"; o ACP não conta, o banco do opencode sim
+    url = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    code = r"""
+const m = await import(process.argv[1]);
+const { DatabaseSync } = await import("node:sqlite");
+const file = process.argv[2];
+const db = new DatabaseSync(file);
+db.exec("create table session (id text, parent_id text, title text, agent text, time_created int, time_updated int); create table message (id text, session_id text, time_created int, data text)");
+const now = 1000000000;
+const ses = db.prepare("insert into session values (?, ?, ?, ?, ?, ?)");
+const msg = db.prepare("insert into message values (?, ?, ?, ?)");
+ses.run("a", "root", "Revisar o login (@argus subagent)", "argus", now - 12000, now - 1000);
+msg.run("m1", "a", now - 2000, JSON.stringify({ role: "assistant", time: { created: now - 2000 }, finish: "tool-calls" }));
+ses.run("b", "root", "Auditar senha (@vincent subagent)", "vincent", now - 40000, now - 5000);
+msg.run("m2", "b", now - 6000, JSON.stringify({ role: "assistant", time: { created: now - 6000, completed: now - 5000 }, finish: "stop" }));
+ses.run("c", "root", "Velho (@tifa subagent)", "tifa", now - 90000, now - 60000);
+msg.run("m3", "c", now - 61000, JSON.stringify({ role: "assistant", time: { completed: now - 60000 }, finish: "stop" }));
+ses.run("d", "a", "neto", "general", now - 3000, now - 500);
+ses.run("e", "outra", "de outra conversa", "x", now - 3000, now - 500);
+// opencode 2.x: o estado vem da própria sessão (ocupada, ociosa com o resultado, suspensa)
+db.exec("create table session_v2 (id text, parent_id text, title text, agent text, time_created int, time_updated int, time_busy int, time_idle int, idle_outcome text, time_suspended int)");
+const v2 = db.prepare("insert into session_v2 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+v2.run("f", "root", "Fatia1 web Axum", "cloud", now - 20000, now - 100, now - 20000, null, null, null);
+v2.run("g", "root", "VERITAS RRE", "malus", now - 30000, now - 3000, now - 30000, now - 3000, "failed", null);
+v2.run("h", "root", "Executar Gherkin", "tifa", now - 9000, now - 8000, now - 9000, null, null, now - 9000);
+v2.run("i", "root", "Antigo", "argus", now - 99000, now - 60000, now - 99000, now - 60000, "succeeded", null);
+db.close();
+console.log(JSON.stringify({ items: m.readChildren(file, "root", now), none: m.readChildren(file, "", now), missing: m.readChildren(file + ".nao", "root", now), path: m.opencodeDb({ XDG_DATA_HOME: "/x" }, "/h").replace(/\\/g, "/"), home: m.opencodeDb({}, "/h").replace(/\\/g, "/") }));
+"""
+    done = subprocess.run(["node", "--input-type=module", "-e", code, url, str(tmp_path / "oc.db")], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    rows = [(i["agent"], i["task"], i.get("mark"), i.get("clock"), i["running"]) for i in out["items"]]
+    # rodando (a), pronto há 5 s (b), o neto do a (d); o terminado há 1 min (c) e o de outra conversa (e) ficam fora
+    assert rows == [("malus", "VERITAS RRE", "✗", "27s", False), ("cloud", "Fatia1 web Axum", None, None, True), ("tifa", "Executar Gherkin", "‖", "pausado", True),
+                    ("vincent", "Auditar senha", "✓", "35s", False), ("argus", "Revisar o login", None, None, True), ("general", "neto", None, None, True)]
+    assert out["none"] == [] and out["missing"] == []
+    assert out["path"] == "/x/opencode/opencode.db" and out["home"] == "/h/.local/share/opencode/opencode.db"
+
+
 def test_a_dying_agent_gives_a_clear_error_and_cancel_kills_it(ext: dict) -> None:
     assert ext["dies"]["stop"] == "error" and "o codex saiu (código 3)" in ext["dies"]["error"]
     assert ext["aborted"] == "Subagent was aborted"
