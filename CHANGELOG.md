@@ -5,7 +5,11 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 
 ## [1.0.10] - 2026-11-24
 
-- Mesmo conteúdo da 1.0.9, que ficou presa como "staged" no npm.
+- Microfone opcional, como no Claude e no Codex desktop: `/microfone instalar` (com o seu ok, ~530 MB uma vez) põe o
+  mesmo modelo do OpenBot, NVIDIA Parakeet TDT 0.6B v3, rodando local com o sherpa-onnx. Na tela cheia, a caixa de
+  digitar ganha o botão "◉ falar": a fala aparece ao vivo na caixa, e "‖ pausar", "■ parar" (o texto fica na caixa)
+  e "➤ enviar" (manda ao agente). O áudio não sai da máquina; sem instalar, nada muda.
+- Inclui tudo da 1.0.9 (a 1.0.9 também está no npm).
 
 ## [1.0.9] - 2026-11-24
 

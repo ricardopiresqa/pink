@@ -11,6 +11,7 @@
 // The layout functions are pure and exported for tests.
 
 import { t } from "./pink-i18n.ts";
+import { micBar } from "./pink-microfone.ts";
 export const LOGO = [
 	"██████╗ ██╗███╗   ██╗██╗  ██╗",
 	"██╔══██╗██║████╗  ██║██║ ██╔╝",
@@ -84,7 +85,7 @@ export function homeBottomPad(rows, headerHeight, editorHeight) {
 	return Math.max(0, rows - 1 - headerHeight - editorHeight);
 }
 
-export function inputBox({ theme, content, width, label, inline = false, hints = BOX_HINTS }) {
+export function inputBox({ theme, content, width, label, inline = false, hints = BOX_HINTS, mic = "" }) {
 	// `content` are the lines of the built-in editor without its top and bottom borders; the box is exactly `width` wide.
 	// Barra rosa cheia à esquerda + fundo, como a barra do OpenCode (owner 2026-10-29, pink.3; antes era a borda inteira);
 	// `inline`: o rótulo "Build · modelo" fica à direita da primeira linha (o editor foi desenhado mais estreito para caber);
@@ -96,15 +97,23 @@ export function inputBox({ theme, content, width, label, inline = false, hints =
 	const open = theme.bg ? theme.bg("userMessageBg", "\u0000").split("\u0000")[0] : "";
 	const keep = (value) => (open ? value.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + open) : value);
 	const row = (value) => `${theme.fg("accent", BAR)}${panel(keep(` ${pad(fit(value, text), text)} `))}`;
-	const tip = theme.fg("dim", hints);
+	const hint = theme.fg("dim", hints);
 	const lines = inline && label ? [footerLine({ theme, width: text, left: content[0] ?? "", right: label }), ...content.slice(1)] : content;
-	if (!inline && label && visible(label) + 1 + visible(tip) > text) {
+	const own = !inline && label && visible(label) + 1 + visible(hint) > text;
+	const left = inline || !label || own ? "" : theme.fg("muted", label);
+	// os botões do microfone (opcional) vão antes das dicas; sem lugar para os dois, as dicas saem
+	const tip = mic ? (visible(left) + 1 + visible(mic) + 3 + visible(hint) <= text ? `${mic}   ${hint}` : mic) : hint;
+	// a coluna onde os botões começam dentro da caixa (a barra e um espaço vêm antes), para o clique
+	const at = (rowIndex) => Object.assign(out, mic ? { micAt: { y: rowIndex, x: 2 + Math.max(visible(left) + 1, text - visible(tip)) } } : {});
+	let out;
+	if (own) {
 		// rótulo e dicas não cabem juntos: o rótulo ganha a linha dele, em vez de cortar as dicas
-		return [row(""), ...lines.map(row), row(""), row(theme.fg("muted", label)), row(footerLine({ theme, width: text, left: "", right: tip })), row("")];
+		out = [row(""), ...lines.map(row), row(""), row(theme.fg("muted", label)), row(footerLine({ theme, width: text, left: "", right: tip })), row("")];
+		return at(out.length - 2);
 	}
-	const last = inline || !label ? footerLine({ theme, width: text, left: "", right: tip }) : footerLine({ theme, width: text, left: theme.fg("muted", label), right: tip });
 	// linha vazia também embaixo do rótulo, como a caixa do OpenCode (owner 2026-11-24)
-	return [row(""), ...lines.map(row), row(""), row(last), row("")];
+	out = [row(""), ...lines.map(row), row(""), row(footerLine({ theme, width: text, left, right: tip })), row("")];
+	return at(out.length - 2);
 }
 
 export function footerLine({ theme, width, left, right }) {
@@ -825,6 +834,22 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			super.handleInput(data);
 		}
 
+		// clique nos botões do microfone (◉ falar, ‖ pausar, ■ parar, ➤ enviar); o resto segue para o editor
+		handleMouse(event) {
+			const hits = state.micHits;
+			const span = event?.type === "click" && event.button === "left" && hits && event.y === hits.y ? hits.spans.find((item) => event.x >= item.from && event.x < item.to) : undefined;
+			if (!span) return super.handleMouse?.(event);
+			const mic = globalThis.__pinkMicrofone;
+			void mic
+				?.act(span.action, this, redraw)
+				.then(() => {
+					const why = mic.view().error;
+					if (why) ctx.ui.notify?.(t(`Microfone: ${why}`, `Micrófono: ${why}`, `Microphone: ${why}`), "error");
+				})
+				.catch((error) => ctx.ui.notify?.(String(error?.message ?? error), "error"));
+			return { handled: true };
+		}
+
 		render(width) {
 			try {
 				return this.pinkRender(width);
@@ -845,7 +870,12 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			const raw = super.render(Math.max(1, text));
 			let content = raw.length >= 3 ? raw.slice(1, -1) : raw; // the built-in editor draws its own top and bottom borders
 			if (typeof this.getText === "function" && this.getText() === "" && content.length) content = [`${content[0].replace(/\s+$/, "")}${theme.fg("dim", PLACEHOLDER)}`, ...content.slice(1)];
-			const lines = inputBox({ theme, content, width: outer, label, inline }).map((line) => " ".repeat(margin) + line);
+			// o botão do microfone só aparece instalado e na tela cheia (fora dela o terminal não entrega o clique)
+			const mic = globalThis.__pinkMicrofone;
+			const bar = framed() && mic ? micBar(theme, mic.view()) : undefined;
+			const box = inputBox({ theme, content, width: outer, label, inline, mic: bar?.text });
+			state.micHits = bar && box.micAt ? { y: box.micAt.y, spans: bar.spans.map((span) => ({ ...span, from: margin + box.micAt.x + span.from, to: margin + box.micAt.x + span.to })) } : undefined;
+			const lines = box.map((line) => " ".repeat(margin) + line);
 			if (!state.home) return lines;
 			const body = [...lines, "", hintsLine({ theme, width })];
 			return [...body, ...Array(homeBottomPad(homeRows(), homeTop(homeRows()) + HEADER_BODY, body.length)).fill("")];

@@ -1,0 +1,221 @@
+{
+  "why": "motor do /microfone: o npm ci instala só estas versões, conferidas pelo sha512 de cada pacote",
+  "package": {
+    "name": "pink-microfone",
+    "private": true,
+    "dependencies": {
+      "sherpa-onnx-node": "2.0.1",
+      "decibri": "5.8.0"
+    }
+  },
+  "lock": {
+    "name": "pink-microfone",
+    "lockfileVersion": 3,
+    "requires": true,
+    "packages": {
+      "": {
+        "name": "pink-microfone",
+        "dependencies": {
+          "decibri": "5.8.0",
+          "sherpa-onnx-node": "2.0.1"
+        }
+      },
+      "node_modules/@decibri/decibri-darwin-arm64": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/@decibri/decibri-darwin-arm64/-/decibri-darwin-arm64-5.8.0.tgz",
+        "integrity": "sha512-dv86BvRoP+IlS/ucJ73vGP/mzGgRcLvyoS0MxoCAkSnrlWKFhKzW6fbm7rqberIkODsiJPHjUfXuSIAd06KC+g==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "darwin"
+        ]
+      },
+      "node_modules/@decibri/decibri-linux-arm64-gnu": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/@decibri/decibri-linux-arm64-gnu/-/decibri-linux-arm64-gnu-5.8.0.tgz",
+        "integrity": "sha512-wlzVMVh5aWzVyZgaSNJ0ZfpUfyGsb+plNGdlEcg5bLZ5KFhnT5D/y9YBA+Q+NKLdyzO/mgrsuZpf9VS6ZDJHbw==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "linux"
+        ]
+      },
+      "node_modules/@decibri/decibri-linux-x64-gnu": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/@decibri/decibri-linux-x64-gnu/-/decibri-linux-x64-gnu-5.8.0.tgz",
+        "integrity": "sha512-+43s3AzpktZiDy2ws47v59TzUivhFo8TQYUKU/EcDdRRebYCnlEHGSeoSDkjI30lW4m85nURETfxEWsGbKtcGg==",
+        "cpu": [
+          "x64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "linux"
+        ]
+      },
+      "node_modules/@decibri/decibri-win32-arm64-msvc": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/@decibri/decibri-win32-arm64-msvc/-/decibri-win32-arm64-msvc-5.8.0.tgz",
+        "integrity": "sha512-FS1yvuj0UpG9WDTG3JIcDR1UyGDBNKw+Ht7LVhqJDs4uoJmSnrMTTuHzqyY5QuznVE6jyFkTCIl+/XKku48GoA==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "win32"
+        ]
+      },
+      "node_modules/@decibri/decibri-win32-x64-msvc": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/@decibri/decibri-win32-x64-msvc/-/decibri-win32-x64-msvc-5.8.0.tgz",
+        "integrity": "sha512-pAmKh6fp3VLaOVD6bChCZFLqThM+pzohb/2BYDN99+3thrb9/cZYgfTocXZ/WjRuHHvR6ErjgQ1wed63unQKYQ==",
+        "cpu": [
+          "x64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "win32"
+        ]
+      },
+      "node_modules/decibri": {
+        "version": "5.8.0",
+        "resolved": "https://registry.npmjs.org/decibri/-/decibri-5.8.0.tgz",
+        "integrity": "sha512-mAIFQ0jMmGj4UqF56UDHtX53PvUMpEE4odTUfhvR8ejG2VvohiSPc4hSk83IUNRxj1unrEuSeF0G6RPtaegR6Q==",
+        "cpu": [
+          "x64",
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "os": [
+          "win32",
+          "darwin",
+          "linux"
+        ],
+        "engines": {
+          "node": ">=18.0.0"
+        },
+        "optionalDependencies": {
+          "@decibri/decibri-darwin-arm64": "5.8.0",
+          "@decibri/decibri-linux-arm64-gnu": "5.8.0",
+          "@decibri/decibri-linux-x64-gnu": "5.8.0",
+          "@decibri/decibri-win32-arm64-msvc": "5.8.0",
+          "@decibri/decibri-win32-x64-msvc": "5.8.0"
+        }
+      },
+      "node_modules/sherpa-onnx-darwin-arm64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-darwin-arm64/-/sherpa-onnx-darwin-arm64-2.0.1.tgz",
+        "integrity": "sha512-agXmbbwiVPUSMViMhWhYAt59iG21ui7x6HxQFU35XzHOfQe9x6Pg9V160Pzak/66x0ePMjixsLUtMaaUrLfCwQ==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "darwin"
+        ]
+      },
+      "node_modules/sherpa-onnx-darwin-x64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-darwin-x64/-/sherpa-onnx-darwin-x64-2.0.1.tgz",
+        "integrity": "sha512-SBnHa3LDOSI/5/rpBHGxKQDFq+yIdxowYY0InLzfojTUx+yGgqu7cYBrRxjzvHOiOKi0O4rmlFVZboyhIqpDgA==",
+        "cpu": [
+          "x64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "darwin"
+        ]
+      },
+      "node_modules/sherpa-onnx-linux-arm64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-linux-arm64/-/sherpa-onnx-linux-arm64-2.0.1.tgz",
+        "integrity": "sha512-5CJvLjFYIg23oELCsT7l07fMLT3PdquZ3tqh7KZK3Pzi+c2YiPKRe1DDUxoNdtCaw3ZiS4aQSQPBblB9JStuDA==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "linux"
+        ]
+      },
+      "node_modules/sherpa-onnx-linux-x64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-2.0.1.tgz",
+        "integrity": "sha512-w5mRRrIvPvcNWac7rQ8AN/t/cwElPGoRpH+ceCRBV7XfjCIQ9Rcr3Ig/kXcJLNOxgK4bGmef+Y47lIWiesDODw==",
+        "cpu": [
+          "x64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "linux"
+        ]
+      },
+      "node_modules/sherpa-onnx-node": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-node/-/sherpa-onnx-node-2.0.1.tgz",
+        "integrity": "sha512-1PSACfQgPXAD7ExwCv1QW09EXTjcNlpZKBqDY+jxSdIzlyOSq0M13SILBoUQUfeJqiTTXnqp6Ha9jjMUQ6efXg==",
+        "license": "Apache-2.0",
+        "optionalDependencies": {
+          "sherpa-onnx-darwin-arm64": "2.0.1",
+          "sherpa-onnx-darwin-x64": "2.0.1",
+          "sherpa-onnx-linux-arm64": "2.0.1",
+          "sherpa-onnx-linux-x64": "2.0.1",
+          "sherpa-onnx-win-arm64": "2.0.1",
+          "sherpa-onnx-win-ia32": "2.0.1",
+          "sherpa-onnx-win-x64": "2.0.1"
+        }
+      },
+      "node_modules/sherpa-onnx-win-arm64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-win-arm64/-/sherpa-onnx-win-arm64-2.0.1.tgz",
+        "integrity": "sha512-Mb9iqy2Zp7GC5a99dk5E8EQJsEBnapf+IcwHLVCgtIf5mxYHO9Q8YptnAoOHZOD0Zi+R+MblFyG9qv0Q6tin4Q==",
+        "cpu": [
+          "arm64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "win32"
+        ]
+      },
+      "node_modules/sherpa-onnx-win-ia32": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-win-ia32/-/sherpa-onnx-win-ia32-2.0.1.tgz",
+        "integrity": "sha512-q7qFCA3FK+tYc8pexC9Kzu9WGGoZ9X//UkpxVp6iT4E4W5tPhOEirPyvawS6zgfEW6K/GOISMcYe996Yc7d6iw==",
+        "cpu": [
+          "ia32"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "win32"
+        ]
+      },
+      "node_modules/sherpa-onnx-win-x64": {
+        "version": "2.0.1",
+        "resolved": "https://registry.npmjs.org/sherpa-onnx-win-x64/-/sherpa-onnx-win-x64-2.0.1.tgz",
+        "integrity": "sha512-7vwdAw9PGEb0JLSpK7UFxAdp1vabBHK9Nhw2jFRBWSFgtslUPHIB0T6syJfRgiUGyCeNW9fJvcFAk2F2u7hBEw==",
+        "cpu": [
+          "x64"
+        ],
+        "license": "Apache-2.0",
+        "optional": true,
+        "os": [
+          "win32"
+        ]
+      }
+    }
+  }
+}
