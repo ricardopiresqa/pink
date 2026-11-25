@@ -3,12 +3,8 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
-## [1.0.10] - 2026-11-24
+## [1.0.11] - 2026-11-25
 
-- Microfone opcional, como no Claude e no Codex desktop: `/microfone instalar` (com o seu ok, ~530 MB uma vez) põe o
-  mesmo modelo do OpenBot, NVIDIA Parakeet TDT 0.6B v3, rodando local com o sherpa-onnx. Na tela cheia, a caixa de
-  digitar ganha o botão "◉ falar": a fala aparece ao vivo na caixa, e "‖ pausar", "■ parar" (o texto fica na caixa)
-  e "➤ enviar" (manda ao agente). O áudio não sai da máquina; sem instalar, nada muda.
 - /agente como o OpenCode: o trabalho antes da resposta vira uma linha "+ 2 comandos, 3 pensamentos" que abre com
   clique; cada "+ Pensou · 5.3s" abre e mostra o raciocínio. Ctrl+T abre o de todas.
 - /agente: as mensagens na fila ficam em cima do "Trabalhando", com uma linha vazia até a caixa. Ctrl+Enter interrompe
@@ -18,6 +14,13 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
 - As personas do DAG do Thoth (`thoth-client dag run`) aparecem em SUBAGENTES enquanto ele roda: quem está rodando,
   esperando, pronto ou falhou (o Thoth grava `.thoth/dag/live.json`).
 - A lista de comandos não some mais no meio da palavra (digitando /resume, ela sumia no "/resu").
+
+## [1.0.10] - 2026-11-24
+
+- Microfone opcional, como no Claude e no Codex desktop: `/microfone instalar` (com o seu ok, ~530 MB uma vez) põe o
+  mesmo modelo do OpenBot, NVIDIA Parakeet TDT 0.6B v3, rodando local com o sherpa-onnx. Na tela cheia, a caixa de
+  digitar ganha o botão "◉ falar": a fala aparece ao vivo na caixa, e "‖ pausar", "■ parar" (o texto fica na caixa)
+  e "➤ enviar" (manda ao agente). O áudio não sai da máquina; sem instalar, nada muda.
 - Inclui tudo da 1.0.9 (a 1.0.9 também está no npm).
 
 ## [1.0.9] - 2026-11-24
