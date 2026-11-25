@@ -3,6 +3,11 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.13] - 2026-11-25
+
+- Subagentes: na tela cheia ficam na coluna da direita, abaixo da SESSÃO; fora dela (modo regular ou terminal
+  estreito), embaixo da caixa de digitar, como no Claude Code. Vale para os do Pink, do DAG do Thoth e do /agente.
+
 ## [1.0.12] - 2026-11-25
 
 - Comandos com opções: o Tab no nome (/microf + Tab) completa e já mostra as opções; Enter sem nada abre um menu

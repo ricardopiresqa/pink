@@ -35,12 +35,12 @@ out.picked = await choose(ui((labels) => labels[1]), "/microfone", choices());
 out.cancelled = (await choose(ui(() => undefined), "/microfone", choices())) ?? null;
 out.noScreen = await choose({ hasUI: false }, "/microfone", choices());
 out.asked = asked[0];
-const { aboveBox, agentLine } = await import(uiUrl);
+const { belowBox, agentLine } = await import(uiUrl);
 const theme = { fg: (_color, text) => text, bold: (text) => text };
 const agents = [{ agent: "tifa", task: "rodar os cenários", started: 1000 }];
-out.aboveSide = aboveBox(theme, 60, { agents, side: true, now: 13000 });
-out.aboveNoSide = aboveBox(theme, 60, { agents, side: false, now: 13000 });
-out.aboveEmpty = aboveBox(theme, 60, {});
+out.belowSide = belowBox(theme, 60, { agents, side: true, now: 13000 });
+out.belowNoSide = belowBox(theme, 60, { agents, side: false, now: 13000 });
+out.belowEmpty = belowBox(theme, 60, {});
 out.line = agentLine(theme, agents[0], 40, 13000);
 process.env.USERPROFILE = home;
 process.env.HOME = home;
@@ -87,11 +87,11 @@ def test_the_options_feed_the_autocomplete_and_the_menu(menus: dict) -> None:
     assert menus["asked"] == ["/microfone", ["status · como está", "falar", "instalar"]]
 
 
-def test_subagents_show_above_the_box_only_without_the_side_column(menus: dict) -> None:
-    assert menus["aboveSide"] == [""]  # com a coluna: só a linha vazia entre o "Trabalhando" e a caixa
-    assert menus["aboveEmpty"] == [""]
-    lines = menus["aboveNoSide"]
-    assert lines[-1] == "" and "SUBAGENTES  1" in lines[0]
+def test_subagents_show_below_the_box_only_without_the_side_column(menus: dict) -> None:
+    assert menus["belowSide"] == []  # tela cheia com a coluna: eles ficam na lateral, abaixo da SESSÃO
+    assert menus["belowEmpty"] == []
+    lines = menus["belowNoSide"]
+    assert len(lines) == 2 and "SUBAGENTES  1" in lines[0]
     assert "tifa" in lines[1] and "rodar os cenários" in lines[1] and lines[1].rstrip().endswith("12s")
     assert menus["line"].startswith("● tifa")
 

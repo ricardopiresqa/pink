@@ -375,7 +375,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 					return fit(` ${mark} ${theme.fg("text", item.agent)} ${theme.fg("muted", item.task)}  ${theme.fg("dim", clock)}`, width);
 				}),
 				invalidate() {},
-			}) : undefined, { placement: "aboveEditor" });
+			}) : undefined, { placement: "belowEditor" }); // sem a lateral: embaixo da caixa, como no Claude Code (owner 2026-11-25)
 			screenRef?.requestRender?.(); // a lateral relê a lista mesmo com a conversa parada
 		};
 		tick();

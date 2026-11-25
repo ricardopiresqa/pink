@@ -292,6 +292,7 @@ export async function savedSnapshot(entries, entryId, cwd, run = runGit) {
 export const LEFT_WIDTH = 32; // com a borda (pink.3: +2 para o horário de cada sessão)
 export const RIGHT_WIDTH = 36; // com a borda
 const ABOVE_BOX = "pink-acima-da-caixa";
+const BELOW_BOX = "pink-subagentes-embaixo";
 export const THREE_COLUMNS = 150; // >= 150: sessões, conversa e contexto
 export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: só a conversa
 export const PLACEHOLDER = t("Peça a próxima etapa...", "Pide el siguiente paso...", "Ask for the next step...");
@@ -431,13 +432,12 @@ export function agentLine(theme, item, width, now = Date.now()) {
 	return footerLine({ theme, width, left: fit(text, Math.max(1, width - visible(clock) - 1)), right: clock });
 }
 
-// Acima da caixa enquanto o Pink trabalha (owner 2026-11-25): os subagentes quando a coluna da direita não está na tela
-// (modo regular ou terminal estreito) e, por último, uma linha vazia que separa o "Trabalhando" da caixa de digitar.
-// Os de segundo plano não entram: o pink-subagent-bg já os lista embaixo da caixa sem a coluna.
-export function aboveBox(theme, width, { agents = [], side = false, now = Date.now() } = {}) {
-	const shown = side ? [] : agents;
-	const head = shown.length ? [` ${theme.fg("muted", `${t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS")}  ${shown.length}`)}`, ...shown.map((item) => ` ${agentLine(theme, item, Math.max(10, width - 2), now)}`)] : [];
-	return [...head, ""];
+// Subagentes enquanto o Pink trabalha (owner 2026-11-25): na tela cheia ficam na coluna da direita; sem ela (modo regular
+// ou terminal estreito), embaixo da caixa de digitar, como no Claude Code. Os de segundo plano não entram: o
+// pink-subagent-bg já os lista embaixo da caixa sem a coluna.
+export function belowBox(theme, width, { agents = [], side = false, now = Date.now() } = {}) {
+	if (side || !agents.length) return [];
+	return [` ${theme.fg("muted", `${t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS")}  ${agents.length}`)}`, ...agents.map((item) => ` ${agentLine(theme, item, Math.max(10, width - 2), now)}`)];
 }
 
 export const MAX_CHANGES = 5;
@@ -1573,17 +1573,19 @@ function registerOpenCodeFunctions(pink) {
 		PINK.runShow = show;  // o message_update também atualiza (tokens), o relógio só o tempo
 		PINK.runTimer = setInterval(show, 1000);
 		PINK.runTimer.unref?.();
-		// o relógio de cima (1 s) redesenha a tela, e esta lista junto
-		ctx.ui.setWidget?.(ABOVE_BOX, (_tui, theme) => ({
-			render: (width) => aboveBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: Date.now() - (globalThis.__pinkSideAt ?? 0) < 5000 }),
+		// uma linha vazia entre o "Trabalhando" e a caixa; o relógio de cima (1 s) redesenha a tela e a lista de baixo junto
+		ctx.ui.setWidget?.(ABOVE_BOX, [""], { placement: "aboveEditor" });
+		ctx.ui.setWidget?.(BELOW_BOX, (_tui, theme) => ({
+			render: (width) => belowBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: Date.now() - (globalThis.__pinkSideAt ?? 0) < 5000 }),
 			invalidate() {},
-		}), { placement: "aboveEditor" });
+		}), { placement: "belowEditor" });
 	});
 	pink.on("agent_end", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
 		PINK.subagents.clear(); // ferramenta bloqueada ou interrompida não manda tool_result
 		ctx.ui.setWorkingMessage?.();
 		ctx.ui.setWidget?.(ABOVE_BOX, undefined);
+		ctx.ui.setWidget?.(BELOW_BOX, undefined);
 		if (PINK.run?.last !== undefined) PINK.runOf.set(PINK.run.last, PINK.run.summary());
 		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
 	});
