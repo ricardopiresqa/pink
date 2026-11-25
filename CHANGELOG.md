@@ -13,9 +13,10 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   As opções aparecem como "Sim / Não".
 - As personas do DAG do Thoth (`thoth-client dag run`) aparecem em SUBAGENTES enquanto ele roda: quem está rodando,
   esperando, pronto ou falhou (o Thoth grava `.thoth/dag/live.json`).
-- /agente com o opencode: os subagentes dele (inclusive os de segundo plano) aparecem em SUBAGENTES, rodando, pausado,
-  pronto ou falhou. O Pink lê as sessões filhas no banco do opencode, só leitura. Sem a lateral (terminal estreito), a
-  lista fica acima da caixa.
+- /agente: os subagentes de todos os agentes aparecem em SUBAGENTES, rodando, pausado, pronto ou falhou: Claude Code
+  (Task/Agent), Codex (spawnAgent) e os ACP (opencode, cline, gemini, qwen, goose, copilot). No opencode, o Pink lê
+  também as sessões filhas no banco dele (só leitura), e os de segundo plano seguem na lista depois da resposta. Sem a
+  lateral (terminal estreito), a lista fica acima da caixa.
 - SUBAGENTES passou para o fim da lateral, abaixo da SESSÃO.
 - A lista de comandos não some mais no meio da palavra (digitando /resume, ela sumia no "/resu").
 

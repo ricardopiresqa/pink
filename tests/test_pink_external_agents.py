@@ -501,6 +501,54 @@ console.log(JSON.stringify({ items: m.readChildren(file, "root", now), none: m.r
     assert out["path"] == "/x/opencode/opencode.db" and out["home"] == "/h/.local/share/opencode/opencode.db"
 
 
+def test_every_agent_reports_its_subagents_while_they_run(package_dir: Path) -> None:
+    # owner 2026-11-25: "tem que funcionar pra todos os subagents" (Claude, Codex e os ACP)
+    ext_url = (package_dir / "examples" / "extensions" / "subagent" / "external.ts").as_uri()
+    agente_url = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    code = r"""
+const x = await import(process.argv[1]);
+const a = await import(process.argv[2]);
+const fresh = () => ({ messages: [], usage: { input: 0, output: 0, cacheRead: 0, turns: 0 } });
+const states = (r) => Object.values(r.subagents ?? {}).map((s) => [s.agent, s.task, s.state]);
+const out = {};
+let emits = 0;
+const emit = () => emits++;
+// Claude: tool_use Task abre; tool_result daquele id fecha (is_error = falhou)
+const c = fresh();
+x.applyClaudeEvent({ type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Task", input: { subagent_type: "code-reviewer", description: "Revisar o login", prompt: "..." } }, { type: "tool_use", id: "t2", name: "Agent", input: { description: "Auditar" } }, { type: "tool_use", id: "t3", name: "Bash", input: { command: "ls" } }] } }, c, emit);
+out.claudeOpen = states(c);
+x.applyClaudeEvent({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1" }, { type: "tool_result", tool_use_id: "t2", is_error: true }] } }, c, emit);
+out.claudeDone = states(c);
+// Codex: spawnAgent ao nascer; agentsStates diz quem terminou
+const k = fresh();
+x.applyCodexItem({ type: "collabAgentToolCall", id: "i1", tool: "spawnAgent", receiverThreadIds: ["th1", "th2"], prompt: "Escrever os testes", status: "inProgress" }, k, emit);
+out.codexOpen = states(k);
+x.applyCodexItem({ type: "collabAgentToolCall", id: "i2", tool: "wait", receiverThreadIds: ["th1"], agentsStates: { th1: { status: "completed" }, th2: { status: "errored" } } }, k, emit);
+out.codexDone = states(k);
+// ACP: título "task" sem entrada; a descrição chega na atualização, e o status fecha
+const p = fresh(), st = { text: "" };
+x.applyAcpUpdate({ sessionUpdate: "tool_call", toolCallId: "u1", title: "task", kind: "other" }, p, st, emit);
+x.applyAcpUpdate({ sessionUpdate: "tool_call_update", toolCallId: "u1", rawInput: { subagent_type: "tifa", description: "Rodar o Gherkin" } }, p, st, emit);
+x.applyAcpUpdate({ sessionUpdate: "tool_call", toolCallId: "u2", title: "Ler arquivo", kind: "read", rawInput: { path: "a.ts" } }, p, st, emit);
+out.acpOpen = states(p);
+x.applyAcpUpdate({ sessionUpdate: "tool_call_update", toolCallId: "u1", status: "completed" }, p, st, emit);
+out.acpDone = states(p);
+// o que o /agente desenha: aberto sem relógio; fechado com o tempo; some 15 s depois do fim
+const r = { subagents: { s1: { agent: "argus", task: "rev", started: 1000, state: "running" }, s2: { agent: "tifa", task: "t", started: 1000, end: 6000, state: "done" }, s3: { agent: "old", task: "o", started: 0, end: 1000, state: "failed" } } };
+out.live = a.liveAgents(r, 17000).map((i) => [i.agent, i.mark ?? null, i.clock ?? null, i.running]);
+console.log(JSON.stringify(out));
+"""
+    done = subprocess.run(["node", "--input-type=module", "-e", code, ext_url, agente_url], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert out["claudeOpen"] == [["code-reviewer", "Revisar o login", "running"], ["general-purpose", "Auditar", "running"]]
+    assert out["claudeDone"] == [["code-reviewer", "Revisar o login", "done"], ["general-purpose", "Auditar", "failed"]]
+    assert out["codexOpen"] == [["codex", "Escrever os testes", "running"], ["codex", "Escrever os testes", "running"]]
+    assert out["codexDone"] == [["codex", "Escrever os testes", "done"], ["codex", "Escrever os testes", "failed"]]
+    assert out["acpOpen"] == [["tifa", "Rodar o Gherkin", "running"]] and out["acpDone"] == [["tifa", "Rodar o Gherkin", "done"]]
+    assert out["live"] == [["argus", None, None, True], ["tifa", "✓", "5s", False]]
+
+
 def test_a_dying_agent_gives_a_clear_error_and_cancel_kills_it(ext: dict) -> None:
     assert ext["dies"]["stop"] == "error" and "o codex saiu (código 3)" in ext["dies"]["error"]
     assert ext["aborted"] == "Subagent was aborted"

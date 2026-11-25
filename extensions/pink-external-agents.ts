@@ -131,6 +131,45 @@ function finalText(result: any, text: string) {
 	if (text && lastText !== text) push(result, [{ type: "text", text }], "stop");
 }
 
+// ---------- subagentes de todos os agentes (owner 2026-11-25: "tem que funcionar pra todos os subagents") ----------
+// a chamada da ferramenta de subagente abre a linha e o resultado dela fecha: result.subagents[id] = { agent, task, ... }
+export const SUBAGENT_TOOL = /^(task|agent|subagent|delegate|dispatch_agent|spawn_?agent)$/i;
+export function subagentStart(result: any, id: string, agent: unknown, task: unknown): boolean {
+	if (!id) return false;
+	const known = result.subagents?.[id];
+	if (known) {
+		// o ACP manda a descrição só na atualização: completa o que veio vazio
+		const text = String(task ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+		const fill = (!known.task && text) || (known.agent === "subagente" && agent && agent !== "subagente");
+		if (!known.task && text) known.task = text;
+		if (known.agent === "subagente" && agent) known.agent = String(agent);
+		return Boolean(fill);
+	}
+	result.subagents ??= {};
+	result.subagents[id] = { agent: String(agent || "subagente"), task: String(task ?? "").replace(/\s+/g, " ").trim().slice(0, 200), started: Date.now(), state: "running" };
+	return true;
+}
+export function subagentEnd(result: any, id: string, failed = false): boolean {
+	const item = result.subagents?.[id];
+	if (!item || item.end) return false;
+	item.end = Date.now();
+	item.state = failed ? "failed" : "done";
+	return true;
+}
+// Codex (colaboração): spawnAgent abre um subagente por thread; agentsStates e closeAgent dizem quando acabou.
+// shortcut: campos do app-server do Codex lidos pela documentação do protocolo, sem um Codex com colaboração para testar
+function codexCollab(item: any, result: any): boolean {
+	let changed = false;
+	if (/spawn/i.test(String(item.tool ?? ""))) for (const thread of item.receiverThreadIds ?? []) changed = subagentStart(result, String(thread), item.agentType ?? item.model ?? "codex", item.prompt) || changed;
+	for (const [thread, value] of Object.entries(item.agentsStates ?? {})) {
+		const status = String((value as any)?.status ?? value ?? "");
+		if (/err|fail/i.test(status)) changed = subagentEnd(result, thread, true) || changed;
+		else if (/complet|done|shutdown|closed|finished/i.test(status)) changed = subagentEnd(result, thread) || changed;
+	}
+	if (/close/i.test(String(item.tool ?? ""))) for (const thread of item.receiverThreadIds ?? []) changed = subagentEnd(result, String(thread)) || changed;
+	return changed;
+}
+
 // ---------- Claude Code: stream-json ----------
 export function applyClaudeEvent(event: any, result: any, emit: () => void): void {
 	if (event?.type === "system" && event.subtype === "init") {
@@ -147,9 +186,17 @@ export function applyClaudeEvent(event: any, result: any, emit: () => void): voi
 						: undefined,
 			)
 			.filter(Boolean);
+		for (const part of event.message.content) if (part?.type === "tool_use" && SUBAGENT_TOOL.test(String(part.name ?? ""))) subagentStart(result, String(part.id ?? ""), part.input?.subagent_type ?? "general-purpose", part.input?.description ?? part.input?.prompt);
 		if (!content.length) return;
 		push(result, content);
 		emit();
+		return;
+	}
+	// o resultado da ferramenta volta numa mensagem "user": fecha o subagente daquela chamada
+	if (event?.type === "user" && Array.isArray(event.message?.content)) {
+		let changed = false;
+		for (const part of event.message.content) if (part?.type === "tool_result") changed = subagentEnd(result, String(part.tool_use_id ?? ""), part.is_error === true) || changed;
+		if (changed) emit();
 		return;
 	}
 	if (event?.type === "result") {
@@ -178,7 +225,9 @@ export function applyCodexItem(item: any, result: any, emit: () => void): void {
 	else if (item.type === "fileChange") push(result, (item.changes ?? []).map((change: any) => tool(change?.kind?.type === "add" || change?.kind === "add" ? "write" : "edit", { path: String(change?.path ?? "") }, item.id)));
 	else if (item.type === "mcpToolCall") push(result, [tool(`mcp__${item.server}__${item.tool}`, item.arguments && typeof item.arguments === "object" ? item.arguments : {}, item.id)]);
 	else if (item.type === "webSearch") push(result, [tool("web_search", { query: String(item.query ?? "") }, item.id)]);
-	else return;
+	else if (item.type === "collabAgentToolCall") {
+		if (!codexCollab(item, result)) return;
+	} else return;
 	emit();
 }
 
@@ -206,6 +255,16 @@ function acpArgs(update: any, before: Record<string, unknown> = {}): Record<stri
 	if (typeof input.code === "string") args.code = input.code; // opencode chama MCP por código: tools.pink.pink_tela({...})
 	return args;
 }
+// subagente no ACP: ferramenta "task"/"agent"... ou entrada com subagent_type; status completed/failed fecha a linha
+function acpSubagent(update: any, result: any): boolean {
+	const id = String(update.toolCallId ?? "");
+	const input = update.rawInput && typeof update.rawInput === "object" ? update.rawInput : {};
+	let changed = false;
+	if (input.subagent_type || input.agent_type || SUBAGENT_TOOL.test(String(update.title ?? "")) || SUBAGENT_TOOL.test(String(input.tool ?? "")))
+		changed = subagentStart(result, id, input.subagent_type ?? input.agent_type ?? input.agent ?? "subagente", input.description ?? input.prompt ?? (SUBAGENT_TOOL.test(String(update.title ?? "")) ? "" : update.title));
+	if (update.status === "completed" || update.status === "failed") changed = subagentEnd(result, id, update.status === "failed") || changed;
+	return changed;
+}
 const flushThinking = (result: any, state: any) => {
 	if (state.thinking) push(result, [{ type: "thinking", thinking: state.thinking, ms: Date.now() - state.thoughtAt }]);
 	state.thinking = "";
@@ -228,11 +287,13 @@ export function applyAcpUpdate(update: any, result: any, state: { text: string; 
 		if (state.text) push(result, [{ type: "text", text: state.text }]), (state.text = "");
 		const name = ACP_TOOLS[update.kind] ?? (typeof update.kind === "string" && update.kind !== "other" ? update.kind : "tool");
 		push(result, [tool(name, acpArgs(update), String(update.toolCallId ?? ""))]);
+		acpSubagent(update, result);
 		emit();
 		return;
 	}
 	// o opencode manda o comando e o arquivo só na atualização (o tool_call chega com título "shell" e entrada vazia)
 	if (update.sessionUpdate === "tool_call_update" && update.toolCallId) {
+		if (acpSubagent(update, result)) emit();
 		for (const message of result.messages) {
 			const part = message.content?.find((item: any) => item.type === "toolCall" && item.id === String(update.toolCallId));
 			if (!part) continue;
@@ -532,6 +593,7 @@ async function runCodex(child: any, task: string, cwd: string, result: any, emit
 		"codex",
 		(method, params) => {
 			if (method === "item/completed") applyCodexItem(params?.item, result, emit);
+			else if (method === "item/started" && params?.item?.type === "collabAgentToolCall") applyCodexItem(params.item, result, emit); // o subagente aparece ao nascer
 			else if (method === "thread/tokenUsage/updated") codexUsage(params?.tokenUsage, result);
 			else if (method === "error" && params?.error?.message) result.errorMessage = String(params.error.message);
 			else if (method === "turn/completed") {

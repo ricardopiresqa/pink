@@ -146,6 +146,13 @@ export function readChildren(file: string, rootId: string, now = Date.now(), ope
 	}
 }
 
+// os subagentes que o próprio fluxo do agente contou (Claude, Codex e ACP: pink-external-agents marca início e fim)
+export function liveAgents(result: any, now: number) {
+	return Object.values(result?.subagents ?? {})
+		.filter((item: any) => !item.end || now - item.end <= CHILD_DONE_SHOWN_MS)
+		.map((item: any) => ({ agent: item.agent, task: item.task, started: item.started, mark: item.state === "failed" ? "✗" : item.end ? "✓" : undefined, clock: item.end ? `${Math.round((item.end - item.started) / 1000)}s` : undefined, running: !item.end }));
+}
+
 const WIDGET = "pink-agente-trabalhando";
 const CHILDREN = "pink-agente-subagentes";
 const QUEUE = "pink-agente-fila";
@@ -299,7 +306,7 @@ export async function pick(ctx: any, title: string, options: string[], load: () 
 export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge, warm: typeof warmKept = run === runExternal ? warmKept : () => undefined) {
 	let screen: ReturnType<typeof telaBridge> | undefined; // pink_tela: aberto no primeiro /agente, fechado ao sair do Pink
 	let screenCtx: any; // a janela deste Pink, onde a tela pede confirmação
-	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[] } | undefined;
+	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[]; live?: any } | undefined;
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastUi: any;
 
@@ -354,8 +361,10 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 	const watchChildren = (ui: any, read = readChildren, dbFile = opencodeDb()) => {
 		if (childTimer || !ui?.setWidget) return;
 		const tick = () => {
+			// opencode: o banco dele mostra também os de segundo plano; os outros (e o opencode sem node:sqlite): o fluxo
 			const opencode = /opencode/i.test(String(active?.agent?.external ?? active?.agent?.name ?? ""));
-			const items = opencode && active?.resume?.id ? read(dbFile, active.resume.id) : [];
+			const fromDb = opencode && active?.resume?.id ? read(dbFile, active.resume.id) : [];
+			const items = fromDb.length ? fromDb : liveAgents(active?.live, Date.now());
 			(globalThis as any).__pinkAgentChildren = items; // a lateral mostra em SUBAGENTES, abaixo da SESSÃO
 			if (!items.length && !active?.controller) return stopChildren(ui);
 			const side = Date.now() - Number((globalThis as any).__pinkSideAt ?? 0) < 5000; // lateral desenhada há pouco: está na tela
@@ -488,6 +497,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const name = current.agent.name;
 		pink.sendMessage({ customType: "pink-agente-pedido", display: true, content: `› ${name}: ${text}`, details: { agent: name, text } });
 		const result = fresh();
+		current.live = result; // os subagentes desta mensagem (liveAgents)
 		const started = Date.now();
 		const lastTool = () => result.messages.at(-1)?.content?.find((part: any) => part.type === "toolCall")?.name;
 		const status = () => {
