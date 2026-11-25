@@ -5,7 +5,7 @@
 // A ferramenta continua se chamando bash/powershell e a execução é a original (createBashToolDefinition), então
 // permissões, hooks, RTK e modo plano valem igual. Ao fechar, trocar ou recarregar a sessão os processos são encerrados.
 // Sem tela (pink -p, subagente) o processo acabaria antes do resultado: o comando espera como antes.
-import { t } from "./pink-i18n.ts";
+import { choose, t } from "./pink-i18n.ts";
 import { createBashToolDefinition, createPowerShellToolDefinition, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -202,6 +202,14 @@ export function createShellJobs(pink: any, { now = Date.now, write = muxWrite } 
 		getArgumentCompletions: (prefix: string) =>
 			["encerrar todos", ...[...jobs.keys()].map((id) => `encerrar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
 		handler: async (args: string, ctx: any) => {
+			if (!args.trim() && jobs.size) {
+				const choice = await choose(ctx, "/processos", [
+					{ value: "listar", description: t("mostra os que estão rodando", "muestra los que están corriendo", "shows the running ones") },
+					...["encerrar todos", ...[...jobs.keys()].map((id) => `encerrar ${id}`)].map((value) => ({ value })),
+				]);
+				if (choice === undefined) return;
+				args = choice === "listar" ? "" : choice;
+			}
 			const [verb, target] = args.trim().split(/\s+/);
 			if (verb === "encerrar" || verb === "stop") {
 				const targets = target === "todos" || target === "all" ? [...jobs.values()] : ([find(target)].filter(Boolean) as Job[]);

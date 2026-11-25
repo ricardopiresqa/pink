@@ -3,6 +3,15 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.12] - 2026-11-25
+
+- Comandos com opções: o Tab no nome (/microf + Tab) completa e já mostra as opções; Enter sem nada abre um menu
+  (/microfone, /tela, /sandbox, /memoria, /processos, /subagentes). /agente e /modo seguem como eram.
+- /microfone falar e /microfone parar: ditar sem clicar no botão, que só aparece na tela cheia.
+- Sem a coluna da direita (modo regular ou terminal estreito), os subagentes do Pink e do DAG do Thoth aparecem acima da
+  caixa enquanto rodam; uma linha vazia separa o "Trabalhando" da caixa de digitar.
+- As personas do Thoth (instaladas pelo thoth-client) viram subagentes do Pink pelo nome curto: tifa, cloud, vincent...
+
 ## [1.0.11] - 2026-11-25
 
 - /agente como o OpenCode: o trabalho antes da resposta vira uma linha "+ 2 comandos, 3 pensamentos" que abre com

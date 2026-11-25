@@ -291,6 +291,7 @@ export async function savedSnapshot(entries, entryId, cwd, run = runGit) {
 // raiz com quatro espaços (top, left, right, bottom) que chamam globalThis.__pinkFrame; sem a extensão, eles ficam invisíveis.
 export const LEFT_WIDTH = 32; // com a borda (pink.3: +2 para o horário de cada sessão)
 export const RIGHT_WIDTH = 36; // com a borda
+const ABOVE_BOX = "pink-acima-da-caixa";
 export const THREE_COLUMNS = 150; // >= 150: sessões, conversa e contexto
 export const TWO_COLUMNS = 115; // 115-149: some a coluna de sessões; < 115: só a conversa
 export const PLACEHOLDER = t("Peça a próxima etapa...", "Pide el siguiente paso...", "Ask for the next step...");
@@ -417,14 +418,26 @@ export function rightColumn({ theme, width, height, data }) {
 	const agents = data.agents ?? [];
 	if (agents.length) {
 		out.push("", rule(theme, inner), heading(theme, t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS"), theme.fg("muted", `  ${agents.length}`)));
-		for (const item of agents) {
-			const clock = theme.fg("dim", item.clock ?? elapsedLabel((data.now ?? Date.now()) - item.started));
-			const text = `${theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
-			out.push(footerLine({ theme, width: inner, left: fit(text, Math.max(1, inner - visible(clock) - 1)), right: clock }));
-		}
+		for (const item of agents) out.push(agentLine(theme, item, inner, data.now));
 	}
 	const lines = out.slice(0, height).map((line) => pad(fit(line, inner), inner));
 	return [...lines, ...Array(Math.max(0, height - lines.length)).fill(" ".repeat(inner))].map((line) => `${theme.fg("borderMuted", "│")} ${line} `);
+}
+
+// uma linha de SUBAGENTES: "● persona tarefa ........ 12s" (coluna da direita e a lista acima da caixa)
+export function agentLine(theme, item, width, now = Date.now()) {
+	const clock = theme.fg("dim", item.clock ?? elapsedLabel(now - item.started));
+	const text = `${theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
+	return footerLine({ theme, width, left: fit(text, Math.max(1, width - visible(clock) - 1)), right: clock });
+}
+
+// Acima da caixa enquanto o Pink trabalha (owner 2026-11-25): os subagentes quando a coluna da direita não está na tela
+// (modo regular ou terminal estreito) e, por último, uma linha vazia que separa o "Trabalhando" da caixa de digitar.
+// Os de segundo plano não entram: o pink-subagent-bg já os lista embaixo da caixa sem a coluna.
+export function aboveBox(theme, width, { agents = [], side = false, now = Date.now() } = {}) {
+	const shown = side ? [] : agents;
+	const head = shown.length ? [` ${theme.fg("muted", `${t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS")}  ${shown.length}`)}`, ...shown.map((item) => ` ${agentLine(theme, item, Math.max(10, width - 2), now)}`)] : [];
+	return [...head, ""];
 }
 
 export const MAX_CHANGES = 5;
@@ -890,6 +903,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 		}
 
 		render(width) {
+			globalThis.__pinkMicTarget = { editor: this, redraw }; // o /microfone falar grava nesta caixa
 			try {
 				return this.pinkRender(width);
 			} catch {
@@ -1559,11 +1573,17 @@ function registerOpenCodeFunctions(pink) {
 		PINK.runShow = show;  // o message_update também atualiza (tokens), o relógio só o tempo
 		PINK.runTimer = setInterval(show, 1000);
 		PINK.runTimer.unref?.();
+		// o relógio de cima (1 s) redesenha a tela, e esta lista junto
+		ctx.ui.setWidget?.(ABOVE_BOX, (_tui, theme) => ({
+			render: (width) => aboveBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: Date.now() - (globalThis.__pinkSideAt ?? 0) < 5000 }),
+			invalidate() {},
+		}), { placement: "aboveEditor" });
 	});
 	pink.on("agent_end", async (_event, ctx) => {
 		clearInterval(PINK.runTimer);
 		PINK.subagents.clear(); // ferramenta bloqueada ou interrompida não manda tool_result
 		ctx.ui.setWorkingMessage?.();
+		ctx.ui.setWidget?.(ABOVE_BOX, undefined);
 		if (PINK.run?.last !== undefined) PINK.runOf.set(PINK.run.last, PINK.run.summary());
 		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
 	});

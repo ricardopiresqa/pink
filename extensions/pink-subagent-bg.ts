@@ -4,7 +4,7 @@
 // a sessão (session_shutdown) os filhos são abortados e nada é entregue: o resultado nunca cai em outra conversa.
 // Copiado para examples/extensions/subagent/background.ts pelo build (rebrand.json); o index.ts do subagente o importa.
 
-import { t } from "./pink-i18n.ts";
+import { choose, t } from "./pink-i18n.ts";
 export const MAX_BACKGROUND = 4;
 const OUTPUT_CAP = 50 * 1024;
 const WIDGET = "pink-subagents";
@@ -122,6 +122,14 @@ export function createBackground(pink: any, { now = Date.now, write = muxWrite }
 		getArgumentCompletions: (prefix: string) =>
 			["cancelar todos", ...[...jobs.keys()].map((id) => `cancelar ${id}`)].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
 		handler: async (args: string, ctx: any) => {
+			if (!args.trim() && jobs.size) {
+				const choice = await choose(ctx, "/subagentes", [
+					{ value: "listar", description: t("mostra os que estão rodando", "muestra los que están corriendo", "shows the running ones") },
+					...["cancelar todos", ...[...jobs.keys()].map((id) => `cancelar ${id}`)].map((value) => ({ value })),
+				]);
+				if (choice === undefined) return;
+				args = choice === "listar" ? "" : choice;
+			}
 			const [verb, target] = args.trim().split(/\s+/);
 			if (verb === "cancelar" || verb === "cancel") {
 				const count = target ? cancel(target) : 0;

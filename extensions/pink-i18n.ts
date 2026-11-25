@@ -53,6 +53,23 @@ export function t(pt: string, es: string, en: string): string {
 	return which === "pt" ? pt : which === "es" ? es : en;
 }
 
+// Opções de um comando (owner 2026-11-25): as mesmas no autocomplete (/cmd + Tab ou espaço) e no menu do Enter sem nada.
+// Aqui porque toda extensão já importa este módulo; a primeira opção é o padrão quando não há tela (rpc, print).
+export type Choice = { value: string; label?: string; description?: string };
+export const completeFrom = (choices: () => Choice[]) => (prefix: string) => {
+	const typed = String(prefix ?? "").trimStart().toLowerCase();
+	const hits = choices().filter((choice) => choice.value.startsWith(typed));
+	return hits.length ? hits.map((choice) => ({ label: choice.value, ...choice })) : null;
+};
+export async function choose(ctx: any, title: string, choices: Choice[]): Promise<string | undefined> {
+	if (!choices.length) return undefined;
+	if (!ctx?.hasUI || typeof ctx.ui?.select !== "function") return choices[0].value;
+	const labels = choices.map((choice) => (choice.description ? `${choice.label ?? choice.value} · ${choice.description}` : (choice.label ?? choice.value)));
+	const picked = await ctx.ui.select(title, labels);
+	const at = picked === undefined ? -1 : labels.indexOf(picked);
+	return at < 0 ? undefined : choices[at].value;
+}
+
 // para os patches do motor (rebrand.json), que não importam módulos: globalThis.__pinkT(pt, es, en)
 (globalThis as any).__pinkT = t;
 (globalThis as any).__pinkLang = lang;

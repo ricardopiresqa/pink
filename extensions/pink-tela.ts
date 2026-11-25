@@ -14,7 +14,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
-import { t } from "./pink-i18n.ts";
+import { type Choice, choose, completeFrom, t } from "./pink-i18n.ts";
+
+const TELA_CHOICES = (): Choice[] => [
+	{ value: "status", description: t("ligada ou desligada?", "¿activada o desactivada?", "on or off?") },
+	{ value: "ligar", description: t("o agente passa a ver e usar a tela", "el agente pasa a ver y usar la pantalla", "the agent can see and use the screen") },
+	{ value: "desligar", description: t("o agente para de usar a tela", "el agente deja de usar la pantalla", "the agent stops using the screen") },
+	{ value: "instalar", description: t("baixa o cua-driver, uma vez", "descarga el cua-driver, una vez", "downloads the cua-driver, once") },
+];
 
 export const READ = ["get_desktop_state", "get_window_state", "list_windows", "list_apps", "get_screen_size", "get_cursor_position"] as const;
 export const ACT = ["click", "double_click", "right_click", "drag", "scroll", "type_text", "press_key", "hotkey", "set_value", "bring_to_front", "launch_app"] as const;
@@ -636,9 +643,10 @@ export function createTela(pink: any, { env = process.env, run = mcpRun as Run, 
 
 	pink.registerCommand("tela", {
 		description: t("Acesso à tela do PC: instalar, ligar, desligar ou status (desligado por padrão)", "Acceso a la pantalla del PC: instalar, activar, desactivar o status (apagado por defecto)", "PC screen access: install, on, off or status (off by default)"),
-		getArgumentCompletions: (prefix: string) => ["instalar", "ligar", "desligar", "status"].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
+		getArgumentCompletions: completeFrom(TELA_CHOICES),
 		handler: async (args: string, ctx: any) => {
-			const verb = String(args ?? "").trim().split(/\s+/)[0];
+			let verb: string | undefined = String(args ?? "").trim().split(/\s+/)[0];
+			if (!verb && (verb = await choose(ctx, "/tela", TELA_CHOICES())) === undefined) return;
 			if (verb === "instalar" || verb === "install") {
 				if (on) return ctx.ui.notify(t("Desligue a tela antes de reinstalar (/tela desligar).", "Desactiva la pantalla antes de reinstalar (/tela desactivar).", "Turn the screen off before reinstalling (/tela off)."), "warning");
 				const ok = await ctx.ui.confirm(

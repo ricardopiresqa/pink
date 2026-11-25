@@ -5,7 +5,12 @@
 // atualiza, lê, lista e apaga; texto com cara de segredo é recusado. O AGENTS.md é da pessoa e fica de fora.
 // Pasta não confiável: nem entra no prompt nem grava (Argus A1: repositório estranho induziria o agente a guardar
 // instruções que voltariam no prompt de sistema de toda sessão). Subagente não lê nem grava.
-import { t } from "./pink-i18n.ts";
+import { type Choice, choose, completeFrom, t } from "./pink-i18n.ts";
+
+const MEMORY_CHOICES = (): Choice[] => [
+	{ value: "mostrar", description: t("a pasta e o índice (MEMORY.md)", "la carpeta y el índice (MEMORY.md)", "the folder and the index (MEMORY.md)") },
+	{ value: "abrir", description: t("abre a pasta da memória", "abre la carpeta de la memoria", "opens the memory folder") },
+];
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -214,10 +219,12 @@ export default function (pink: any) {
 	});
 	pink.registerCommand("memoria", {
 		description: t("Memória deste projeto: mostra a pasta e o índice (MEMORY.md); 'abrir' abre a pasta", "Memoria de este proyecto: muestra la carpeta y el índice (MEMORY.md); 'abrir' abre la carpeta", "This project's memory: shows the folder and the index (MEMORY.md); 'open' opens the folder"),
-		getArgumentCompletions: (prefix: string) => ("abrir".startsWith(prefix) ? [{ value: "abrir", label: "abrir" }] : null),
+		getArgumentCompletions: completeFrom(MEMORY_CHOICES),
 		handler: async (args: string, ctx: any) => {
 			const here = ctx?.cwd ?? cwd;
-			if (["abrir", "open"].includes(args.trim())) {
+			let verb: string | undefined = String(args ?? "").trim();
+			if (!verb && (verb = await choose(ctx, "/memoria", MEMORY_CHOICES())) === undefined) return;
+			if (["abrir", "open"].includes(verb)) {
 				const dir = memoryDir(here);
 				fs.mkdirSync(dir, { recursive: true });
 				const opener = process.platform === "win32" ? "explorer" : process.platform === "darwin" ? "open" : "xdg-open";

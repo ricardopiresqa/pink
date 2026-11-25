@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { t } from "./pink-i18n.ts";
+import { type Choice, choose, completeFrom, t } from "./pink-i18n.ts";
 
 export const MODEL = {
 	name: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
@@ -337,14 +337,35 @@ export function micBar(theme: any, view: { installed: boolean; state: MicState; 
 	return { text, spans };
 }
 
+const MIC_CHOICES = (): Choice[] => [
+	{ value: "status", description: t("está instalado? onde?", "¿está instalado? ¿dónde?", "is it installed? where?") },
+	{ value: "falar", description: t("começa a gravar; o texto vai para a caixa", "empieza a grabar; el texto va a la caja", "starts recording; the text goes to the box") },
+	{ value: "parar", description: t("para de gravar e deixa o texto na caixa", "deja de grabar y deja el texto en la caja", "stops recording and leaves the text in the box") },
+	{ value: "instalar", description: t(`baixa ~${SIZE_MB} MB, uma vez`, `descarga ~${SIZE_MB} MB, una vez`, `downloads ~${SIZE_MB} MB, once`) },
+];
+
 export default function (pink: any) {
 	const microfone = createMicrofone();
 	Reflect.set(globalThis, "__pinkMicrofone", microfone);
 	pink.registerCommand("microfone", {
-		description: t("Microfone para ditar (opcional): instalar ou status", "Micrófono para dictar (opcional): instalar o status", "Microphone for dictation (optional): install or status"),
-		getArgumentCompletions: (prefix: string) => ["instalar", "status"].filter((item) => item.startsWith(prefix)).map((value) => ({ value, label: value })),
+		description: t("Microfone para ditar (opcional): falar, parar, instalar ou status", "Micrófono para dictar (opcional): falar, parar, instalar o status", "Microphone for dictation (optional): falar (talk), parar (stop), instalar (install) or status"),
+		getArgumentCompletions: completeFrom(MIC_CHOICES),
 		handler: async (args: string, ctx: any) => {
-			const verb = String(args ?? "").trim().split(/\s+/)[0];
+			let verb: string | undefined = String(args ?? "").trim().split(/\s+/)[0];
+			if (!verb && (verb = await choose(ctx, "/microfone", MIC_CHOICES())) === undefined) return;
+			if (verb === "falar" || verb === "talk") {
+				// pelo comando também (o botão "◉ falar" só aparece na tela cheia); a caixa de digitar se registra ao desenhar
+				const target = (globalThis as any).__pinkMicTarget;
+				if (!target?.editor) return ctx.ui.notify(t("A caixa de digitar do Pink não está aberta.", "La caja de texto de Pink no está abierta.", "Pink's input box is not open."), "warning");
+				await microfone.act("start", target.editor, target.redraw);
+				const why = microfone.view().error;
+				return ctx.ui.notify(why ? t(`Microfone: ${why}`, `Micrófono: ${why}`, `Microphone: ${why}`) : t("Gravando: fale. /microfone parar deixa o texto na caixa.", "Grabando: habla. /microfone parar deja el texto en la caja.", "Recording: speak. /microfone parar leaves the text in the box."), why ? "error" : "info");
+			}
+			if (verb === "parar" || verb === "stop") {
+				if (microfone.view().state === "off") return ctx.ui.notify(t("O microfone não está gravando.", "El micrófono no está grabando.", "The microphone is not recording."), "info");
+				await microfone.stop();
+				return ctx.ui.notify(t("Gravação parada; o texto ficou na caixa.", "Grabación detenida; el texto quedó en la caja.", "Recording stopped; the text stayed in the box."), "info");
+			}
 			if (verb === "instalar" || verb === "install") {
 				if (microfone.view().state !== "off") return ctx.ui.notify(t("Pare a gravação antes de reinstalar.", "Detén la grabación antes de reinstalar.", "Stop recording before reinstalling."), "warning");
 				const ok = await ctx.ui.confirm(

@@ -4,7 +4,14 @@
 // processo só grava onde o SID do Pink tem permissão (a pasta do projeto e um temporário próprio) ou onde Todos já gravam
 // (limite conhecido). Leitura e rede não mudam. O Job Object do helper mata a árvore inteira junto com ele.
 // Os comandos que a pessoa roda com ! não passam pelo sandbox: são dela. Linux e macOS ficam para depois.
-import { t } from "./pink-i18n.ts";
+import { type Choice, choose, completeFrom, t } from "./pink-i18n.ts";
+
+const SANDBOX_CHOICES = (): Choice[] => [
+	{ value: "status", description: t("ligado ou desligado?", "¿activado o desactivado?", "on or off?") },
+	{ value: "ligar", description: t("os comandos só gravam na pasta do projeto", "los comandos solo escriben en la carpeta del proyecto", "commands only write to the project folder") },
+	{ value: "desligar", description: t("volta a rodar os comandos fora do isolamento", "vuelve a ejecutar los comandos sin aislamiento", "runs commands without isolation again") },
+	{ value: "remover", description: t("apaga o isolamento desta pasta", "borra el aislamiento de esta carpeta", "removes this folder's isolation") },
+];
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -281,8 +288,10 @@ export default function (pink: any) {
 	const label = (ctx: any) => ctx?.ui?.setStatus?.("pink-sandbox", sandbox.active() ? "sandbox" : undefined);
 	pink.registerCommand("sandbox", {
 		description: t("Isola os comandos do agente (só gravam na pasta do projeto): /sandbox ligar | desligar | status | remover", "Aísla los comandos del agente (solo escriben en la carpeta del proyecto): /sandbox activar | desactivar | status | quitar", "Isolates the agent's commands (they only write to the project folder): /sandbox on | off | status | remove"),
+		getArgumentCompletions: completeFrom(SANDBOX_CHOICES),
 		handler: async (args: string, ctx: any) => {
-			const verb = String(args ?? "").trim().toLowerCase();
+			let verb: string | undefined = String(args ?? "").trim().toLowerCase();
+			if (!verb && (verb = await choose(ctx, "/sandbox", SANDBOX_CHOICES())) === undefined) return;
 			const root = path.resolve(ctx?.cwd ?? process.cwd());
 			let text: string;
 			if (["ligar", "on", "activar"].includes(verb)) text = await sandbox.on(root, (note) => ctx.ui.notify(note, "info"));
