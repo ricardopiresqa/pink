@@ -735,6 +735,15 @@ def test_the_sidebar_lists_running_subagents_and_only_the_latest_changes(ui_fact
     assert "ALTERAÇÕES  8" in text and "+3 anteriores" in text and "f7.py" in text and "f2.py" not in text
 
 
+def test_the_sidebar_shows_the_thoth_dag_personas_while_it_runs(ui_facts: dict) -> None:
+    """Owner 2026-11-25: o DAG do Thoth roda como um comando só; o live.json dele vira linhas em SUBAGENTES."""
+    d = ui_facts["pink3"]["dagAgents"]
+    text = d["text"]
+    assert "SUBAGENTES  3" in text and "● argus rodando" in text and "30s" in text
+    assert "✓ vincent pronto" in text and "12.5s" in text and "· c esperando" in text
+    assert d["dead"] == 0 and d["afterEnd"] == [3, 0] and d["missing"] == 0
+
+
 def test_a_crash_leaves_its_cause_in_crash_log(ui_facts: dict) -> None:
     """Owner 2026-11-22 (card 1dfwh7kg7r1): o Pink fechava sem rastro; agora a exceção e o código de saída ficam no crash.log."""
     c = ui_facts["hooks"]["crashLog"]

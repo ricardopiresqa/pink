@@ -386,8 +386,8 @@ export function rightColumn({ theme, width, height, data }) {
 	if (agents.length) {
 		out.push("", rule(theme, inner), heading(theme, t("SUBAGENTES", "SUBAGENTES", "SUBAGENTS"), theme.fg("muted", `  ${agents.length}`)));
 		for (const item of agents) {
-			const clock = theme.fg("dim", elapsedLabel((data.now ?? Date.now()) - item.started));
-			const text = `${theme.fg("accent", "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
+			const clock = theme.fg("dim", item.clock ?? elapsedLabel((data.now ?? Date.now()) - item.started));
+			const text = `${theme.fg(item.mark === "✗" ? "error" : item.mark === "✓" ? "success" : "accent", item.mark ?? "●")} ${theme.fg("text", String(item.agent ?? "?"))} ${theme.fg("muted", String(item.task ?? "").replace(/\s+/g, " ").trim())}`;
 			out.push(footerLine({ theme, width: inner, left: fit(text, Math.max(1, inner - visible(clock) - 1)), right: clock }));
 		}
 	}
@@ -436,6 +436,36 @@ export function trackSubagent(map, event) {
 	if (input.background) return; // esses o pink-subagent-bg acompanha até o resultado chegar
 	const items = Array.isArray(input.tasks) ? input.tasks : Array.isArray(input.chain) ? input.chain : [{ agent: input.agent, task: input.task }];
 	map.set(event.toolCallId, items.map((item) => ({ agent: item?.agent, task: item?.task, started: Date.now() })));
+}
+// DAG do Thoth (thoth-client dag run) grava .thoth/dag/live.json enquanto roda: cada persona aparece em SUBAGENTES, como os
+// subagentes do Pink (owner 2026-11-25). Some 15 s depois do fim, ou quando o processo do DAG morre sem terminar.
+const DAG_STATE = { waiting: ["·", "esperando"], running: ["●", "rodando"], ok: ["✓", "pronto"], failed: ["✗", "falhou"], skipped: ["−", "pulou"] };
+export function dagAgents(cwd, now = Date.now(), read = (file) => process.getBuiltinModule?.("node:fs")?.readFileSync(file, "utf8"), alive = (pid) => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		return error?.code === "EPERM";
+	}
+}) {
+	let live;
+	try {
+		live = JSON.parse(read(`${cwd}/.thoth/dag/live.json`));
+	} catch {
+		return [];
+	}
+	if (!live || !Array.isArray(live.nodes)) return [];
+	if (live.finished ? now - live.finished * 1000 > 15000 : !alive(Number(live.pid))) return [];
+	return live.nodes.map((node) => {
+		const [mark, label] = DAG_STATE[node.state] ?? DAG_STATE.waiting;
+		const running = node.state === "running" && node.started;
+		return { agent: node.persona || node.id, task: t(label, label, node.state), mark, started: running ? node.started * 1000 : now, clock: running ? undefined : node.seconds ? `${node.seconds}s` : "" };
+	});
+}
+let dagCache = { at: 0, cwd: "", items: [] };
+function dagAgentsCached(cwd, now = Date.now()) {
+	if (cwd && (now - dagCache.at > 1000 || dagCache.cwd !== cwd)) dagCache = { at: now, cwd, items: dagAgents(cwd, now) }; // um arquivo lido por segundo, não por quadro
+	return cwd ? dagCache.items : [];
 }
 export function runningSubagents(waiting, background) {
 	return [...[...(background?.values?.() ?? [])].map((job) => ({ agent: job.agent, task: job.task, started: job.started })), ...[...(waiting?.values?.() ?? [])].flat()];
@@ -1030,7 +1060,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (PINK.thothOn) startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs) } });
+			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: [...runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs), ...dagAgentsCached(ctx.cwd)] } });
 		}, []),
 	};
 	// tarefas sobre a caixa de digitar quando a coluna da direita não cabe (com ela, as tarefas aparecem no PLANO)

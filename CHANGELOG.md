@@ -15,6 +15,8 @@ versão está no campo `upstream` do `rebrand.json` do repositório.
   o agente e manda na hora, junto com a fila. A caixa mostra "esc interromper · ctrl+enter enviar agora".
 - Permissão pedida pelo agente (opencode e os outros ACP) diz o que ele quer fazer: tipo, comando, arquivos e motivo.
   As opções aparecem como "Sim / Não".
+- As personas do DAG do Thoth (`thoth-client dag run`) aparecem em SUBAGENTES enquanto ele roda: quem está rodando,
+  esperando, pronto ou falhou (o Thoth grava `.thoth/dag/live.json`).
 - A lista de comandos não some mais no meio da palavra (digitando /resume, ela sumia no "/resu").
 - Inclui tudo da 1.0.9 (a 1.0.9 também está no npm).
 

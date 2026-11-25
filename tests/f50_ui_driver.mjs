@@ -345,6 +345,19 @@ out.sideAgents = (() => {
 	ui.trackSubagent(waiting, { type: "tool_result", toolName: "subagent", toolCallId: "t1", content: [] });
 	return { tracked, cleared: waiting.size, text, none: ui.rightColumn({ theme: plain, width: 36, height: 60, data: { input: 0, output: 0, cost: 0 } }).join("\n").includes("SUBAGENTES") };
 })();
+// owner 2026-11-25: as personas do DAG do Thoth (.thoth/dag/live.json) aparecem em SUBAGENTES enquanto ele roda
+out.dagAgents = (() => {
+	const live = { pid: 7, finished: null, nodes: [{ id: "a", persona: "argus", state: "running", started: 100 }, { id: "b", persona: "vincent", state: "ok", seconds: 12.5 }, { id: "c", persona: "", state: "waiting" }] };
+	const read = (body) => (file) => (file.replace(/\\/g, "/").endsWith("/proj/.thoth/dag/live.json") ? JSON.stringify(body) : (() => { throw new Error("nao achei"); })());
+	const items = ui.dagAgents("/proj", 130000, read(live), () => true);
+	const text = ui.rightColumn({ theme: plain, width: 36, height: 60, data: { input: 0, output: 0, cost: 0, agents: items, now: 130000 } }).join("\n");
+	return {
+		text,
+		dead: ui.dagAgents("/proj", 130000, read(live), () => false).length, // o DAG morreu sem terminar: some
+		afterEnd: [ui.dagAgents("/proj", 110000, read({ ...live, finished: 100 }), () => false).length, ui.dagAgents("/proj", 116000, read({ ...live, finished: 100 }), () => false).length],
+		missing: ui.dagAgents("/outro", 130000, read(live), () => true).length,
+	};
+})();
 out.rightModels =ui.rightColumn({ theme: plain, width: 36, height: 30, data: { input: 1, output: 1, cost: 0, models: ["anthropic/claude-sonnet-4-5-20250929", "thoth"] } }).join("\n");
 // card 1dfwh7kg7r1: o Thoth é outro produto; a lateral só mostra THOTH/COTA com ele na máquina
 out.thothInstalled = [
@@ -879,4 +892,4 @@ out.web = await (async () => {
 		})(),
 	};
 })();
-console.log(JSON.stringify({ web: out.web, notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels, sideAgents: out.sideAgents, thothInstalled: out.thothInstalled }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
+console.log(JSON.stringify({ web: out.web, notify: out.notify, hooks: out.hooks, permissions: out.permissions, natives: out.natives, prompt: out.prompt, pink3: { compact: out.compact, thinking: out.thinking, stale: out.stale, language: out.language, rightModels: out.rightModels, sideAgents: out.sideAgents, dagAgents: out.dagAgents, thothInstalled: out.thothInstalled }, thoth: out.thoth, plan: out.plan, own: out.own, mcp: out.mcp, run: out.run, wiring: out.wiring }));
