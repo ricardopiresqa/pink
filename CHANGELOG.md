@@ -3,6 +3,10 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.10] - 2026-11-24
+
+- Mesmo conteúdo da 1.0.9, que ficou presa como "staged" no npm.
+
 ## [1.0.9] - 2026-11-24
 
 - COTA: quando o uso do plano não chega, a lateral diz o motivo (`thoth-client` fora do PATH, antigo, lento ou com
