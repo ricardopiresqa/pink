@@ -95,6 +95,9 @@ const day = (d, h, m) => new Date(2026, 9, d, h, m);
 out.relative = [day(29, 14, 32), day(28, 23, 0), day(26, 9, 0), day(20, 9, 0), "nope"].map((when) => ui.relativeTime(when, day(29, 18, 0)));
 const msg = (text) => ({ type: "message", message: { role: "user", content: [{ type: "text", text }] } });
 out.autoTitle = [ui.autoTitle([msg("oi"), msg("/model x y z w"), msg("revise   a autenticação antes de implementar")]), ui.autoTitle([msg("oi pink")]), ui.autoTitle([msg("a b c d ".repeat(20))]).length];
+// owner 2026-11-26: o pedido ao /agente conta como o da pessoa (título da sessão e /undo)
+const ask = (id, text) => ({ id, type: "custom_message", customType: "pink-agente-pedido", content: `› codex: ${text}`, details: { agent: "codex", text } });
+out.agentAsk = [ui.autoTitle([ask("a", "corrige o login do painel agora")]), ui.lastUserEntry([msg("antes"), ask("b", "x"), { id: "c", type: "custom_message", customType: "pink-agente" }])?.id, ui.isAsk({ type: "custom_message", customType: "outra" })];
 const leftTimes = ui.leftColumn({ theme: plain, width: 32, height: 10, data: { sessions: [{ title: "oi", current: true, when: "14:32" }, { title: "oi", when: "ontem" }], tools: 1 } });
 out.leftTimes = { widths: [...new Set(leftTimes.map(ui.visible))], rows: leftTimes.slice(2, 4) };
 out.trash = (() => {

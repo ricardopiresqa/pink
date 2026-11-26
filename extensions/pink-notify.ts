@@ -84,13 +84,18 @@ export function notifyExtension(pink, deps = {}) {
 		state.unsubscribe?.();
 		out.write("\x1b[?1004l");
 	});
-	pink.on("agent_start", async () => { if (!state.start) state.start = now(); });
-	pink.on("agent_settled", async (event, ctx) => {
+	const started = () => { if (!state.start) state.start = now(); };
+	const settled = (event, ctx) => {
 		const elapsed = state.start ? now() - state.start : 0;
 		state.start = 0;
 		if (!state.active || event?.aborted || !shouldNotify({ on, focused: state.focused, focusKnown: state.focusKnown, elapsed })) return;
 		send("Pink", t(`Terminou em ${path.basename(ctx?.cwd ?? process.cwd())}: pronto para o próximo pedido`, `Terminó en ${path.basename(ctx?.cwd ?? process.cwd())}: listo para el próximo pedido`, `Finished in ${path.basename(ctx?.cwd ?? process.cwd())}: ready for the next request`));
-	});
+	};
+	pink.on("agent_start", async () => started());
+	pink.on("agent_settled", async (event, ctx) => settled(event, ctx));
+	// o /agente avisa pelo barramento (owner 2026-11-26: funciona como um modelo logado)
+	pink.events?.on?.("pink:agent_start", started);
+	pink.events?.on?.("pink:agent_settled", (data) => settled(data, data?.ctx));
 	pink.registerCommand?.("notificacoes", {
 		description: t("Liga ou desliga a notificação do sistema quando o Pink termina e a janela está sem foco", "Activa o desactiva la notificación del sistema cuando Pink termina y la ventana no tiene el foco", "Turns the system notification on or off when Pink finishes and the window is not focused"),
 		handler: async (_args, ctx) => {

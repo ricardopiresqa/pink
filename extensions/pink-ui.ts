@@ -201,8 +201,11 @@ export function todosFromBranch(entries) {
 
 // /undo e /redo como no OpenCode: voltam a conversa E os arquivos. Os arquivos vão para um índice do Git só do Pink
 // (GIT_INDEX_FILE à parte): o índice, o HEAD e o stash do usuário não mudam; arquivos ignorados pelo .gitignore ficam de fora.
+// um pedido da pessoa: a mensagem dela ao modelo do Pink ou ao /agente (que fica na sessão como custom_message)
+export const isAsk = (entry) => (entry?.type === "message" && entry.message?.role === "user") || (entry?.type === "custom_message" && entry.customType === "pink-agente-pedido");
+
 export function lastUserEntry(branch) {
-	return [...(branch ?? [])].reverse().find((entry) => entry?.type === "message" && entry.message?.role === "user");
+	return [...(branch ?? [])].reverse().find(isAsk);
 }
 
 export function parseNameStatus(text) {
@@ -819,10 +822,13 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 	};
 	// sessão do multiplexador (pink/mux): progresso (OSC 9;4) enquanto trabalha e sino ao terminar, para a lateral mostrar o estado
 	const signal = (text) => process.env.PINK_MUX_CHILD === "1" && process.stdout.isTTY && process.stdout.write(text);
-	pink.on("agent_start", () => {
+	const runStarted = () => {
 		signal("\x1b]9;4;3\x07");
 		leaveHome();
-	});
+	};
+	pink.on("agent_start", runStarted);
+	// o /agente roda fora do ciclo do Pink e avisa pelo barramento: o resto reage como a um modelo logado (owner 2026-11-26)
+	pink.events?.on?.("pink:agent_start", runStarted);
 	pink.on("input", leaveHome);
 	void pink.exec?.("git", ["branch", "--show-current"], { cwd: ctx.cwd }).then((result) => {
 		state.branch = (result?.stdout ?? "").trim();
@@ -835,7 +841,7 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 	}).catch(() => undefined);
 	loadSessions();
 	PINK.refreshSessions = loadSessions;  // o "Apagar sessão" relê a coluna depois de mover o arquivo
-	pink.on("agent_end", () => {
+	const runEnded = () => {
 		signal("\x1b]9;4;0\x07\x07");
 		// o multiplexador guarda o arquivo de cada sessão aberta para reabri-la no próximo Pink (card 1dfwh7kfyty)
 		const file = ctx.sessionManager?.getSessionFile?.();
@@ -846,7 +852,9 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (title) pink.setSessionName?.(title);
 		}
 		loadSessions();
-	});
+	};
+	pink.on("agent_end", runEnded);
+	pink.events?.on?.("pink:agent_settled", runEnded);
 
 	// a moldura só existe na tela cheia; no modo regular do Pink (--tui-mode regular) fica o rodapé de uma linha
 	const framed = () => (state.tui?.mode ?? "fullscreen") === "fullscreen";
@@ -1075,7 +1083,6 @@ export function install(pink, ctx, { CustomEditor, SessionManager, version = "",
 			if (PINK.thothOn) startThoth();
 			const stats = sessionStats(ctx.sessionManager?.getEntries?.());
 			const total = stats.models.reduce((sum, item) => ({ input: sum.input + item.input, output: sum.output + item.output }), { input: 0, output: 0 });
-			globalThis.__pinkSideAt = Date.now(); // pink-agente: com a lateral na tela, os subagentes ficam só nela
 			return rightColumn({ theme, width: RIGHT_WIDTH, height, data: { ...total, cost: stats.cost, models: stats.models.map((item) => item.model).filter((model) => model && model !== "?"), project, context: bars().context, todos: PINK.todos, thoth: PINK.thothOn ? PINK.thoth.data : { ad: true }, plan: PINK.thothOn ? PINK.plan.data : undefined, mcp: globalThis.__pinkMcp?.(), mcpOpen: PINK.mcpOpen, hits: (PINK.rightHits = {}), changes: changesFromBranch(ctx.sessionManager?.getBranch?.(), PINK.created), agents: [...runningSubagents(PINK.subagents, globalThis.__pinkSubagentJobs), ...dagAgentsCached(ctx.cwd), ...(globalThis.__pinkAgentChildren ?? [])] } });
 		}, []),
 	};
@@ -1119,9 +1126,9 @@ export function relativeTime(when, now = new Date()) {
 // título automático: a primeira mensagem do usuário com mais de 3 palavras (as sessões ficavam todas "oi")
 export function autoTitle(entries, max = 50) {
 	for (const entry of entries ?? []) {
-		const message = entry?.type === "message" ? entry.message : undefined;
-		if (message?.role !== "user") continue;
-		const content = Array.isArray(message.content) ? message.content.filter((part) => part?.type === "text").map((part) => part.text).join(" ") : message.content;
+		if (!isAsk(entry)) continue;
+		const message = entry.message;
+		const content = entry.type === "custom_message" ? entry.details?.text : Array.isArray(message.content) ? message.content.filter((part) => part?.type === "text").map((part) => part.text).join(" ") : message.content;
 		const text = String(content ?? "").replace(/\s+/g, " ").trim();
 		if (text.startsWith("/") || text.split(" ").length <= 3) continue;
 		return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -1440,6 +1447,7 @@ export function skipThinking(message) {
 }
 
 function userText(entry) {
+	if (entry?.type === "custom_message") return String(entry.details?.text ?? "");
 	const content = entry?.message?.content;
 	return Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
 }
@@ -1577,7 +1585,7 @@ function registerOpenCodeFunctions(pink) {
 		// fábrica, não [""]: a lista vira Text(""), que não desenha nada, e o "Trabalhando" ficava colado (owner 2026-11-25)
 		ctx.ui.setWidget?.(ABOVE_BOX, () => ({ render: () => [""], invalidate() {} }), { placement: "aboveEditor" });
 		ctx.ui.setWidget?.(BELOW_BOX, (_tui, theme) => ({
-			render: (width) => belowBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: Date.now() - (globalThis.__pinkSideAt ?? 0) < 5000 }),
+			render: (width) => belowBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: globalThis.__pinkRightOn === true }),
 			invalidate() {},
 		}), { placement: "belowEditor" });
 	});
@@ -1591,16 +1599,18 @@ function registerOpenCodeFunctions(pink) {
 		[PINK.lastRun, PINK.lastRunEnd, PINK.run, PINK.runShow] = [PINK.run, Date.now(), undefined, undefined];
 	});
 	// ponto de restauração dos arquivos antes de cada mensagem (só na TUI, só num repositório Git)
-	pink.on("agent_start", async (_event, ctx) => {
-		const leaf = ctx.sessionManager?.getLeafEntry?.();
-		if (ctx.mode !== "tui" || leaf?.type !== "message" || leaf.message?.role !== "user") return;
+	const restorePoint = async (ctx) => {
+		const leaf = ctx?.sessionManager?.getLeafEntry?.();
+		if (ctx?.mode !== "tui" || !isAsk(leaf)) return;
 		PINK.redo.length = 0;
 		const snapshot = await gitSnapshot(ctx.cwd).catch(() => undefined);
 		if (!snapshot) return;
 		PINK.snapshots.set(leaf.id, snapshot);
 		// card 1dfwh7kfmqr: o ponto também vai para a sessão (fora do contexto do modelo); o /undo funciona depois de reabrir
 		try { pink.appendEntry?.(UNDO_ENTRY, { entryId: leaf.id, top: snapshot.top, tree: snapshot.tree }); } catch { /* sem gravar: o /undo desta execução ainda vale */ }
-	});
+	};
+	pink.on("agent_start", async (_event, ctx) => restorePoint(ctx));
+	pink.events?.on?.("pink:agent_start", (data) => void restorePoint(data?.ctx));
 	pink.on("message_start", async (event) => {
 		if (event?.message?.role !== "assistant") return;
 		PINK.agentOf.set(event.message.timestamp, PINK.agent);

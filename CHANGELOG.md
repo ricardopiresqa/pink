@@ -3,6 +3,21 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.15] - 2026-11-26
+
+- /agente funciona como um modelo logado:
+  - a sessão é gravada já na primeira mensagem ao agente e aparece na lista com o seu pedido como título (antes uma
+    sessão só com o agente não ia para o disco e sumia se o Pink fechasse);
+  - o fim de cada resposta do agente faz o mesmo que o do modelo do Pink: título automático, coluna de sessões
+    atualizada, círculo do pink mux, sessão lembrada pelo mux, notificação e hook Stop;
+  - /undo desfaz também o último pedido ao agente e os arquivos que ele mudou (a conversa interna do agente não volta).
+- Trocar entre o modelo do Pink e o /agente continua de onde o outro parou, nos dois sentidos: o agente recebe o que
+  aconteceu na conversa desde a última resposta dele, e ir para o agente com o modelo respondendo para o modelo e passa
+  o pedido ao agente.
+- Os subagentes do /agente seguem a mesma regra dos do Pink: com a lateral ligada, só nela; sem ela, embaixo da caixa.
+- ctrl+enter funciona no Windows Terminal (o Pink pergunta ao Windows se o ctrl está apertado, como já fazia com o
+  shift).
+
 ## [1.0.14] - 2026-11-25
 
 - /agente opencode: os subagentes dele voltam a aparecer (o Pink olhava o transporte "acp" em vez do nome do agente).

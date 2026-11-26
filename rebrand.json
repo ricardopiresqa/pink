@@ -4,7 +4,7 @@
   "package_json": {
     "set": {
       "name": "@thothdev/pink",
-      "version": "1.0.14",
+      "version": "1.0.15",
       "description": "Pink: coding agent of the Thoth project, with a pink theme",
       "homepage": "https://pink.thothdev.ia.br",
       "repository": {
@@ -2687,6 +2687,27 @@
       "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
       "find": "spacerWhenEmpty&&container.addChild(new Spacer(1));return}leadingSpacer&&container.addChild(new Spacer(1));",
       "replace": "spacerWhenEmpty&&container.addChild({render:()=>this.activeStatusIndicator&&!this.activeWorkingIndicatorEmbedded?[]:[\"\"],invalidate(){}});return}leadingSpacer&&container.addChild({render:()=>this.activeStatusIndicator&&!this.activeWorkingIndicatorEmbedded?[]:[\"\"],invalidate(){}});",
+      "count": 1
+    },
+    {
+      "id": "windows-ctrl-enter",
+      "file": "dist/bundle/chunks/chunk-T726RZZU.js",
+      "find": "forwardInputSequence(sequence){if(!this.inputHandler)return;let shouldDetectNativeShiftEnter=",
+      "replace": "forwardInputSequence(sequence){if(!this.inputHandler)return;if(process.platform===\"win32\"&&(sequence===\"\\r\"||sequence===\"\\n\")&&isNativeModifierPressed(\"control\")){this.inputHandler(\"\\x1b[13;5u\");return}let shouldDetectNativeShiftEnter=",
+      "count": 1
+    },
+    {
+      "id": "agent-session-is-a-conversation",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "_hasConversation(){return this.fileEntries.some(e=>e.type===\"message\"&&(e.message.role===\"user\"||e.message.role===\"assistant\"))}",
+      "replace": "_hasConversation(){return this.fileEntries.some(e=>e.type===\"message\"&&(e.message.role===\"user\"||e.message.role===\"assistant\")||e.type===\"custom_message\"&&/^pink-agente/.test(e.customType??\"\"))}",
+      "count": 1
+    },
+    {
+      "id": "agent-session-in-the-list",
+      "file": "dist/bundle/chunks/chunk-MM3LKT73.js",
+      "find": "entry.type===\"session_info\"&&(name=entry.name?.trim()||void 0),entry.type!==\"message\")continue;",
+      "replace": "entry.type===\"session_info\"&&(name=entry.name?.trim()||void 0),entry.type===\"custom_message\"&&/^pink-agente/.test(entry.customType??\"\")){messageCount++;let pinkText=String(entry.details?.text??(typeof entry.content==\"string\"?entry.content:\"\")).trim();pinkText&&(allMessages.push(pinkText),!firstMessage&&entry.customType===\"pink-agente-pedido\"&&(firstMessage=pinkText));continue}if(entry.type!==\"message\")continue;",
       "count": 1
     },
     {

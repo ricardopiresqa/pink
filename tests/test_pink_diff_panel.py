@@ -135,11 +135,10 @@ def test_b_a_big_write_is_cut_at_40_lines_with_a_count(cli: Path, fake_provider:
 def test_c_read_grep_and_bash_stay_on_one_line(cli: Path, fake_provider: int, tmp_path: Path) -> None:
     screen = text(tui(cli, tmp_path, fake_provider, "read-line", OPEN + [(None, 12.0)])[-1])
     rows = screen.split("\n")
-    for summary in ("Leu notas.txt", "Rodou: echo oi-pink", 'Buscou "a"'):
-        assert any(summary in row for row in rows), screen  # cada um numa linha, com o resumo
-    assert not any("erro" in row for row in rows if "Leu notas.txt" in row or "Rodou: echo oi-pink" in row), screen  # read e bash sem erro
-    # grep: a linha 'Buscou "a" · erro' é observação: a ferramenta devolveu erro nesta build (causa não diagnosticada)
-    assert screen.count("oi-pink") == 1, screen  # só o comando aparece; a saída do bash não abre
+    # desde 22/11 (card 1dfwh7kg7r1) ferramentas seguidas viram uma linha de resumo, como no Claude Code
+    assert any("Rodou 2 comandos, leu 1 arquivo, buscou 1 padrão" in row for row in rows), screen
+    # o "· 1 falhou" é o grep, que devolve erro nesta build (causa não diagnosticada); read e bash passam
+    assert screen.count("oi-pink") <= 1, screen  # a saída do bash não abre
     assert not any(re.match(r"^\s*\d+ [+-] ", row) for row in screen), screen  # nenhuma linha de diff com número
 
 

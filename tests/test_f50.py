@@ -436,6 +436,7 @@ def test_the_sessions_column_tells_same_named_sessions_apart_and_titles_itself(u
     assert ui_facts["relative"] == ["14:32", "ontem", "3d", "20/10", ""]
     assert ui_facts["leftTimes"]["widths"] == [32] and ui_facts["leftTimes"]["rows"][0].rstrip(" │").endswith("14:32 ●") and ui_facts["leftTimes"]["rows"][1].rstrip(" │").endswith("ontem")
     assert ui_facts["autoTitle"] == ["revise a autenticação antes de implementar", "", 50]  # a 1ª com mais de 3 palavras; comando não conta
+    assert ui_facts["agentAsk"] == ["corrige o login do painel agora", "b", False]  # o pedido ao /agente é pedido da pessoa
 
 
 def test_deleting_a_session_moves_it_to_the_trash_and_never_the_current_one(ui_facts: dict) -> None:

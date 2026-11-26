@@ -523,6 +523,71 @@ console.log(JSON.stringify({
     assert out["text"].endswith("\n\ncorrige o login\n\ne roda os testes")
 
 
+def test_the_agent_gets_what_happened_since_its_last_answer(package_dir: Path) -> None:
+    # owner 2026-11-26: trocar entre o modelo logado e o /agente continua de onde o outro parou, nos dois sentidos
+    url = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    code = r"""
+const m = await import(process.argv[1]);
+const user = (text) => ({ type: "message", message: { role: "user", content: [{ type: "text", text }] } });
+const model = (text) => ({ type: "message", message: { role: "assistant", model: "gpt-5", content: [{ type: "thinking", thinking: "x" }, { type: "text", text }] } });
+const ask = (agent, text) => ({ type: "custom_message", customType: "pink-agente-pedido", details: { agent, text } });
+const answer = (agent, content) => ({ type: "custom_message", customType: "pink-agente", content, details: { agent } });
+const branch = [user("primeiro"), ask("codex", "faz A"), answer("codex", "fiz A"), user("agora B"), model("fiz B no login")];
+console.log(JSON.stringify({
+  codex: m.contextFor(branch, "codex"),
+  opencode: m.contextFor(branch, "opencode"),
+  none: m.contextFor([ask("codex", "x"), answer("codex", "y")], "codex"),
+  cut: m.contextFor([user("a".repeat(500))], "codex", 100).length < 400,
+}));
+"""
+    done = subprocess.run(["node", "--input-type=module", "-e", code, url], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    # o codex já viu até a resposta dele: recebe só o que veio depois, com o modelo do Pink identificado
+    assert "Pessoa: agora B" in out["codex"] and "Modelo do Pink (gpt-5): fiz B no login" in out["codex"] and "faz A" not in out["codex"]
+    assert out["codex"].endswith("Pedido atual:")
+    # o opencode nunca falou nesta sessão: recebe a conversa toda, inclusive o que o codex fez
+    assert "Pessoa: primeiro" in out["opencode"] and "Pessoa → codex: faz A" in out["opencode"] and "codex: fiz A" in out["opencode"]
+    assert out["none"] == "" and out["cut"] is True
+
+
+def test_ctrl_enter_works_in_the_windows_terminal(package_dir: Path) -> None:
+    # owner 2026-11-26: "o ctrl+enter não funciona": sem o protocolo do kitty o Windows Terminal manda \r ou \n; o Pink
+    # pergunta ao Windows se o ctrl está apertado, como já fazia com o shift
+    chunk = (package_dir / "dist" / "bundle" / "chunks" / "chunk-T726RZZU.js").read_text(encoding="utf-8")
+    assert 'process.platform==="win32"&&(sequence==="\\r"||sequence==="\\n")&&isNativeModifierPressed("control")){this.inputHandler("\\x1b[13;5u");return}' in chunk
+
+
+def test_a_session_only_with_the_agent_is_saved_and_listed(package_dir: Path) -> None:
+    # owner 2026-11-26: "a sessão fechou e não ficou salvo como sessão": o Pink só gravava o arquivo com mensagem user ou
+    # assistant, e as do /agente são custom_message
+    chunk = (package_dir / "dist" / "bundle" / "chunks" / "chunk-MM3LKT73.js").read_text(encoding="utf-8")
+    start = chunk.index("_hasConversation(){")
+    method = chunk[start:chunk.index("_persist(entry){", start)]
+    code = "const has = function " + method[len("_hasConversation"):] + r"""
+const msg = (role) => ({ type: "message", message: { role } });
+const custom = (customType) => ({ type: "custom_message", customType });
+console.log(JSON.stringify([
+  has.call({ fileEntries: [custom("pink-agente-pedido")] }),
+  has.call({ fileEntries: [custom("pink-agente")] }),
+  has.call({ fileEntries: [custom("outra-extensao"), { type: "model_change" }] }),
+  has.call({ fileEntries: [msg("user")] }),
+]));
+"""
+    done = subprocess.run(["node", "--input-type=module", "-e", code], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert json.loads(done.stdout.strip()) == [True, True, False, True]
+    # o começo e o fim do turno do /agente chegam a quem reage ao modelo do Pink (mux, /undo, título, notificação, hook Stop)
+    ext = package_dir / "extensions"
+    agente = (ext / "pink-agente.ts").read_text(encoding="utf-8")
+    assert 'pink.events?.emit?.("pink:agent_start", { ctx });' in agente and 'pink.events?.emit?.("pink:agent_settled", { ctx, aborted: controller.signal.aborted });' in agente
+    for name, channels in (("pink-ui.ts", ("pink:agent_start", "pink:agent_settled")), ("pink-notify.ts", ("pink:agent_start", "pink:agent_settled")), ("pink-hooks.ts", ("pink:agent_settled",))):
+        source = (ext / name).read_text(encoding="utf-8")
+        assert all(f'pink.events?.on?.("{channel}"' in source for channel in channels), name
+    # a lista de sessões conta as mensagens do agente e usa o pedido como título, em vez de "(no messages)"
+    assert '!firstMessage&&entry.customType==="pink-agente-pedido"&&(firstMessage=pinkText));continue}if(entry.type!=="message")continue;' in chunk
+
+
 def test_every_agent_reports_its_subagents_while_they_run(package_dir: Path) -> None:
     # owner 2026-11-25: "tem que funcionar pra todos os subagents" (Claude, Codex e os ACP)
     ext_url = (package_dir / "examples" / "extensions" / "subagent" / "external.ts").as_uri()

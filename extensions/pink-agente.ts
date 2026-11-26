@@ -100,6 +100,31 @@ SELECT s.title, s.agent, s.time_created AS created, s.time_updated AS updated, (
 FROM session s JOIN tree ON s.id = tree.id WHERE s.time_updated > ? ORDER BY s.time_created`;
 // `external` é o transporte ("acp"), não o agente: olhar o nome e o executável (owner 2026-11-25, subagentes sumiam)
 export const isOpencode = (agent: any) => /opencode/i.test(`${agent?.name ?? ""} ${agent?.bin ?? ""}`);
+// o que o agente não viu: a conversa depois da última resposta dele (ou toda, se ele nunca falou nesta sessão), com o modelo
+// do Pink e outros agentes; vai antes do pedido para ele continuar de onde o outro parou (owner 2026-11-26)
+const textOfContent = (content: any) => (typeof content === "string" ? content : (content ?? []).filter((part: any) => part?.type === "text").map((part: any) => part.text).join("\n")).trim();
+export function contextFor(entries: any[] | undefined, agent: string, max = 16000): string {
+	const list = entries ?? [];
+	let from = 0;
+	list.forEach((entry, index) => {
+		if (entry?.type === "custom_message" && entry.customType === "pink-agente" && entry.details?.agent === agent) from = index + 1;
+	});
+	const lines = list.slice(from).map((entry) => {
+		if (entry?.type === "message" && entry.message?.role === "user") return `${t("Pessoa", "Persona", "User")}: ${textOfContent(entry.message.content)}`;
+		if (entry?.type === "message" && entry.message?.role === "assistant") {
+			const text = textOfContent(entry.message.content);
+			return text ? `${t("Modelo do Pink", "Modelo de Pink", "Pink model")}${entry.message.model ? ` (${entry.message.model})` : ""}: ${text}` : "";
+		}
+		if (entry?.type === "custom_message" && entry.customType === "pink-agente-pedido") return `${t("Pessoa", "Persona", "User")} → ${entry.details?.agent}: ${entry.details?.text ?? ""}`;
+		if (entry?.type === "custom_message" && entry.customType === "pink-agente") return `${entry.details?.agent}: ${textOfContent(entry.content)}`;
+		return "";
+	}).filter((line) => line.replace(/^[^:]*:\s*/, "").trim());
+	if (!lines.length) return "";
+	let body = lines.join("\n\n");
+	if (body.length > max) body = `…${body.slice(body.length - max)}`; // shortcut: corta pelo começo; um resumo pelo modelo seria melhor em conversa muito longa
+	return `${t("Contexto: antes deste pedido a conversa no Pink seguiu sem você. O que aconteceu:", "Contexto: antes de este pedido la conversación en Pink siguió sin ti. Lo que pasó:", "Context: before this request the conversation in Pink went on without you. What happened:")}\n\n${body}\n\n${t("Pedido atual:", "Pedido actual:", "Current request:")}`;
+}
+
 // o pedido que o agente largou ao trocarem o modelo, para o novo modelo do Pink continuar
 export const handoffText = (agent: string, asks: string[]) =>
 	`${t(`O ${agent} foi interrompido na troca de modelo. O que ele já fez está acima; continue este pedido:`, `${agent} fue interrumpido al cambiar de modelo. Lo que ya hizo está arriba; continúa este pedido:`, `${agent} was stopped by the model switch. What it already did is above; continue this request:`)}\n\n${asks.filter((ask) => ask.trim()).join("\n\n")}`;
@@ -324,7 +349,6 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		loader?.stop?.();
 		loader = undefined;
 		lastUi?.setWidget?.(WIDGET, undefined);
-		if ((globalThis as any).__pinkAgentBusy) screenRef?.terminal?.setProgress?.(false);
 		(globalThis as any).__pinkAgentBusy = false; // a caixa volta às dicas de sempre (pink-ui)
 	};
 	// a fila em cinza fica em cima do "Trabalhando" e uma linha vazia o separa da caixa (owner 2026-11-25, como o Claude Code)
@@ -340,8 +364,6 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (tui?.Loader) {
 			ui.setWidget(WIDGET, (screen: any, theme: any) => {
 				screenRef = screen;
-				// progresso (OSC 9;4), como o Pink faz no turno dele: o círculo da sessão gira na lateral do pink mux (owner 2026-11-25)
-				screen?.terminal?.setProgress?.(true);
 				loader?.stop?.(); // a fábrica pode ser chamada de novo: o Loader anterior para de girar
 				loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message());
 				const own = loader;
@@ -350,7 +372,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			ticker = setInterval(() => loader?.setMessage?.(message()), 1000);
 		} else {
 			let frame = 0;
-			const draw = () => ui.setWidget(WIDGET, (screen: any, theme: any) => (screen?.terminal?.setProgress?.(true), screenRef = screen, { render: (width: number) => around([` ${FRAMES[frame % FRAMES.length]} ${message()}`], width, theme), invalidate() {} }), { placement: "aboveEditor" });
+			const draw = () => ui.setWidget(WIDGET, (screen: any, theme: any) => ((screenRef = screen), { render: (width: number) => around([` ${FRAMES[frame % FRAMES.length]} ${message()}`], width, theme), invalidate() {} }), { placement: "aboveEditor" });
 			draw();
 			ticker = setInterval(() => (frame++, draw()), 120);
 		}
@@ -375,7 +397,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			const items = fromDb.length ? fromDb : liveAgents(active?.live, Date.now());
 			(globalThis as any).__pinkAgentChildren = items; // a lateral mostra em SUBAGENTES, abaixo da SESSÃO
 			if (!items.length && !active?.controller) return stopChildren(ui);
-			const side = Date.now() - Number((globalThis as any).__pinkSideAt ?? 0) < 5000; // lateral desenhada há pouco: está na tela
+			const side = (globalThis as any).__pinkRightOn === true; // lateral ligada (pink-ui): os subagentes ficam só nela, como os do Pink
 			ui.setWidget(CHILDREN, items.length && !side ? (_screen: any, theme: any) => ({
 				render: (width: number) => items.map((item: any) => {
 					const clock = item.clock ?? elapsedLabel(Date.now() - item.started);
@@ -503,7 +525,11 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const controller = new AbortController();
 		current.controller = controller;
 		const name = current.agent.name;
+		const before = contextFor(ctx.sessionManager?.getBranch?.(), name); // antes de gravar o pedido: só o que veio antes dele
 		pink.sendMessage({ customType: "pink-agente-pedido", display: true, content: `› ${name}: ${text}`, details: { agent: name, text } });
+		// o mesmo começo e fim de turno do modelo do Pink (o círculo do mux, o ponto do /undo, o título, a coluna de sessões,
+		// a notificação e o hook Stop reagem a eles); owner 2026-11-26: "/agente tem que funcionar como um modelo logado"
+		pink.events?.emit?.("pink:agent_start", { ctx });
 		const result = fresh();
 		current.live = result; // os subagentes desta mensagem (liveAgents)
 		const started = Date.now();
@@ -517,7 +543,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (ctx.hasUI) watchChildren(ctx.ui);
 		(globalThis as any).__pinkExternalAsk = ctx.hasUI ? (title: string, body: string) => ctx.ui.confirm(title, body) : undefined;
 		try {
-			await run(current.agent, text, ctx.cwd, controller.signal, result, status, undefined, undefined, current.resume);
+			await run(current.agent, before ? `${before}\n${text}` : text, ctx.cwd, controller.signal, result, status, undefined, undefined, current.resume);
 		} catch (error: any) {
 			result.stopReason = "error";
 			result.errorMessage = controller.signal.aborted ? t("cancelado", "cancelado", "cancelled") : String(error?.message ?? error);
@@ -532,6 +558,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		}
 		const error = result.stopReason === "error" ? String(result.errorMessage ?? t("erro", "error", "error")) : undefined;
 		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, session: current.resume?.id, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
+		pink.events?.emit?.("pink:agent_settled", { ctx, aborted: controller.signal.aborted });
 		// trocaram o modelo do Pink no meio: o que o agente fez já está na sessão; o novo modelo continua o pedido
 		if (current.handoff) return void pink.sendUserMessage?.(handoffText(name, [text, ...current.handoff]));
 		// a fila sai agora, numa mensagem só (como o Claude Code junta o que você digitou enquanto ele trabalhava)
@@ -633,6 +660,12 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 					}
 				}
 			}
+			// o modelo do Pink estava respondendo: para agora e o agente continua o pedido (só um trabalha; owner 2026-11-26)
+			const busyAsk = ctx.isIdle?.() === false ? [...(ctx.sessionManager?.getBranch?.() ?? [])].reverse().find((entry: any) => entry?.type === "message" && entry.message?.role === "user") : undefined;
+			if (busyAsk) {
+				ctx.abort?.();
+				await ctx.waitForIdle?.();
+			}
 			stop(ctx);
 			// mesma sessão do Pink + mesmo agente: continua a conversa dele (owner 2026-11-24); sessão nova do Pink começa do zero
 			const saved = lastAgentSession(ctx.sessionManager?.getBranch?.(), agent.name);
@@ -642,6 +675,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			ctx.ui?.setStatus?.(STATUS, `${t("agente", "agente", "agent")}: ${label(active.agent)}`);
 			const again = saved ? t(" Continuando a conversa anterior dele.", " Continuando su conversación anterior.", " Continuing its previous conversation.") : "";
 			ctx.ui?.notify?.(t(`Agora suas mensagens vão para o ${label(active.agent)}, com o login e a cota dele.${again} /agente off volta ao Pink.`, `Ahora tus mensajes van a ${label(active.agent)}, con su login y su cuota.${again} /agente off vuelve a Pink.`, `Your messages now go to ${label(active.agent)}, with its own login and quota.${again} /agente off returns to Pink.`), "info");
+			if (busyAsk) void send(handoffText(t("modelo do Pink", "modelo de Pink", "Pink model"), [textOfContent(busyAsk.message.content)]), ctx);
 		},
 	});
 

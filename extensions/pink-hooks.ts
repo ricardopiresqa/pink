@@ -130,6 +130,8 @@ export function hooksExtension(pink, deps = {}) {
 	pink.on("agent_settled", async (event, ctx) => {
 		await fire("Stop", ctx, { aborted: Boolean(event?.aborted) });
 	});
+	// o /agente também termina um turno: o hook Stop roda igual (owner 2026-11-26)
+	pink.events?.on?.("pink:agent_settled", (data) => void Promise.resolve(fire("Stop", data?.ctx, { aborted: Boolean(data?.aborted) })).catch(() => undefined));
 	pink.registerCommand?.("hooks", {
 		description: t("Mostra os hooks em uso (usuário e projeto confiável)", "Muestra los hooks en uso (usuario y proyecto de confianza)", "Shows the hooks in use (user and trusted project)"),
 		handler: async (_args, ctx) => {
