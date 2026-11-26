@@ -1574,7 +1574,8 @@ function registerOpenCodeFunctions(pink) {
 		PINK.runTimer = setInterval(show, 1000);
 		PINK.runTimer.unref?.();
 		// uma linha vazia entre o "Trabalhando" e a caixa; o relógio de cima (1 s) redesenha a tela e a lista de baixo junto
-		ctx.ui.setWidget?.(ABOVE_BOX, [""], { placement: "aboveEditor" });
+		// fábrica, não [""]: a lista vira Text(""), que não desenha nada, e o "Trabalhando" ficava colado (owner 2026-11-25)
+		ctx.ui.setWidget?.(ABOVE_BOX, () => ({ render: () => [""], invalidate() {} }), { placement: "aboveEditor" });
 		ctx.ui.setWidget?.(BELOW_BOX, (_tui, theme) => ({
 			render: (width) => belowBox(theme, width, { agents: [...runningSubagents(PINK.subagents), ...dagAgentsCached(ctx.cwd)], side: Date.now() - (globalThis.__pinkSideAt ?? 0) < 5000 }),
 			invalidate() {},

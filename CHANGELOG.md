@@ -3,6 +3,14 @@
 O Pink é um fork do Pi (MIT, veja `LICENSE-PI.txt` e `NOTICE.md`). Aqui só entra o que mudou no Pink; a base de cada
 versão está no campo `upstream` do `rebrand.json` do repositório.
 
+## [1.0.14] - 2026-11-25
+
+- /agente opencode: os subagentes dele voltam a aparecer (o Pink olhava o transporte "acp" em vez do nome do agente).
+- Uma linha vazia entre o "Trabalhando" e a caixa também no modelo do Pink, como já era com o /agente.
+- Trocar o modelo do Pink com o agente trabalhando derruba o agente na hora e o novo modelo continua o pedido, com o
+  que o agente já fez na conversa. Antes os dois trabalhavam ao mesmo tempo.
+- Com o /agente trabalhando, o círculo da sessão gira na lateral do pink mux.
+
 ## [1.0.13] - 2026-11-25
 
 - Subagentes: na tela cheia ficam na coluna da direita, abaixo da SESSÃO; fora dela (modo regular ou terminal

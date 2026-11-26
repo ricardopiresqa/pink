@@ -501,6 +501,28 @@ console.log(JSON.stringify({ items: m.readChildren(file, "root", now), none: m.r
     assert out["path"] == "/x/opencode/opencode.db" and out["home"] == "/h/.local/share/opencode/opencode.db"
 
 
+def test_opencode_is_found_by_name_and_model_switch_hands_off(package_dir: Path) -> None:
+    # owner 2026-11-25: `external` é o transporte ("acp"), por isso os subagentes do opencode sumiam; trocar o modelo
+    # no meio passa o pedido ao novo modelo
+    url = (package_dir / "extensions" / "pink-agente.ts").as_uri()
+    code = r"""
+const m = await import(process.argv[1]);
+console.log(JSON.stringify({
+  oc: m.isOpencode({ name: "opencode", bin: "opencode", external: "acp" }),
+  bin: m.isOpencode({ name: "oc", bin: "C:/x/opencode.exe" }),
+  codex: m.isOpencode({ name: "codex", bin: "codex", external: "acp" }),
+  none: m.isOpencode(undefined),
+  text: m.handoffText("opencode", ["corrige o login", " ", "e roda os testes"]),
+}));
+"""
+    done = subprocess.run(["node", "--input-type=module", "-e", code, url], capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert (out["oc"], out["bin"], out["codex"], out["none"]) == (True, True, False, False)
+    assert out["text"].startswith("O opencode foi interrompido na troca de modelo.")
+    assert out["text"].endswith("\n\ncorrige o login\n\ne roda os testes")
+
+
 def test_every_agent_reports_its_subagents_while_they_run(package_dir: Path) -> None:
     # owner 2026-11-25: "tem que funcionar pra todos os subagents" (Claude, Codex e os ACP)
     ext_url = (package_dir / "examples" / "extensions" / "subagent" / "external.ts").as_uri()

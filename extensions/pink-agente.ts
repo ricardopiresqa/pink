@@ -98,6 +98,11 @@ FROM session_v2 s JOIN tree ON s.id = tree.id WHERE s.time_updated > ? ORDER BY 
 const LEGACY_SQL = `${tree("session")}
 SELECT s.title, s.agent, s.time_created AS created, s.time_updated AS updated, (SELECT data FROM message m WHERE m.session_id = s.id ORDER BY m.time_created DESC LIMIT 1) AS last
 FROM session s JOIN tree ON s.id = tree.id WHERE s.time_updated > ? ORDER BY s.time_created`;
+// `external` é o transporte ("acp"), não o agente: olhar o nome e o executável (owner 2026-11-25, subagentes sumiam)
+export const isOpencode = (agent: any) => /opencode/i.test(`${agent?.name ?? ""} ${agent?.bin ?? ""}`);
+// o pedido que o agente largou ao trocarem o modelo, para o novo modelo do Pink continuar
+export const handoffText = (agent: string, asks: string[]) =>
+	`${t(`O ${agent} foi interrompido na troca de modelo. O que ele já fez está acima; continue este pedido:`, `${agent} fue interrumpido al cambiar de modelo. Lo que ya hizo está arriba; continúa este pedido:`, `${agent} was stopped by the model switch. What it already did is above; continue this request:`)}\n\n${asks.filter((ask) => ask.trim()).join("\n\n")}`;
 export const CHILD_DONE_SHOWN_MS = 15000;
 function childState(row: any): { state: "running" | "paused" | "done" | "failed" | "stopped"; end?: number } {
 	if (row.last === undefined) {
@@ -306,7 +311,7 @@ export async function pick(ctx: any, title: string, options: string[], load: () 
 export default function (pink: any, list: typeof externalAgents = externalAgents, run: typeof runExternal = runExternal, models: typeof listModels = listModels, extras: (tela?: { pipe: string; key: string }) => any = (tela) => gatherExtras(pink, undefined, tela), load: () => Promise<any[]> = loadTui, bridge: typeof telaBridge = telaBridge, warm: typeof warmKept = run === runExternal ? warmKept : () => undefined) {
 	let screen: ReturnType<typeof telaBridge> | undefined; // pink_tela: aberto no primeiro /agente, fechado ao sair do Pink
 	let screenCtx: any; // a janela deste Pink, onde a tela pede confirmação
-	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[]; live?: any } | undefined;
+	let active: { agent: any; resume: any; controller?: AbortController; queue?: string[]; live?: any; handoff?: string[] } | undefined;
 	let ticker: ReturnType<typeof setInterval> | undefined;
 	let lastUi: any;
 
@@ -319,6 +324,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		loader?.stop?.();
 		loader = undefined;
 		lastUi?.setWidget?.(WIDGET, undefined);
+		if ((globalThis as any).__pinkAgentBusy) screenRef?.terminal?.setProgress?.(false);
 		(globalThis as any).__pinkAgentBusy = false; // a caixa volta às dicas de sempre (pink-ui)
 	};
 	// a fila em cinza fica em cima do "Trabalhando" e uma linha vazia o separa da caixa (owner 2026-11-25, como o Claude Code)
@@ -334,6 +340,8 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (tui?.Loader) {
 			ui.setWidget(WIDGET, (screen: any, theme: any) => {
 				screenRef = screen;
+				// progresso (OSC 9;4), como o Pink faz no turno dele: o círculo da sessão gira na lateral do pink mux (owner 2026-11-25)
+				screen?.terminal?.setProgress?.(true);
 				loader?.stop?.(); // a fábrica pode ser chamada de novo: o Loader anterior para de girar
 				loader = new tui.Loader(screen, (s: string) => theme.fg("accent", s), (s: string) => theme.fg("muted", s), message());
 				const own = loader;
@@ -342,7 +350,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 			ticker = setInterval(() => loader?.setMessage?.(message()), 1000);
 		} else {
 			let frame = 0;
-			const draw = () => ui.setWidget(WIDGET, (_screen: any, theme: any) => ({ render: (width: number) => around([` ${FRAMES[frame % FRAMES.length]} ${message()}`], width, theme), invalidate() {} }), { placement: "aboveEditor" });
+			const draw = () => ui.setWidget(WIDGET, (screen: any, theme: any) => (screen?.terminal?.setProgress?.(true), screenRef = screen, { render: (width: number) => around([` ${FRAMES[frame % FRAMES.length]} ${message()}`], width, theme), invalidate() {} }), { placement: "aboveEditor" });
 			draw();
 			ticker = setInterval(() => (frame++, draw()), 120);
 		}
@@ -362,7 +370,7 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		if (childTimer || !ui?.setWidget) return;
 		const tick = () => {
 			// opencode: o banco dele mostra também os de segundo plano; os outros (e o opencode sem node:sqlite): o fluxo
-			const opencode = /opencode/i.test(String(active?.agent?.external ?? active?.agent?.name ?? ""));
+			const opencode = isOpencode(active?.agent);
 			const fromDb = opencode && active?.resume?.id ? read(dbFile, active.resume.id) : [];
 			const items = fromDb.length ? fromDb : liveAgents(active?.live, Date.now());
 			(globalThis as any).__pinkAgentChildren = items; // a lateral mostra em SUBAGENTES, abaixo da SESSÃO
@@ -524,6 +532,8 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		}
 		const error = result.stopReason === "error" ? String(result.errorMessage ?? t("erro", "error", "error")) : undefined;
 		pink.sendMessage({ customType: "pink-agente", display: true, content: render(result, ctx.cwd), details: { agent: name, session: current.resume?.id, model: result.model, usage: result.usage, error, steps: steps(result, ctx.cwd), ms: Date.now() - started, output: outputOf(result) } });
+		// trocaram o modelo do Pink no meio: o que o agente fez já está na sessão; o novo modelo continua o pedido
+		if (current.handoff) return void pink.sendUserMessage?.(handoffText(name, [text, ...current.handoff]));
 		// a fila sai agora, numa mensagem só (como o Claude Code junta o que você digitou enquanto ele trabalhava)
 		if (active === current && current.queue?.length) {
 			const next = current.queue.join("\n\n");
@@ -646,6 +656,16 @@ export default function (pink: any, list: typeof externalAgents = externalAgents
 		const done = send(String(event.text), ctx);
 		if (!ctx.hasUI) await done; // pink -p: a resposta tem de sair antes de o processo acabar
 		return { action: "handled" };
+	});
+
+	// escolher um modelo do Pink com o agente ligado volta ao Pink na hora: só um trabalha (owner 2026-11-25, os dois rodavam juntos)
+	pink.on("model_select", (event: any, ctx: any) => {
+		if (!active || event?.source === "restore") return;
+		const current = active;
+		const was = current.agent.name;
+		if (current.controller) current.handoff = [...(current.queue ?? [])];
+		stop(ctx);
+		ctx?.ui?.notify?.(t(`Voltou ao Pink (${was} desligado).`, `Volviste a Pink (${was} apagado).`, `Back to Pink (${was} off).`), "info");
 	});
 
 	pink.on("session_shutdown", () => {
